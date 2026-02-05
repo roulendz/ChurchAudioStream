@@ -1,7 +1,7 @@
 # Requirements: ChurchAudioStream
 
 **Defined:** 2026-02-05
-**Core Value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure — with near-zero latency and zero friction.
+**Core Value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
 
 ## v1 Requirements
 
@@ -107,64 +107,64 @@
 | Chat/messaging during service | Scope creep, moderation burden, distraction from worship. |
 | Listener authentication/accounts | Friction kills adoption. Churches are welcoming. Anonymous listener counts suffice. |
 | Hearing loop (T-coil) integration | Purely hardware (electromagnetic). Users can pair hearing aids to phone via Bluetooth. |
-| Multi-site/campus support | v2+ scope — requires fundamentally different architecture. |
+| Multi-site/campus support | v2+ scope -- requires fundamentally different architecture. |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CAPT-01 | — | Pending |
-| CAPT-02 | — | Pending |
-| CAPT-03 | — | Pending |
-| CAPT-04 | — | Pending |
-| CAPT-05 | — | Pending |
-| PROC-01 | — | Pending |
-| PROC-02 | — | Pending |
-| PROC-03 | — | Pending |
-| PROC-04 | — | Pending |
-| STRM-01 | — | Pending |
-| STRM-02 | — | Pending |
-| STRM-03 | — | Pending |
-| STRM-04 | — | Pending |
-| STRM-05 | — | Pending |
-| LWEB-01 | — | Pending |
-| LWEB-02 | — | Pending |
-| LWEB-03 | — | Pending |
-| LWEB-04 | — | Pending |
-| LWEB-05 | — | Pending |
-| LWEB-06 | — | Pending |
-| LWEB-07 | — | Pending |
-| AGUI-01 | — | Pending |
-| AGUI-02 | — | Pending |
-| AGUI-03 | — | Pending |
-| AGUI-04 | — | Pending |
-| AGUI-05 | — | Pending |
-| AGUI-06 | — | Pending |
-| AGUI-07 | — | Pending |
-| AGUI-08 | — | Pending |
-| AGUI-09 | — | Pending |
-| AGUI-10 | — | Pending |
-| AGUI-11 | — | Pending |
-| CONF-01 | — | Pending |
-| CONF-02 | — | Pending |
-| CONF-03 | — | Pending |
-| CONF-04 | — | Pending |
-| PLAT-01 | — | Pending |
-| PLAT-02 | — | Pending |
-| PLAT-03 | — | Pending |
-| PLAT-04 | — | Pending |
-| PLAT-05 | — | Pending |
-| RELY-01 | — | Pending |
-| RELY-02 | — | Pending |
-| RELY-03 | — | Pending |
-| RELY-04 | — | Pending |
-| RELY-05 | — | Pending |
+| CAPT-01 | Phase 2 | Pending |
+| CAPT-02 | Phase 2 | Pending |
+| CAPT-03 | Phase 2 | Pending |
+| CAPT-04 | Phase 2 | Pending |
+| CAPT-05 | Phase 2 | Pending |
+| PROC-01 | Phase 3 | Pending |
+| PROC-02 | Phase 3 | Pending |
+| PROC-03 | Phase 3 | Pending |
+| PROC-04 | Phase 2 | Pending |
+| STRM-01 | Phase 4 | Pending |
+| STRM-02 | Phase 8 | Pending |
+| STRM-03 | Phase 7 | Pending |
+| STRM-04 | Phase 7 | Pending |
+| STRM-05 | Phase 4 | Pending |
+| LWEB-01 | Phase 5 | Pending |
+| LWEB-02 | Phase 5 | Pending |
+| LWEB-03 | Phase 5 | Pending |
+| LWEB-04 | Phase 5 | Pending |
+| LWEB-05 | Phase 5 | Pending |
+| LWEB-06 | Phase 7 | Pending |
+| LWEB-07 | Phase 7 | Pending |
+| AGUI-01 | Phase 6 | Pending |
+| AGUI-02 | Phase 6 | Pending |
+| AGUI-03 | Phase 6 | Pending |
+| AGUI-04 | Phase 6 | Pending |
+| AGUI-05 | Phase 6 | Pending |
+| AGUI-06 | Phase 6 | Pending |
+| AGUI-07 | Phase 9 | Pending |
+| AGUI-08 | Phase 9 | Pending |
+| AGUI-09 | Phase 6 | Pending |
+| AGUI-10 | Phase 6 | Pending |
+| AGUI-11 | Phase 9 | Pending |
+| CONF-01 | Phase 1 | Pending |
+| CONF-02 | Phase 1 | Pending |
+| CONF-03 | Phase 9 | Pending |
+| CONF-04 | Phase 1 | Pending |
+| PLAT-01 | Phase 1 | Pending |
+| PLAT-02 | Phase 10 | Pending |
+| PLAT-03 | Phase 10 | Pending |
+| PLAT-04 | Phase 10 | Pending |
+| PLAT-05 | Phase 10 | Pending |
+| RELY-01 | Phase 8 | Pending |
+| RELY-02 | Phase 8 | Pending |
+| RELY-03 | Phase 8 | Pending |
+| RELY-04 | Phase 8 | Pending |
+| RELY-05 | Phase 8 | Pending |
 
 **Coverage:**
-- v1 requirements: 45 total
-- Mapped to phases: 0
-- Unmapped: 45 (pending roadmap creation)
+- v1 requirements: 46 total
+- Mapped to phases: 46
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-05*
-*Last updated: 2026-02-05 after initial definition*
+*Last updated: 2026-02-05 after roadmap creation (phase traceability added)*
