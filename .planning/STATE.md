@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 1 of 10 (Project Foundation & Configuration)
-Plan: 2 of 3 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-05 -- Completed 01-02-PLAN.md (Config Store, HTTPS Server, WebSocket Signaling)
+Last activity: 2026-02-05 -- Completed 01-04-PLAN.md (Host Binding and Firewall Gap Closure)
 
-Progress: [==........] 6% (2/35 plans)
+Progress: [===.......] 9% (3/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 19 minutes
-- Total execution time: 0.6 hours
+- Total plans completed: 3
+- Average duration: 14 minutes
+- Total execution time: 0.7 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 2/3 | 38 min | 19 min |
+| 01 | 3/5 | 42 min | 14 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (23m), 01-02 (15m)
-- Trend: accelerating (familiarity with codebase)
+- Last 5 plans: 01-01 (23m), 01-02 (15m), 01-04 (4m)
+- Trend: accelerating (gap closure plans are surgical fixes)
 
 *Updated after each plan completion*
 
@@ -53,6 +53,8 @@ Recent decisions affecting current work:
 - [01-02]: Default host binds to first non-loopback IPv4 interface, not 0.0.0.0
 - [01-02]: selfsigned v5 uses notBeforeDate/notAfterDate instead of days option
 - [01-02]: __dirname with candidate paths for CJS/ESM dual-mode static directory resolution
+- [01-04]: Separate listenHost (0.0.0.0 bind) from host (advertised LAN IP for mDNS/cert)
+- [01-04]: Firewall rule uses profile=private,domain (not public) for church WiFi
 
 ### Pending Todos
 
@@ -69,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 01-02-PLAN.md
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
