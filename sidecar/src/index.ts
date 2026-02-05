@@ -1,37 +1,39 @@
 import path from "node:path";
+import { EventEmitter } from "node:events";
 import { logger, stderrLog } from "./utils/logger";
+import { ConfigStore } from "./config/store";
+import { createServer, startServer } from "./server";
 
-function resolveConfigPath(): string {
+function resolveBasePath(): string {
   const configPathArgIndex = process.argv.indexOf("--config-path");
   if (configPathArgIndex !== -1 && process.argv[configPathArgIndex + 1]) {
     return path.resolve(process.argv[configPathArgIndex + 1]);
   }
-  // Default: directory containing the executable (works for both pkg and dev)
-  const executableDirectory = path.dirname(process.execPath);
-  return path.resolve(executableDirectory, "config.json");
+  return path.dirname(process.execPath);
 }
 
 function setupOrphanPrevention(): void {
-  // Detect when parent process closes stdin (Tauri exited or crashed).
-  // This prevents orphaned sidecar processes on Windows.
   process.stdin.resume();
   process.stdin.on("end", () => {
     logger.info("Parent process closed stdin, shutting down");
     process.exit(0);
   });
   process.stdin.on("error", () => {
-    // stdin error likely means parent died
     logger.warn("Stdin error detected, parent may have exited");
   });
 }
 
-function setupGracefulShutdown(): void {
+function setupGracefulShutdown(
+  stopServer: (() => Promise<void>) | null,
+): void {
   const shutdownSignals: NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
 
   for (const signal of shutdownSignals) {
-    process.on(signal, () => {
+    process.on(signal, async () => {
       logger.info(`Received ${signal}, shutting down gracefully`);
-      // Future: close server, WebSocket connections, etc.
+      if (stopServer) {
+        await stopServer();
+      }
       process.exit(0);
     });
   }
@@ -52,25 +54,52 @@ function setupGracefulShutdown(): void {
   });
 }
 
-function main(): void {
-  const configFilePath = resolveConfigPath();
+async function main(): Promise<void> {
+  const basePath = resolveBasePath();
 
   logger.info("ChurchAudioStream sidecar starting", {
     version: "0.1.0",
     nodeVersion: process.version,
     pid: process.pid,
-    configPath: configFilePath,
+    basePath,
   });
 
   setupOrphanPrevention();
-  setupGracefulShutdown();
 
-  logger.info("Sidecar initialized, waiting for connections", {
-    configPath: configFilePath,
+  const configStore = new ConfigStore(basePath);
+  const config = configStore.get();
+
+  logger.info("Config loaded", {
+    configPath: configStore.getPath(),
+    port: config.server.port,
+    host: config.server.host,
+    mdnsEnabled: config.network.mdns.enabled,
+    mdnsDomain: config.network.mdns.domain,
   });
 
-  // Server creation happens in Plan 02 (Express + WebSocket setup)
-  // For now, the process stays alive via stdin.resume() above
+  const serverEvents = new EventEmitter();
+
+  const components = await createServer(
+    config,
+    basePath,
+    configStore,
+    serverEvents,
+  );
+
+  const stopServer = await startServer(components, config);
+
+  setupGracefulShutdown(stopServer);
+
+  logger.info("Sidecar fully initialized", {
+    url: `https://${config.server.host}:${config.server.port}`,
+  });
 }
 
-main();
+main().catch((error) => {
+  stderrLog(`Fatal startup error: ${error.message}`);
+  logger.error("Failed to start sidecar", {
+    error: error.message,
+    stack: error.stack ?? "no stack",
+  });
+  process.exit(1);
+});
