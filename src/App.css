@@ -1,0 +1,28 @@
+.app-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.app-container h1 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: #1a1a2e;
+}
+
+.status-text {
+  color: #666;
+  font-size: 1.1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-container h1 {
+    color: #e0e0e0;
+  }
+
+  .status-text {
+    color: #999;
+  }
+}

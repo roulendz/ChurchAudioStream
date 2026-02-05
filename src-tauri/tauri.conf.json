@@ -1,0 +1,37 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicoverbruggen/tauri-conf-schema/refs/heads/main/schema.json",
+  "productName": "ChurchAudioStream",
+  "identifier": "com.churchaudiostream.app",
+  "version": "0.1.0",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": ["binaries/server"],
+    "icon": []
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Church Audio Stream",
+        "width": 1200,
+        "height": 800,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' wss://localhost:* wss://127.0.0.1:* https://localhost:* https://127.0.0.1:*; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": false
+    }
+  }
+}

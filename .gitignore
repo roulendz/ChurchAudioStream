@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+target/
+
+# Tauri generated files
+src-tauri/gen/
+
+# Compiled sidecar binaries
+src-tauri/binaries/
+
+# Runtime config (not source)
+config.json
+
+# TLS certificates
+*.pem
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
