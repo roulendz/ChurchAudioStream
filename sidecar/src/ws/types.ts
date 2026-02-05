@@ -56,4 +56,5 @@ export type ServerMessageType =
   | "config:response"
   | "config:updated"
   | "server:status"
-  | "server:restarting";
+  | "server:restarting"
+  | "interfaces:list";

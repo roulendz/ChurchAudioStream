@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { EventEmitter } from "node:events";
 import WebSocket, { WebSocketServer } from "ws";
 import type { ConfigStore } from "../config/store";
+import { listNetworkInterfaces } from "../network/interfaces";
 import type {
   WsMessage,
   IdentifyPayload,
@@ -177,6 +178,9 @@ function handleIncomingMessage(
       break;
     case "server:status":
       handleServerStatus(socket, message, configStore, clientMap);
+      break;
+    case "interfaces:list":
+      handleInterfacesList(socket, message);
       break;
     default:
       sendMessage(
@@ -393,6 +397,19 @@ function broadcastToAdminClients(
       sendMessage(ws, type, payload);
     }
   }
+}
+
+function handleInterfacesList(
+  socket: ExtendedWebSocket,
+  message: WsMessage,
+): void {
+  const interfaces = listNetworkInterfaces();
+  sendMessage(
+    socket,
+    "interfaces:list",
+    { interfaces },
+    message.requestId,
+  );
 }
 
 function sendMessage(

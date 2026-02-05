@@ -22,7 +22,10 @@ interface ServerComponents {
   cert: string;
 }
 
-type StopServerFunction = () => Promise<void>;
+export type StopServerFunction = (
+  newHost?: string,
+  newPort?: number,
+) => Promise<void>;
 
 export async function createServer(
   config: AppConfig,
@@ -85,14 +88,31 @@ export async function startServer(
     publishService(config.server.port, config.network.mdns.domain);
   }
 
-  const stopServer: StopServerFunction = async () => {
-    logger.info("Stopping server");
+  const broadcastAndClose = (
+    newHost?: string,
+    newPort?: number,
+  ): void => {
+    const restartPayload = {
+      type: "server:restarting" as const,
+      payload: { host: newHost, port: newPort },
+    };
+    const restartMessage = JSON.stringify(restartPayload);
 
     for (const client of wss.clients) {
       if (client.readyState === WebSocket.OPEN) {
+        client.send(restartMessage);
         client.close(1012, "Service Restart");
       }
     }
+  };
+
+  const stopServer: StopServerFunction = async (
+    newHost?: string,
+    newPort?: number,
+  ) => {
+    logger.info("Stopping server");
+
+    broadcastAndClose(newHost, newPort);
 
     if (config.network.mdns.enabled) {
       unpublishService();
