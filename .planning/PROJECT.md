@@ -79,7 +79,8 @@ Enable multilingual church members and hearing-impaired listeners to hear sermon
 | PWA for mobile experience | No app store needed, works on all phones, remembers settings | — Pending |
 | JSON config files | Cross-platform, human-readable, easy import/export | — Pending |
 | No listener authentication | Church is welcoming, minimal friction to start listening | — Pending |
-| Desktop GUI framework | To be researched — needs cross-platform, modern, maintainable | — Pending |
+| Tauri 2.x + Node.js sidecar | Lower RAM (150-250MB vs 400-600MB Electron), native feel, Node.js sidecar runs mediasoup/Express/WebSocket. Admin GUI connects to server via same API as Web UI. | — Pending |
+| Dante/AES67 + local audio device support | Both input methods: AES67 multicast for Dante churches, system audio devices for non-Dante churches. Broadens audience. | — Pending |
 
 ---
-*Last updated: 2026-02-05 after initialization*
+*Last updated: 2026-02-05 after framework decision and requirements scoping*
