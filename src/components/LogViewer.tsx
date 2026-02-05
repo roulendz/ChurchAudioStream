@@ -115,10 +115,18 @@ export function LogViewer({ subscribe }: LogViewerProps) {
           );
           cleanupFns.push(unlistenLog, unlistenError);
         };
-        setupListeners();
+        setupListeners().catch((error) => {
+          console.warn(
+            "Failed to set up Tauri sidecar log listeners:",
+            error instanceof Error ? error.message : String(error),
+          );
+        });
       })
-      .catch(() => {
-        // Tauri API not available, fall back to WS
+      .catch((error) => {
+        console.warn(
+          "Tauri event API not available, falling back to WebSocket logs:",
+          error instanceof Error ? error.message : String(error),
+        );
       });
 
     return () => {
