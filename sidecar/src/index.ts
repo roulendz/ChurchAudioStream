@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import { logger, stderrLog } from "./utils/logger";
 import { ConfigStore } from "./config/store";
 import { createServer, startServer, type StopServerFunction } from "./server";
+import { ensureFirewallRule } from "./network/firewall";
 
 function resolveBasePath(): string {
   const configPathArgIndex = process.argv.indexOf("--config-path");
@@ -88,6 +89,8 @@ function setupRestartListener(
 
       await new Promise((resolve) => setTimeout(resolve, TCP_TIME_WAIT_MS));
 
+      await ensureFirewallRule(newConfig.server.port);
+
       const components = await createServer(
         newConfig,
         basePath,
@@ -157,6 +160,8 @@ async function main(): Promise<void> {
     mdnsEnabled: config.network.mdns.enabled,
     mdnsDomain: config.network.mdns.domain,
   });
+
+  await ensureFirewallRule(config.server.port);
 
   const serverEvents = new EventEmitter();
 
