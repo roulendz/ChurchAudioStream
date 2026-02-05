@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 1 of 10 (Project Foundation & Configuration)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-02-05 -- Completed 01-04-PLAN.md (Host Binding and Firewall Gap Closure)
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-02-05 -- Completed 01-05-PLAN.md (LogViewer Error Logging and Sidecar Rebuild)
 
-Progress: [===.......] 9% (3/35 plans)
+Progress: [====......] 14% (5/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 14 minutes
-- Total execution time: 0.7 hours
+- Total plans completed: 5
+- Average duration: 10 minutes
+- Total execution time: 0.8 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 3/5 | 42 min | 14 min |
+| 01 | 5/5 | 48 min | 10 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (23m), 01-02 (15m), 01-04 (4m)
+- Last 5 plans: 01-01 (23m), 01-02 (15m), 01-04 (4m), 01-05 (3m)
 - Trend: accelerating (gap closure plans are surgical fixes)
 
 *Updated after each plan completion*
@@ -55,6 +55,7 @@ Recent decisions affecting current work:
 - [01-02]: __dirname with candidate paths for CJS/ESM dual-mode static directory resolution
 - [01-04]: Separate listenHost (0.0.0.0 bind) from host (advertised LAN IP for mDNS/cert)
 - [01-04]: Firewall rule uses profile=private,domain (not public) for church WiFi
+- [01-05]: Errors from Tauri event API import surfaced via console.warn, not silently swallowed
 
 ### Pending Todos
 
@@ -71,5 +72,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 01-04-PLAN.md
+Stopped at: Completed 01-05-PLAN.md -- Phase 1 complete
 Resume file: None
