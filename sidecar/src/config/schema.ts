@@ -8,7 +8,8 @@ function resolveDefaultHost(): string {
 
 export const ServerSchema = z.object({
   port: z.number().int().min(1024).max(65535).default(7777),
-  host: z.string().default(resolveDefaultHost),
+  host: z.string().default(resolveDefaultHost),      // Advertised host (mDNS, cert SANs, display)
+  listenHost: z.string().default("0.0.0.0"),          // Actual bind address (all interfaces)
   interface: z.string().optional(),
 });
 

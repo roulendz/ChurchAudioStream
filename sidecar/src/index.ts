@@ -77,6 +77,7 @@ function setupRestartListener(
     logger.info("Server restart requested due to config change", {
       newPort: newConfig.server.port,
       newHost: newConfig.server.host,
+      newListenHost: newConfig.server.listenHost,
     });
 
     try {
@@ -97,7 +98,8 @@ function setupRestartListener(
       setStopServer(newStopServer);
 
       logger.info("Server restarted successfully", {
-        url: `https://${newConfig.server.host}:${newConfig.server.port}`,
+        listenAddress: `${newConfig.server.listenHost}:${newConfig.server.port}`,
+        advertisedUrl: `https://${newConfig.server.host}:${newConfig.server.port}`,
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -151,6 +153,7 @@ async function main(): Promise<void> {
     configPath: configStore.getPath(),
     port: config.server.port,
     host: config.server.host,
+    listenHost: config.server.listenHost,
     mdnsEnabled: config.network.mdns.enabled,
     mdnsDomain: config.network.mdns.domain,
   });
@@ -182,7 +185,8 @@ async function main(): Promise<void> {
   );
 
   logger.info("Sidecar fully initialized", {
-    url: `https://${config.server.host}:${config.server.port}`,
+    listenAddress: `${config.server.listenHost}:${config.server.port}`,
+    advertisedUrl: `https://${config.server.host}:${config.server.port}`,
   });
 }
 

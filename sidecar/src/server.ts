@@ -67,7 +67,7 @@ export async function startServer(
 
   await new Promise<void>((resolve, reject) => {
     server.on("error", reject);
-    server.listen(config.server.port, config.server.host, () => {
+    server.listen(config.server.port, config.server.listenHost, () => {
       server.removeListener("error", reject);
       resolve();
     });
@@ -80,8 +80,8 @@ export async function startServer(
       : `${boundAddress?.address}:${boundAddress?.port}`;
 
   logger.info("Server listening", {
-    address: addressInfo,
-    url: `https://${config.server.host}:${config.server.port}`,
+    listenAddress: `${config.server.listenHost}:${config.server.port}`,
+    advertisedUrl: `https://${config.server.host}:${config.server.port}`,
   });
 
   if (config.network.mdns.enabled) {
