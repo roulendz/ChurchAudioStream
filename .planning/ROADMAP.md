@@ -35,12 +35,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. WebSocket signaling endpoint accepts connections from browser clients
   4. Changing a setting in the app persists after restart (JSON config file written to disk and reloaded on launch)
   5. Admin can change the web server IP and port in settings, and the server restarts on the new address
-**Plans**: 3 plans
+**Plans**: 5 plans
 
 Plans:
 - [ ] 01-01-PLAN.md -- Tauri 2.x project scaffolding with Node.js sidecar lifecycle (spawn, auto-restart, clean shutdown)
 - [ ] 01-02-PLAN.md -- Config store (Zod), self-signed certs, Express HTTPS server, WebSocket signaling, mDNS
 - [ ] 01-03-PLAN.md -- Config wire-up with server restart, React admin UI shell (settings, status, logs)
+- [ ] 01-04-PLAN.md -- [GAP FIX] Server 0.0.0.0 binding + Windows Firewall rule (UAT Tests 2, 3, 8, 9)
+- [ ] 01-05-PLAN.md -- [GAP FIX] LogViewer error visibility + sidecar binary rebuild (UAT Test 11)
 
 ### Phase 2: Audio Capture Pipeline
 **Goal**: The app can receive audio from both AES67 multicast streams (Dante network) and local system audio devices, with each channel running as an independent GStreamer process for fault isolation
@@ -203,7 +205,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Project Foundation & Configuration | 0/3 | Planned | - |
+| 1. Project Foundation & Configuration | 0/5 | In progress (UAT gap closure) | - |
 | 2. Audio Capture Pipeline | 0/4 | Not started | - |
 | 3. Audio Processing | 0/2 | Not started | - |
 | 4. WebRTC Streaming Core | 0/3 | Not started | - |
