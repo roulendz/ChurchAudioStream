@@ -6,8 +6,19 @@ function resolveDefaultHost(): string {
   return defaultInterface?.address ?? "127.0.0.1";
 }
 
+/**
+ * Port reserved for the admin loopback HTTP server.
+ * Must match ADMIN_LOOPBACK_PORT in server.ts.
+ * The HTTPS port cannot be set to this value to avoid a bind collision.
+ */
+const RESERVED_ADMIN_LOOPBACK_PORT = 7778;
+
 export const ServerSchema = z.object({
-  port: z.number().int().min(1024).max(65535).default(7777),
+  port: z.number().int().min(1024).max(65535).default(7777)
+    .refine(
+      (port) => port !== RESERVED_ADMIN_LOOPBACK_PORT,
+      { message: `Port ${RESERVED_ADMIN_LOOPBACK_PORT} is reserved for the admin loopback server` },
+    ),
   host: z.string().default(resolveDefaultHost),      // Advertised host (mDNS, cert SANs, display)
   listenHost: z.string().default("0.0.0.0"),          // Actual bind address (all interfaces)
   interface: z.string().optional(),
@@ -15,12 +26,12 @@ export const ServerSchema = z.object({
 
 export const MdnsSchema = z.object({
   enabled: z.boolean().default(true),
-  domain: z.string().default("churchaudio.local"),
+  domain: z.string().default("church.audio"),
 });
 
 export const HostsFileSchema = z.object({
-  enabled: z.boolean().default(false),
-  domain: z.string().default("churchaudio.local"),
+  enabled: z.boolean().default(true),
+  domain: z.string().default("church.audio"),
 });
 
 export const NetworkSchema = z.object({
