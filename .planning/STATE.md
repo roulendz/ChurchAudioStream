@@ -67,6 +67,12 @@ Recent decisions affecting current work:
 
 None.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 001 | Local domain (church.audio) + hosts file auto-update + cert SAN | 2026-02-06 | 8f27c89 | [001-local-domain-hosts-cert](./quick/001-local-domain-hosts-cert/) |
+
 ### Blockers/Concerns
 
 - [Research Gap]: PTP clock synchronization on Windows has sparse documentation -- needs validation in Phase 2
