@@ -69,14 +69,14 @@ function resolveWebSocketUrl(): string {
   // Phone browsers connect via wss:// to the HTTPS server (encrypted for WiFi)
   if (typeof window !== "undefined" && window.location) {
     if (isTauriEnvironment()) {
-      return `ws://localhost:${DEFAULT_HTTPS_PORT + LOOPBACK_PORT_OFFSET}`;
+      return `ws://127.0.0.1:${DEFAULT_HTTPS_PORT + LOOPBACK_PORT_OFFSET}`;
     }
     // Running in browser: derive from current URL
     const host = window.location.hostname;
     const port = window.location.port || String(DEFAULT_HTTPS_PORT);
     return `wss://${host}:${port}`;
   }
-  return `ws://localhost:${DEFAULT_HTTPS_PORT + LOOPBACK_PORT_OFFSET}`;
+  return `ws://127.0.0.1:${DEFAULT_HTTPS_PORT + LOOPBACK_PORT_OFFSET}`;
 }
 
 let requestIdCounter = 0;
@@ -169,7 +169,7 @@ export function useServerStatus(): UseServerStatusReturn {
   function updateWsUrlFromConfig(newConfig: AppConfig): void {
     if (isTauriEnvironment()) {
       const loopbackPort = newConfig.server.port + LOOPBACK_PORT_OFFSET;
-      setWsUrl(`ws://localhost:${loopbackPort}`);
+      setWsUrl(`ws://127.0.0.1:${loopbackPort}`);
     } else {
       const host = window.location.hostname;
       setWsUrl(`wss://${host}:${newConfig.server.port}`);
