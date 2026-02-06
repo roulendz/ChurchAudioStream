@@ -25,6 +25,8 @@ const RESTART_TRIGGERING_FIELDS = new Set([
   "server.port",
   "server.host",
   "server.interface",
+  "network.hostsFile.domain",
+  "network.hostsFile.enabled",
 ]);
 
 type ExtendedWebSocket = WebSocket & { metadata: ClientMetadata };

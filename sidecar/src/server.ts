@@ -8,11 +8,21 @@ import { WebSocket } from "ws";
 import type { AppConfig } from "./config/schema";
 import type { ConfigStore } from "./config/store";
 import { loadOrGenerateCert } from "./network/certificate";
+import { ensureHostsEntry } from "./network/hosts";
 import { publishService, unpublishService } from "./network/mdns";
 import { setupWebSocket, type WebSocketSetupResult } from "./ws/handler";
 import { logger } from "./utils/logger";
 
 const SIDECAR_VERSION = "0.1.0";
+
+/**
+ * Fixed loopback port for the Tauri admin UI WebSocket connection.
+ *
+ * This port is intentionally NOT derived from config.server.port so that
+ * changing the external HTTPS port in settings never breaks the admin
+ * GUI's ability to reconnect. The admin GUI hardcodes this same value.
+ */
+export const ADMIN_LOOPBACK_PORT = 7778;
 
 interface ServerComponents {
   httpsServer: https.Server;
@@ -65,7 +75,6 @@ export async function startServer(
   config: AppConfig,
 ): Promise<StopServerFunction> {
   const { httpsServer, httpServer, httpsWsSetup, httpWsSetup } = components;
-  const loopbackPort = config.server.port + 1;
 
   // Start HTTPS server on all interfaces (for phone browsers)
   await new Promise<void>((resolve, reject) => {
@@ -76,26 +85,38 @@ export async function startServer(
     });
   });
 
-  logger.info("HTTPS server listening (external)", {
-    address: `${config.server.listenHost}:${config.server.port}`,
-    advertisedUrl: `https://${config.server.host}:${config.server.port}`,
-  });
+  logger.info(
+    `HTTPS server listening on https://${config.server.host}:${config.server.port} (bound to ${config.server.listenHost})`,
+  );
 
   // Start HTTP server on loopback only (for Tauri admin UI)
   await new Promise<void>((resolve, reject) => {
     httpServer.on("error", reject);
-    httpServer.listen(loopbackPort, "127.0.0.1", () => {
+    httpServer.listen(ADMIN_LOOPBACK_PORT, "127.0.0.1", () => {
       httpServer.removeListener("error", reject);
       resolve();
     });
   });
 
-  logger.info("HTTP server listening (loopback)", {
-    address: `127.0.0.1:${loopbackPort}`,
-  });
+  logger.info(
+    `Admin loopback listening on http://127.0.0.1:${ADMIN_LOOPBACK_PORT}`,
+  );
 
   if (config.network.mdns.enabled) {
     publishService(config.server.port, config.network.mdns.domain);
+  }
+
+  if (config.network.hostsFile.enabled) {
+    try {
+      ensureHostsEntry(config.server.host, config.network.hostsFile.domain);
+    } catch (hostsError) {
+      const errorMessage = hostsError instanceof Error ? hostsError.message : String(hostsError);
+      logger.warn("Failed to update hosts file (user may have cancelled elevation prompt)", {
+        domain: config.network.hostsFile.domain,
+        ip: config.server.host,
+        error: errorMessage,
+      });
+    }
   }
 
   const broadcastAndCloseAll = (

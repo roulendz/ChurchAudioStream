@@ -2,8 +2,9 @@ import path from "node:path";
 import { EventEmitter } from "node:events";
 import { logger, stderrLog } from "./utils/logger";
 import { ConfigStore } from "./config/store";
-import { createServer, startServer, type StopServerFunction } from "./server";
+import { createServer, startServer, ADMIN_LOOPBACK_PORT, type StopServerFunction } from "./server";
 import { logFirewallReminder } from "./network/firewall";
+import { removeHostsEntry } from "./network/hosts";
 
 function resolveBasePath(): string {
   const configPathArgIndex = process.argv.indexOf("--config-path");
@@ -35,6 +36,11 @@ function setupGracefulShutdown(
       const stopServer = getStopServer();
       if (stopServer) {
         await stopServer();
+      }
+      try {
+        removeHostsEntry();
+      } catch {
+        // Best-effort: don't block shutdown if hosts cleanup fails
       }
       process.exit(0);
     });
@@ -100,12 +106,9 @@ function setupRestartListener(
       const newStopServer = await startServer(components, newConfig);
       setStopServer(newStopServer);
 
-      const loopbackPort = newConfig.server.port + 1;
-      logger.info("Server restarted successfully", {
-        httpsAddress: `${newConfig.server.listenHost}:${newConfig.server.port}`,
-        httpLoopbackAddress: `127.0.0.1:${loopbackPort}`,
-        advertisedUrl: `https://${newConfig.server.host}:${newConfig.server.port}`,
-      });
+      logger.info(
+        `Server restarted — phones: https://${newConfig.server.host}:${newConfig.server.port} | admin: http://127.0.0.1:${ADMIN_LOOPBACK_PORT}`,
+      );
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       logger.error("Failed to restart server on new config", {
@@ -154,14 +157,9 @@ async function main(): Promise<void> {
   const configStore = new ConfigStore(basePath);
   const config = configStore.get();
 
-  logger.info("Config loaded", {
-    configPath: configStore.getPath(),
-    port: config.server.port,
-    host: config.server.host,
-    listenHost: config.server.listenHost,
-    mdnsEnabled: config.network.mdns.enabled,
-    mdnsDomain: config.network.mdns.domain,
-  });
+  logger.info(
+    `Config loaded from ${configStore.getPath()} — port=${config.server.port}, host=${config.server.host}, mdns=${config.network.mdns.enabled ? config.network.mdns.domain : "off"}`,
+  );
 
   logFirewallReminder(config.server.port);
 
@@ -191,12 +189,9 @@ async function main(): Promise<void> {
     () => currentStopServer,
   );
 
-  const loopbackPort = config.server.port + 1;
-  logger.info("Sidecar fully initialized", {
-    httpsAddress: `${config.server.listenHost}:${config.server.port}`,
-    httpLoopbackAddress: `127.0.0.1:${loopbackPort}`,
-    advertisedUrl: `https://${config.server.host}:${config.server.port}`,
-  });
+  logger.info(
+    `Sidecar ready — phones: https://${config.server.host}:${config.server.port} | admin: http://127.0.0.1:${ADMIN_LOOPBACK_PORT}`,
+  );
 }
 
 main().catch((error) => {
