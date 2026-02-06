@@ -100,8 +100,10 @@ function setupRestartListener(
       const newStopServer = await startServer(components, newConfig);
       setStopServer(newStopServer);
 
+      const loopbackPort = newConfig.server.port + 1;
       logger.info("Server restarted successfully", {
-        listenAddress: `${newConfig.server.listenHost}:${newConfig.server.port}`,
+        httpsAddress: `${newConfig.server.listenHost}:${newConfig.server.port}`,
+        httpLoopbackAddress: `127.0.0.1:${loopbackPort}`,
         advertisedUrl: `https://${newConfig.server.host}:${newConfig.server.port}`,
       });
     } catch (err) {
@@ -189,8 +191,10 @@ async function main(): Promise<void> {
     () => currentStopServer,
   );
 
+  const loopbackPort = config.server.port + 1;
   logger.info("Sidecar fully initialized", {
-    listenAddress: `${config.server.listenHost}:${config.server.port}`,
+    httpsAddress: `${config.server.listenHost}:${config.server.port}`,
+    httpLoopbackAddress: `127.0.0.1:${loopbackPort}`,
     advertisedUrl: `https://${config.server.host}:${config.server.port}`,
   });
 }

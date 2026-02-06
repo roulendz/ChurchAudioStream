@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import http from "node:http";
 import https from "node:https";
 import path from "node:path";
 import { EventEmitter } from "node:events";
@@ -14,10 +15,11 @@ import { logger } from "./utils/logger";
 const SIDECAR_VERSION = "0.1.0";
 
 interface ServerComponents {
-  server: https.Server;
+  httpsServer: https.Server;
+  httpServer: http.Server;
   app: express.Application;
-  wss: WebSocketSetupResult["wss"];
-  getClients: WebSocketSetupResult["getClients"];
+  httpsWsSetup: WebSocketSetupResult;
+  httpWsSetup: WebSocketSetupResult;
   key: string;
   cert: string;
 }
@@ -50,45 +52,53 @@ export async function createServer(
   });
 
   const httpsServer = https.createServer({ key, cert }, app);
-  const { wss, getClients } = setupWebSocket(
-    httpsServer,
-    configStore,
-    serverEvents,
-  );
+  const httpsWsSetup = setupWebSocket(httpsServer, configStore, serverEvents);
 
-  return { server: httpsServer, app, wss, getClients, key, cert };
+  const httpServer = http.createServer(app);
+  const httpWsSetup = setupWebSocket(httpServer, configStore, serverEvents);
+
+  return { httpsServer, httpServer, app, httpsWsSetup, httpWsSetup, key, cert };
 }
 
 export async function startServer(
   components: ServerComponents,
   config: AppConfig,
 ): Promise<StopServerFunction> {
-  const { server, wss } = components;
+  const { httpsServer, httpServer, httpsWsSetup, httpWsSetup } = components;
+  const loopbackPort = config.server.port + 1;
 
+  // Start HTTPS server on all interfaces (for phone browsers)
   await new Promise<void>((resolve, reject) => {
-    server.on("error", reject);
-    server.listen(config.server.port, config.server.listenHost, () => {
-      server.removeListener("error", reject);
+    httpsServer.on("error", reject);
+    httpsServer.listen(config.server.port, config.server.listenHost, () => {
+      httpsServer.removeListener("error", reject);
       resolve();
     });
   });
 
-  const boundAddress = server.address();
-  const addressInfo =
-    typeof boundAddress === "string"
-      ? boundAddress
-      : `${boundAddress?.address}:${boundAddress?.port}`;
-
-  logger.info("Server listening", {
-    listenAddress: `${config.server.listenHost}:${config.server.port}`,
+  logger.info("HTTPS server listening (external)", {
+    address: `${config.server.listenHost}:${config.server.port}`,
     advertisedUrl: `https://${config.server.host}:${config.server.port}`,
+  });
+
+  // Start HTTP server on loopback only (for Tauri admin UI)
+  await new Promise<void>((resolve, reject) => {
+    httpServer.on("error", reject);
+    httpServer.listen(loopbackPort, "127.0.0.1", () => {
+      httpServer.removeListener("error", reject);
+      resolve();
+    });
+  });
+
+  logger.info("HTTP server listening (loopback)", {
+    address: `127.0.0.1:${loopbackPort}`,
   });
 
   if (config.network.mdns.enabled) {
     publishService(config.server.port, config.network.mdns.domain);
   }
 
-  const broadcastAndClose = (
+  const broadcastAndCloseAll = (
     newHost?: string,
     newPort?: number,
   ): void => {
@@ -98,10 +108,13 @@ export async function startServer(
     };
     const restartMessage = JSON.stringify(restartPayload);
 
-    for (const client of wss.clients) {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(restartMessage);
-        client.close(1012, "Service Restart");
+    const allWssInstances = [httpsWsSetup.wss, httpWsSetup.wss];
+    for (const wss of allWssInstances) {
+      for (const client of wss.clients) {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(restartMessage);
+          client.close(1012, "Service Restart");
+        }
       }
     }
   };
@@ -110,19 +123,20 @@ export async function startServer(
     newHost?: string,
     newPort?: number,
   ) => {
-    logger.info("Stopping server");
+    logger.info("Stopping servers (HTTPS + HTTP loopback)");
 
-    broadcastAndClose(newHost, newPort);
+    broadcastAndCloseAll(newHost, newPort);
 
     if (config.network.mdns.enabled) {
       unpublishService();
     }
 
-    await new Promise<void>((resolve) => {
-      server.close(() => resolve());
-    });
+    await Promise.all([
+      new Promise<void>((resolve) => httpsServer.close(() => resolve())),
+      new Promise<void>((resolve) => httpServer.close(() => resolve())),
+    ]);
 
-    logger.info("Server stopped");
+    logger.info("Both servers stopped");
   };
 
   return stopServer;

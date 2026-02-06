@@ -1,4 +1,5 @@
-import https from "node:https";
+import type { Server as HttpServer } from "node:http";
+import type { Server as HttpsServer } from "node:https";
 import crypto from "node:crypto";
 import { EventEmitter } from "node:events";
 import WebSocket, { WebSocketServer } from "ws";
@@ -34,7 +35,7 @@ export interface WebSocketSetupResult {
 }
 
 export function setupWebSocket(
-  server: https.Server,
+  server: HttpServer | HttpsServer,
   configStore: ConfigStore,
   serverEvents: EventEmitter,
 ): WebSocketSetupResult {
