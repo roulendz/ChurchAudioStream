@@ -91,6 +91,32 @@ export function LogViewer({ subscribe }: LogViewerProps) {
     });
   }, []);
 
+  // Fetch early sidecar logs that were buffered in Rust before this component mounted.
+  // drain() on the Rust side ensures logs are replayed at most once, even with StrictMode
+  // double-mount (second invoke returns an empty array).
+  useEffect(() => {
+    if (!isTauriRef.current) return;
+
+    import("@tauri-apps/api/core")
+      .then(({ invoke }) => {
+        invoke<string[]>("get_buffered_logs")
+          .then((bufferedLines) => {
+            for (const line of bufferedLines) {
+              addLogEntry(line);
+            }
+          })
+          .catch((error) => {
+            console.warn(
+              "Failed to fetch buffered sidecar logs:",
+              error instanceof Error ? error.message : String(error),
+            );
+          });
+      })
+      .catch(() => {
+        // Tauri core API not available -- ignore (browser mode)
+      });
+  }, [addLogEntry]);
+
   // Ref to hold Tauri listener cleanup functions so the cleanup closure
   // always accesses the latest value (survives async registration race)
   const tauriListenerCleanupRef = useRef<Array<() => void>>([]);

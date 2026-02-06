@@ -1,10 +1,50 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tauri::Emitter;
+use tauri::Manager;
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
 const RESTART_DELAY_SECONDS: u64 = 2;
+const LOG_BUFFER_CAPACITY: usize = 500;
+
+/// Circular buffer for sidecar log lines emitted before the frontend mounts.
+/// Capacity-bounded to prevent unbounded memory growth in long sessions.
+struct LogBuffer {
+    entries: Vec<String>,
+    capacity: usize,
+}
+
+impl LogBuffer {
+    fn new(capacity: usize) -> Self {
+        Self {
+            entries: Vec::with_capacity(capacity),
+            capacity,
+        }
+    }
+
+    fn push(&mut self, entry: String) {
+        if self.entries.len() >= self.capacity {
+            self.entries.remove(0);
+        }
+        self.entries.push(entry);
+    }
+
+    fn drain(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.entries)
+    }
+}
+
+/// Tauri managed state wrapper for the shared log buffer.
+struct AppLogBuffer(Mutex<LogBuffer>);
+
+/// Returns and clears all buffered sidecar log lines.
+/// Called by the frontend on mount to replay early startup logs
+/// that were emitted before React registered event listeners.
+#[tauri::command]
+fn get_buffered_logs(buffer: tauri::State<'_, AppLogBuffer>) -> Vec<String> {
+    buffer.0.lock().map(|mut b| b.drain()).unwrap_or_default()
+}
 
 /// Spawns the Node.js sidecar process and manages its lifecycle.
 ///
@@ -13,6 +53,7 @@ const RESTART_DELAY_SECONDS: u64 = 2;
 /// Stops restarting when `sidecar_should_run` is set to false (on app close).
 fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBool>) {
     tauri::async_runtime::spawn(async move {
+        let log_buffer = app_handle.state::<AppLogBuffer>();
         while sidecar_should_run.load(Ordering::SeqCst) {
             let sidecar_command = match app_handle.shell().sidecar("server") {
                 Ok(cmd) => cmd,
@@ -46,12 +87,18 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
             while let Some(event) = event_receiver.recv().await {
                 match event {
                     CommandEvent::Stdout(line_bytes) => {
-                        let log_line = String::from_utf8_lossy(&line_bytes);
-                        let _ = app_handle.emit("sidecar-log", log_line.as_ref());
+                        let log_line = String::from_utf8_lossy(&line_bytes).to_string();
+                        if let Ok(mut buffer) = log_buffer.0.lock() {
+                            buffer.push(log_line.clone());
+                        }
+                        let _ = app_handle.emit("sidecar-log", &log_line);
                     }
                     CommandEvent::Stderr(line_bytes) => {
-                        let error_line = String::from_utf8_lossy(&line_bytes);
-                        let _ = app_handle.emit("sidecar-error", error_line.as_ref());
+                        let error_line = String::from_utf8_lossy(&line_bytes).to_string();
+                        if let Ok(mut buffer) = log_buffer.0.lock() {
+                            buffer.push(error_line.clone());
+                        }
+                        let _ = app_handle.emit("sidecar-error", &error_line);
                         eprintln!("[sidecar:stderr] {error_line}");
                     }
                     CommandEvent::Error(error_description) => {
@@ -91,6 +138,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .manage(AppLogBuffer(Mutex::new(LogBuffer::new(LOG_BUFFER_CAPACITY))))
+        .invoke_handler(tauri::generate_handler![get_buffered_logs])
         .setup({
             let sidecar_should_run = sidecar_should_run.clone();
             move |app| {
