@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 use tauri::Manager;
-use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 const RESTART_DELAY_SECONDS: u64 = 2;
@@ -38,6 +38,10 @@ impl LogBuffer {
 /// Tauri managed state wrapper for the shared log buffer.
 struct AppLogBuffer(Mutex<LogBuffer>);
 
+/// Holds the active sidecar child process handle for explicit cleanup on exit.
+/// Without this, the sidecar becomes a zombie when the parent is killed (e.g., Ctrl+C).
+struct SidecarChild(Mutex<Option<CommandChild>>);
+
 /// Returns and clears all buffered sidecar log lines.
 /// Called by the frontend on mount to replay early startup logs
 /// that were emitted before React registered event listeners.
@@ -54,6 +58,7 @@ fn get_buffered_logs(buffer: tauri::State<'_, AppLogBuffer>) -> Vec<String> {
 fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBool>) {
     tauri::async_runtime::spawn(async move {
         let log_buffer = app_handle.state::<AppLogBuffer>();
+        let sidecar_child = app_handle.state::<SidecarChild>();
         while sidecar_should_run.load(Ordering::SeqCst) {
             let sidecar_command = match app_handle.shell().sidecar("server") {
                 Ok(cmd) => cmd,
@@ -71,7 +76,7 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
             // Pass --config-path pointing to the resource directory next to the executable
             let sidecar_command = sidecar_command.args(["--config-path", "."]);
 
-            let (mut event_receiver, _child) = match sidecar_command.spawn() {
+            let (mut event_receiver, child) = match sidecar_command.spawn() {
                 Ok(result) => result,
                 Err(error) => {
                     let error_message = format!("Failed to spawn sidecar: {error}");
@@ -82,6 +87,11 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
                     continue;
                 }
             };
+
+            // Store child handle so on_window_event can kill it on exit
+            if let Ok(mut guard) = sidecar_child.0.lock() {
+                *guard = Some(child);
+            }
 
             // Process sidecar output events until the process exits
             while let Some(event) = event_receiver.recv().await {
@@ -119,6 +129,11 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
                 }
             }
 
+            // Clear child handle since process has exited
+            if let Ok(mut guard) = sidecar_child.0.lock() {
+                *guard = None;
+            }
+
             // Only restart if the app is still running
             if sidecar_should_run.load(Ordering::SeqCst) {
                 eprintln!(
@@ -139,6 +154,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(AppLogBuffer(Mutex::new(LogBuffer::new(LOG_BUFFER_CAPACITY))))
+        .manage(SidecarChild(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![get_buffered_logs])
         .setup({
             let sidecar_should_run = sidecar_should_run.clone();
@@ -149,11 +165,22 @@ pub fn run() {
         })
         .on_window_event({
             let sidecar_should_run = sidecar_should_run.clone();
-            move |_window, event| {
+            move |window, event| {
                 if let tauri::WindowEvent::CloseRequested { .. } = event {
-                    // Signal the sidecar lifecycle loop to stop restarting.
-                    // The sidecar detects stdin close and self-terminates.
+                    // Signal the sidecar lifecycle loop to stop restarting
                     sidecar_should_run.store(false, Ordering::SeqCst);
+
+                    // Explicitly kill the sidecar process to prevent zombie on Windows.
+                    // Stdin-based orphan prevention is unreliable when the parent
+                    // is killed via Ctrl+C in the terminal.
+                    if let Some(child_state) = window.app_handle().try_state::<SidecarChild>() {
+                        if let Ok(mut guard) = child_state.0.lock() {
+                            if let Some(child) = guard.take() {
+                                let _ = child.kill();
+                                eprintln!("[sidecar] Explicitly killed on window close");
+                            }
+                        }
+                    }
                 }
             }
         })
