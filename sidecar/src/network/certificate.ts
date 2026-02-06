@@ -18,6 +18,7 @@ export async function loadOrGenerateCert(
   const keyFilePath = path.join(basePath, config.certificate.keyPath);
 
   if (fs.existsSync(certFilePath) && fs.existsSync(keyFilePath)) {
+    // TODO: Detect SAN mismatch and regenerate cert when domain config changes
     logger.info("Loading existing TLS certificate", {
       certPath: certFilePath,
       keyPath: keyFilePath,
@@ -45,18 +46,26 @@ async function generateCertificate(
   config: AppConfig,
 ): Promise<CertificateCredentials> {
   const domain = config.network.mdns.domain;
+  const hostsFileDomain = config.network.hostsFile.domain;
   const attributes = [{ name: "commonName", value: domain }];
 
   const localIpAddresses = listNetworkInterfaces().map(
     (iface) => iface.address,
   );
 
-  const subjectAltNames = [
+  const subjectAltNames: Array<{ type: 2; value: string } | { type: 7; ip: string }> = [
     { type: 2 as const, value: domain },
     { type: 2 as const, value: "localhost" },
+  ];
+
+  if (hostsFileDomain !== domain && hostsFileDomain !== "localhost") {
+    subjectAltNames.push({ type: 2 as const, value: hostsFileDomain });
+  }
+
+  subjectAltNames.push(
     { type: 7 as const, ip: "127.0.0.1" },
     ...localIpAddresses.map((ip) => ({ type: 7 as const, ip })),
-  ];
+  );
 
   const validityDays = 3650;
   const notBeforeDate = new Date();
@@ -77,6 +86,7 @@ async function generateCertificate(
 
   logger.info("Self-signed certificate generated", {
     commonName: domain,
+    hostsFileDomain,
     sanCount: subjectAltNames.length,
     validDays: validityDays,
   });
