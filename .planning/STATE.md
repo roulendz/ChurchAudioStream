@@ -11,26 +11,26 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 Phase: 1 of 10 (Project Foundation & Configuration)
 Plan: 8 of 8 in current phase (gap closure)
-Status: Phase complete (all gap closure plans done)
-Last activity: 2026-02-06 -- Completed 01-08-PLAN.md (LogViewer Dedup and Early Log Replay)
+Status: Phase complete (all 8 plans done, including gap closure 06-08)
+Last activity: 2026-02-06 -- Completed 01-06-PLAN.md (Dual HTTP/HTTPS Listener)
 
-Progress: [=====.....] 18% (7/38 plans)
+Progress: [=====.....] 21% (8/38 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 8
 - Average duration: 8 minutes
-- Total execution time: 1.0 hours
+- Total execution time: 1.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 7/8 | 57 min | 8 min |
+| 01 | 8/8 | 64 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (15m), 01-04 (4m), 01-05 (3m), 01-07 (5m), 01-08 (4m)
+- Last 5 plans: 01-04 (4m), 01-05 (3m), 01-07 (5m), 01-08 (4m), 01-06 (7m)
 - Trend: accelerating (gap closure plans are surgical fixes)
 
 *Updated after each plan completion*
@@ -58,6 +58,7 @@ Recent decisions affecting current work:
 - [01-05]: Errors from Tauri event API import surfaced via console.warn, not silently swallowed
 - [01-07]: Use `net session` for elevation detection; early return with actionable netsh command when not admin
 - [01-08]: aborted flag pattern for async useEffect StrictMode safety; Rust LogBuffer with drain semantics for one-shot early log replay
+- [01-06]: HTTP loopback port = HTTPS port + 1; Tauri uses ws:// (no TLS cert issues), phone browsers use wss://
 
 ### Pending Todos
 
@@ -74,5 +75,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 01-08-PLAN.md -- Phase 1 fully complete (including all gap closure)
+Stopped at: Completed 01-06-PLAN.md -- Phase 1 fully complete (all 8 plans including gap closure 06-08)
 Resume file: None
