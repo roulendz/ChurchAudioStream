@@ -144,6 +144,7 @@ export function useWebSocket({
       setLastMessage(message);
 
       // Handle server restart notification: update reconnect URL
+      // The payload port is the HTTPS port; Tauri uses ws:// on loopback (port+1)
       if (message.type === "server:restarting") {
         isServerRestartRef.current = true;
         const payload = message.payload as
@@ -151,10 +152,13 @@ export function useWebSocket({
           | undefined;
         if (payload?.port) {
           const currentUrl = new URL(urlRef.current);
-          if (payload.host) {
+          const isTauri = currentUrl.protocol === "ws:";
+          if (payload.host && !isTauri) {
             currentUrl.hostname = payload.host;
           }
-          currentUrl.port = String(payload.port);
+          currentUrl.port = isTauri
+            ? String(payload.port + 1)
+            : String(payload.port);
           urlRef.current = currentUrl.toString();
         }
       }

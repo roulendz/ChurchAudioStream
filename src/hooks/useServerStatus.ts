@@ -54,20 +54,29 @@ interface UseServerStatusReturn {
   subscribe: (type: string, handler: (msg: WsMessage) => void) => () => void;
 }
 
+const DEFAULT_HTTPS_PORT = 7777;
+const LOOPBACK_PORT_OFFSET = 1;
+
+function isTauriEnvironment(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    ("__TAURI__" in window || "__TAURI_INTERNALS__" in window)
+  );
+}
+
 function resolveWebSocketUrl(): string {
-  // In Tauri, we always connect to localhost with default port
-  // In browser, derive from current page URL
+  // Tauri admin UI connects via plain ws:// to the HTTP loopback server (no TLS cert issues)
+  // Phone browsers connect via wss:// to the HTTPS server (encrypted for WiFi)
   if (typeof window !== "undefined" && window.location) {
-    const isTauri = "__TAURI__" in window || "__TAURI_INTERNALS__" in window;
-    if (isTauri) {
-      return "wss://localhost:7777";
+    if (isTauriEnvironment()) {
+      return `ws://localhost:${DEFAULT_HTTPS_PORT + LOOPBACK_PORT_OFFSET}`;
     }
     // Running in browser: derive from current URL
     const host = window.location.hostname;
-    const port = window.location.port || "7777";
+    const port = window.location.port || String(DEFAULT_HTTPS_PORT);
     return `wss://${host}:${port}`;
   }
-  return "wss://localhost:7777";
+  return `ws://localhost:${DEFAULT_HTTPS_PORT + LOOPBACK_PORT_OFFSET}`;
 }
 
 let requestIdCounter = 0;
@@ -158,17 +167,12 @@ export function useServerStatus(): UseServerStatusReturn {
   }, [subscribe]);
 
   function updateWsUrlFromConfig(newConfig: AppConfig): void {
-    const isTauri =
-      typeof window !== "undefined" &&
-      ("__TAURI__" in window || "__TAURI_INTERNALS__" in window);
-
-    if (isTauri) {
-      const newUrl = `wss://localhost:${newConfig.server.port}`;
-      setWsUrl(newUrl);
+    if (isTauriEnvironment()) {
+      const loopbackPort = newConfig.server.port + LOOPBACK_PORT_OFFSET;
+      setWsUrl(`ws://localhost:${loopbackPort}`);
     } else {
       const host = window.location.hostname;
-      const newUrl = `wss://${host}:${newConfig.server.port}`;
-      setWsUrl(newUrl);
+      setWsUrl(`wss://${host}:${newConfig.server.port}`);
     }
   }
 
