@@ -91,29 +91,43 @@ export function LogViewer({ subscribe }: LogViewerProps) {
     });
   }, []);
 
-  // Set up Tauri event listeners if running in Tauri
+  // Ref to hold Tauri listener cleanup functions so the cleanup closure
+  // always accesses the latest value (survives async registration race)
+  const tauriListenerCleanupRef = useRef<Array<() => void>>([]);
+
+  // Set up Tauri event listeners if running in Tauri.
+  // Uses an `aborted` flag to handle React StrictMode's unmount/remount cycle:
+  //   Mount 1: aborted=false, async import starts, listeners register
+  //   Unmount 1 (StrictMode): aborted=true, cleanup runs or async guard prevents registration
+  //   Mount 2: new aborted=false, listeners register once
+  //   Result: exactly one set of active listeners
   useEffect(() => {
     if (!isTauriRef.current) return;
+    let aborted = false;
 
-    let cleanupFns: Array<() => void> = [];
-
-    // Dynamically import Tauri API to avoid errors in browser mode
     import("@tauri-apps/api/event")
       .then(({ listen }) => {
+        if (aborted) return;
+
         const setupListeners = async () => {
           const unlistenLog = await listen<string>(
             "sidecar-log",
             (event) => {
-              addLogEntry(event.payload);
+              if (!aborted) addLogEntry(event.payload);
             },
           );
           const unlistenError = await listen<string>(
             "sidecar-error",
             (event) => {
-              addLogEntry(event.payload);
+              if (!aborted) addLogEntry(event.payload);
             },
           );
-          cleanupFns.push(unlistenLog, unlistenError);
+          if (aborted) {
+            unlistenLog();
+            unlistenError();
+            return;
+          }
+          tauriListenerCleanupRef.current = [unlistenLog, unlistenError];
         };
         setupListeners().catch((error) => {
           console.warn(
@@ -130,9 +144,11 @@ export function LogViewer({ subscribe }: LogViewerProps) {
       });
 
     return () => {
-      for (const cleanup of cleanupFns) {
+      aborted = true;
+      for (const cleanup of tauriListenerCleanupRef.current) {
         cleanup();
       }
+      tauriListenerCleanupRef.current = [];
     };
   }, [addLogEntry]);
 
