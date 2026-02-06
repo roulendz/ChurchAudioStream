@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 Phase: 1 of 10 (Project Foundation & Configuration)
 Plan: 7 of 8 in current phase (01-03 pending, gap closure 06-08 done)
 Status: Human verification needed (4/5 must-haves verified, awaiting UAT v3)
-Last activity: 2026-02-06 -- Completed gap closure plans 01-06, 01-07, 01-08
+Last activity: 2026-02-06 -- Completed quick task 001 (local domain + hosts file + cert SAN)
 
 Progress: [=====.....] 20% (7/35 plans)
 
@@ -59,6 +59,9 @@ Recent decisions affecting current work:
 - [01-07]: Use `net session` for elevation detection; early return with actionable netsh command when not admin
 - [01-08]: aborted flag pattern for async useEffect StrictMode safety; Rust LogBuffer with drain semantics for one-shot early log replay
 - [01-06]: HTTP loopback port = HTTPS port + 1; Tauri uses ws:// (no TLS cert issues), phone browsers use wss://
+- [quick-001]: Default domain changed to church.audio (from churchaudio.local); hostsFile.enabled defaults to true
+- [quick-001]: execSync for elevation commands (intentional: elevation dialogs are blocking by nature)
+- [quick-001]: Cert regeneration on domain change deferred (TODO; user deletes cert files to force regen)
 
 ### Pending Todos
 
@@ -75,5 +78,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Gap closure plans 06-08 executed. 01-03 still pending. Verification v2: human_needed (4/5)
+Stopped at: Completed quick task 001 (local domain + hosts file + cert SAN). 01-03 still pending.
 Resume file: None
