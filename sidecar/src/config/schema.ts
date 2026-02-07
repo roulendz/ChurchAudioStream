@@ -63,6 +63,44 @@ export const SourceAssignmentSchema = z.object({
   delayMs: z.number().min(0).max(5000).default(0),
 });
 
+// ---------------------------------------------------------------------------
+// Audio processing schemas
+// ---------------------------------------------------------------------------
+
+/** AGC / loudness normalization settings. Maps to audioloudnorm element. */
+export const AgcSchema = z.object({
+  enabled: z.boolean().default(true),
+  targetLufs: z.number().min(-20).max(-14).default(-16),
+  maxTruePeakDbtp: z.number().min(-6).max(0).default(-2),
+});
+
+/**
+ * Opus encoder settings. Maps to opusenc element.
+ * frameSize stored as string enum for JSON serialization; convert to number at pipeline build time.
+ */
+export const OpusEncodingSchema = z.object({
+  enabled: z.boolean().default(true),
+  bitrateKbps: z.number().int().min(48).max(192).default(128),
+  frameSize: z.enum(["10", "20", "40"]).default("20"),
+  fec: z.boolean().default(false),
+  bitrateMode: z.enum(["vbr", "cbr"]).default("vbr"),
+});
+
+/** RTP/RTCP output port and SSRC assignment. Ports assigned by port-allocator at runtime. */
+export const RtpOutputSchema = z.object({
+  rtpPort: z.number().int().min(1024).max(65534).default(77702),
+  rtcpPort: z.number().int().min(1025).max(65535).default(77703),
+  ssrc: z.number().int().min(1).default(1),
+});
+
+/** Complete per-channel processing configuration. */
+export const ProcessingSchema = z.object({
+  mode: z.enum(["speech", "music"]).default("speech"),
+  agc: AgcSchema.default(() => AgcSchema.parse({})),
+  opus: OpusEncodingSchema.default(() => OpusEncodingSchema.parse({})),
+  rtpOutput: RtpOutputSchema.default(() => RtpOutputSchema.parse({})),
+});
+
 /** An app-level audio channel (mix bus) persisted in config. */
 export const ChannelSchema = z.object({
   id: z.string().uuid(),
@@ -70,6 +108,7 @@ export const ChannelSchema = z.object({
   sources: z.array(SourceAssignmentSchema).default([]),
   outputFormat: z.enum(["mono", "stereo"]).default("mono"),
   autoStart: z.boolean().default(true),
+  processing: ProcessingSchema.default(() => ProcessingSchema.parse({})),
 });
 
 /** Pipeline crash recovery settings. */

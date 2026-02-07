@@ -6,6 +6,7 @@
  */
 
 import type { AudioApi } from "../sources/source-types";
+import type { ProcessingConfig } from "../processing/processing-types";
 
 /** GStreamer pipeline lifecycle state. */
 export type PipelineState =
@@ -81,10 +82,15 @@ export interface LocalPipelineConfig {
  *
  * Discriminated by `sourceType`: exactly one of `aes67Config` or `localConfig`
  * will be populated based on the source type.
+ *
+ * When `processing` is present, the pipeline builder produces a Phase 3
+ * processing + encoding pipeline (AGC -> Opus -> RTP).
+ * When `processing` is undefined, it produces the Phase 2 metering-only pipeline.
  */
 export type PipelineConfig = {
   readonly levelIntervalMs: number;
   readonly label: string;
+  readonly processing?: ProcessingConfig;
 } & (
   | { readonly sourceType: "aes67"; readonly aes67Config: Aes67PipelineConfig; readonly localConfig?: never }
   | { readonly sourceType: "local"; readonly localConfig: LocalPipelineConfig; readonly aes67Config?: never }
