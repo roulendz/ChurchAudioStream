@@ -162,29 +162,32 @@ export async function startServer(
 }
 
 function resolveStaticDirectory(basePath: string): string {
-  // Strategy: try multiple paths to find public/ directory
-  // 1. Relative to basePath (production: binary directory)
-  // 2. Relative to source file (dev: sidecar/src/../public)
-  // 3. Current working directory fallback
+  const cwd = process.cwd();
+  const execDir = path.dirname(process.execPath);
   const candidates = [
     path.join(basePath, "public"),
     path.join(basePath, "sidecar", "public"),
+    path.join(cwd, "public"),
+    path.join(cwd, "sidecar", "public"),
+    path.join(execDir, "public"),
+    path.join(execDir, "..", "..", "..", "sidecar", "public"),
   ];
 
-  // In CJS (pkg build), __dirname points to the compiled JS location
-  // In ESM (tsx dev), __dirname is shimmed by tsx
   try {
     candidates.unshift(path.join(__dirname, "..", "public"));
   } catch {
-    // __dirname not available in strict ESM -- skip
+    // __dirname not available in strict ESM
   }
 
   for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
+    const resolved = path.resolve(candidate);
+    if (fs.existsSync(resolved) && fs.existsSync(path.join(resolved, "index.html"))) {
+      logger.info(`Static directory resolved: ${resolved}`);
+      return resolved;
     }
   }
 
-  // Last resort: basePath/public (even if not found, express.static handles gracefully)
-  return path.join(basePath, "public");
+  const fallback = path.join(basePath, "public");
+  logger.warn(`No static directory with index.html found, using fallback: ${fallback}`);
+  return fallback;
 }
