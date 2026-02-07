@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 2 of 10 (Audio Capture Pipeline)
-Plan: 5 of 9 in current phase (02-01, 02-02, 02-04, 02-05 complete)
+Plan: 6 of 9 in current phase (02-01, 02-02, 02-04, 02-05, 02-06 complete)
 Status: In progress
-Last activity: 2026-02-07 -- Completed 02-02-PLAN.md (pipeline builder and metering parser)
+Last activity: 2026-02-07 -- Completed 02-06-PLAN.md (source registry and discovery manager)
 
-Progress: [==========] 34% (12/35 plans)
+Progress: [=============] 37% (13/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: 8 minutes
-- Total execution time: 1.7 hours
+- Total execution time: 1.8 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 8/8 | 67 min | 8 min |
-| 02 | 4/9 | 34 min | 9 min |
+| 02 | 5/9 | 38 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-06 (7m), 01-03 (3m), 02-05 (4m), 02-04 (12m), 02-02 (14m)
-- Trend: steady execution; 02-02 thorough due to 7 source type variants and 43 metering parser assertions
+- Last 5 plans: 01-03 (3m), 02-05 (4m), 02-04 (12m), 02-02 (14m), 02-06 (4m)
+- Trend: steady execution; 02-06 clean with no deviations
 
 *Updated after each plan completion*
 
@@ -79,6 +79,9 @@ Recent decisions affecting current work:
 - [02-02]: Dispatch table (Record<AudioApi, builderFn>) for local pipeline builders -- extensible without switch/case
 - [02-02]: Separate channel selection for AES67 (knows total channels from SDP) vs local devices (may not know total)
 - [02-02]: -60 dB silence floor in dbToNormalized to prevent display artifacts from near-zero floating point noise
+- [02-06]: SAP deletion reverse map (sapHash+originAddress->sourceId) because deletion packets lack originSessionId
+- [02-06]: mDNS RAVENNA discovery is log-only; sources not created without SDP from SAP
+- [02-06]: Preserve discoveredAt on AES67 source updates by reading existing value from registry
 
 ### Pending Todos
 
@@ -102,6 +105,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 02-02-PLAN.md (pipeline builder and metering parser)
+Stopped at: Completed 02-06-PLAN.md (source registry and discovery manager)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
