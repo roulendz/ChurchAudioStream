@@ -57,13 +57,18 @@ Plans:
   3. Each configured channel spawns its own GStreamer child process, and killing one process does not affect others
   4. Audio level data (peak/RMS) is parsed from each GStreamer pipeline and available to the sidecar for monitoring
   5. Admin can configure a channel to use either a Dante/AES67 network source or a local audio device, and switch between them
-**Plans**: TBD
+**Plans**: 9 plans
 
 Plans:
-- [ ] 02-01: GStreamer pipeline builder and process manager
-- [ ] 02-02: AES67 multicast RTP reception and stream discovery
-- [ ] 02-03: Local audio device enumeration and capture
-- [ ] 02-04: Channel source configuration and audio level parsing
+- [ ] 02-01-PLAN.md -- Audio type system (source, channel, pipeline types) and Zod config schemas
+- [ ] 02-02-PLAN.md -- GStreamer pipeline string builder and level metering parser
+- [ ] 02-03-PLAN.md -- GStreamer child process wrapper and pipeline manager with crash recovery
+- [ ] 02-04-PLAN.md -- SAP multicast listener and SDP parser for AES67 stream discovery
+- [ ] 02-05-PLAN.md -- Local audio device enumeration via gst-device-monitor-1.0
+- [ ] 02-06-PLAN.md -- Source registry and discovery manager (SAP + mDNS + device polling)
+- [ ] 02-07-PLAN.md -- Level monitor, resource monitor (pidusage), and event logger
+- [ ] 02-08-PLAN.md -- Channel manager with source assignment and pipeline orchestration
+- [ ] 02-09-PLAN.md -- WebSocket API integration and audio subsystem facade
 
 ### Phase 3: Audio Processing
 **Goal**: Captured audio is processed with normalization/AGC and Speech/Music mode awareness before being encoded to Opus, so listeners hear clean, consistent audio
@@ -208,8 +213,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Project Foundation & Configuration | 7/8 | In progress (human verification needed) | - |
-| 2. Audio Capture Pipeline | 0/4 | Not started | - |
+| 1. Project Foundation & Configuration | 8/8 | Verified (UAT v3: 12/12) | 2026-02-07 |
+| 2. Audio Capture Pipeline | 0/9 | Planning complete | - |
 | 3. Audio Processing | 0/2 | Not started | - |
 | 4. WebRTC Streaming Core | 0/3 | Not started | - |
 | 5. Listener Web UI | 0/4 | Not started | - |
