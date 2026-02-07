@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 3 in progress -- audio processing type system and config
+**Current focus:** Phase 3 in progress -- pipeline builder processing chain and gain reduction
 
 ## Current Position
 
 Phase: 3 of 10 (Audio Processing)
-Plan: 1 of 3 in current phase (03-01 complete)
+Plan: 2 of 3 in current phase (03-02 complete)
 Status: In progress
-Last activity: 2026-02-07 -- Completed 03-01-PLAN.md (processing types and config schemas)
+Last activity: 2026-02-07 -- Completed 03-02-PLAN.md (pipeline builder processing chain and gain reduction)
 
-Progress: [==================] 51% (18/35 plans)
+Progress: [===================] 54% (19/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18
+- Total plans completed: 19
 - Average duration: 7 minutes
-- Total execution time: 2.2 hours
+- Total execution time: 2.3 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [==================] 51% (18/35 plans)
 |-------|-------|-------|----------|
 | 01 | 8/8 | 67 min | 8 min |
 | 02 | 9/9 | 56 min | 6 min |
-| 03 | 1/3 | 5 min | 5 min |
+| 03 | 2/3 | 9 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-07 (5m), 02-08 (3m), 02-09 (5m), 03-01 (5m)
-- Trend: Consistent fast execution into Phase 3
+- Last 5 plans: 02-08 (3m), 02-09 (5m), 03-01 (5m), 03-02 (4m)
+- Trend: Consistent fast execution through Phase 3
 
 *Updated after each plan completion*
 
@@ -102,6 +102,9 @@ Recent decisions affecting current work:
 - [03-01]: frameSize stored as string enum in Zod for JSON serialization (convert to number at pipeline build time)
 - [03-01]: ProcessingConfig optional on PipelineConfig (Phase 2 pipelines unchanged)
 - [03-01]: Zod factory defaults fill processing config for existing channels without processing field
+- [03-02]: Source-head/tail separation pattern: source builders return head only, buildPipelineString appends tail
+- [03-02]: 4-case processing matrix handles all AGC x Opus enable/disable combinations
+- [03-02]: Gain reduction estimated as (avgRmsDb - targetLufs) approximation
 
 ### Pending Todos
 
@@ -125,6 +128,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 03-01-PLAN.md (processing types and config schemas)
+Stopped at: Completed 03-02-PLAN.md (pipeline builder processing chain and gain reduction)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
