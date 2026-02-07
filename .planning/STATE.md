@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 2 of 10 (Audio Capture Pipeline)
-Plan: 7 of 9 in current phase (02-01 through 02-07 complete)
+Plan: 8 of 9 in current phase (02-01 through 02-08 complete)
 Status: In progress
-Last activity: 2026-02-07 -- Completed 02-07-PLAN.md (monitoring subsystem)
+Last activity: 2026-02-07 -- Completed 02-08-PLAN.md (channel manager)
 
-Progress: [===============] 43% (15/35 plans)
+Progress: [================] 46% (16/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
-- Average duration: 8 minutes
-- Total execution time: 1.9 hours
+- Total plans completed: 16
+- Average duration: 7 minutes
+- Total execution time: 2.0 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 8/8 | 67 min | 8 min |
-| 02 | 7/9 | 48 min | 7 min |
+| 02 | 8/9 | 51 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-05 (4m), 02-04 (12m), 02-02 (14m), 02-06 (4m), 02-07 (5m)
-- Trend: steady execution; 02-07 clean monitoring subsystem build
+- Last 5 plans: 02-04 (12m), 02-02 (14m), 02-06 (4m), 02-07 (5m), 02-08 (3m)
+- Trend: fast execution; 02-08 channel manager wired cleanly to existing subsystems
 
 *Updated after each plan completion*
 
@@ -90,6 +90,9 @@ Recent decisions affecting current work:
 - [02-07]: JSONL format for event logs (append-only, crash-safe, line-by-line parsing)
 - [02-07]: 1000-event in-memory cache per channel with oldest-first eviction
 - [02-07]: Momentary clipping: true for one frame then auto-cleared
+- [02-08]: PipelineManager does not expose PIDs; ResourceMonitor PID tracking limited to cleanup until PipelineManager extension
+- [02-08]: Partial<AppConfig> cast needed for configStore.update() with nested partial objects (deepMerge handles at runtime)
+- [02-08]: Source assignment index as string key in pipeline mapping; rekeyPipelineMappings shifts on splice
 
 ### Pending Todos
 
@@ -113,6 +116,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 02-07-PLAN.md (monitoring subsystem)
+Stopped at: Completed 02-08-PLAN.md (channel manager)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
