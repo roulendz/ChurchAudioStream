@@ -27,6 +27,9 @@ import { logger } from "../../utils/logger.js";
 /** Default drain timeout in milliseconds before SIGKILL on stop. */
 const DEFAULT_DRAIN_TIMEOUT_MS = 500;
 
+/** Whether the current platform is Windows. */
+const IS_WINDOWS = process.platform === "win32";
+
 /** States in which the pipeline process is considered actively running. */
 const RUNNING_STATES: ReadonlySet<PipelineState> = new Set([
   "initializing",
@@ -134,8 +137,13 @@ export class GStreamerProcess extends EventEmitter {
   /**
    * Gracefully stop the child process.
    *
-   * Sends SIGTERM (gst-launch-1.0 with -e handles EOS cleanly on SIGTERM),
-   * then falls back to SIGKILL after the drain timeout.
+   * Platform-specific shutdown strategy:
+   * - **Unix**: Sends SIGINT which triggers EOS processing when gst-launch-1.0
+   *   runs with the `-e` flag. Falls back to SIGKILL after drain timeout.
+   * - **Windows**: Closes stdin (best-effort cleanup signal), then falls back
+   *   to process termination after drain timeout. Windows does not support
+   *   POSIX signals — `child.kill()` calls `TerminateProcess()` regardless
+   *   of the signal argument, so force-kill is the only guaranteed mechanism.
    *
    * @returns Promise that resolves when the process has exited.
    */
@@ -156,27 +164,52 @@ export class GStreamerProcess extends EventEmitter {
 
       const drainTimeout = DEFAULT_DRAIN_TIMEOUT_MS;
 
-      // Resolve once the process exits (either from SIGTERM or SIGKILL)
+      // Resolve once the process exits (from signal or force-kill)
       const onExit = (): void => {
         clearTimeout(killTimer);
         resolve();
       };
       child.once("exit", onExit);
 
-      // Send SIGTERM for graceful EOS shutdown
-      child.kill("SIGTERM");
+      this.sendShutdownSignal(child);
 
-      // SIGKILL fallback if process does not exit within drain timeout
+      // Force-kill fallback if process does not exit within drain timeout
       const killTimer = setTimeout(() => {
         if (this.childProcess) {
           logger.warn(
-            `Pipeline "${this.config.label}" did not exit within ${drainTimeout}ms, sending SIGKILL`,
+            `Pipeline "${this.config.label}" did not exit within ${drainTimeout}ms, force-killing`,
             { pipelineId: this.id },
           );
           child.kill("SIGKILL");
         }
       }, drainTimeout);
     });
+  }
+
+  /**
+   * Send a platform-appropriate shutdown signal to the GStreamer child process.
+   *
+   * - Unix: SIGINT triggers EOS drain when `-e` flag is active.
+   * - Windows: Close stdin as a best-effort cleanup hint. Node.js on Windows
+   *   maps all kill signals to `TerminateProcess()` (instant kill, no EOS),
+   *   so we rely on the force-kill timer as the guaranteed termination path.
+   */
+  private sendShutdownSignal(child: ChildProcess): void {
+    if (IS_WINDOWS) {
+      // Close stdin — gst-launch-1.0 may detect EOF and begin teardown.
+      // This is best-effort; the force-kill timer guarantees termination.
+      try {
+        child.stdin?.end();
+      } catch {
+        // stdin may already be closed or destroyed
+      }
+      logger.debug(`Pipeline "${this.config.label}" stdin closed (Windows shutdown)`, {
+        pipelineId: this.id,
+      });
+    } else {
+      // SIGINT triggers EOS processing in gst-launch-1.0 with -e flag
+      child.kill("SIGINT");
+    }
   }
 
   /**

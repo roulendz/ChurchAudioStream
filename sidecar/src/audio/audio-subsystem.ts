@@ -33,6 +33,9 @@ import type { PipelineStats } from "./pipeline/pipeline-types.js";
 import type { ConfigStore } from "../config/store.js";
 import { logger } from "../utils/logger.js";
 
+/** Maximum time (ms) to wait for channels to stop during shutdown before force-continuing. */
+const SHUTDOWN_TIMEOUT_MS = 30_000;
+
 export class AudioSubsystem extends EventEmitter {
   private readonly sourceRegistry: SourceRegistry;
   private readonly pipelineManager: PipelineManager;
@@ -86,9 +89,26 @@ export class AudioSubsystem extends EventEmitter {
     logger.info("Audio subsystem started");
   }
 
-  /** Stop all audio subsystem components in order: channels, discovery, monitors, logger. */
+  /**
+   * Stop all audio subsystem components in order: channels, discovery, monitors, logger.
+   *
+   * Channel shutdown is time-boxed — if GStreamer processes hang beyond the
+   * timeout, shutdown continues with force-killed processes rather than
+   * blocking indefinitely.
+   */
   async stop(): Promise<void> {
-    await this.channelManager.stopAll();
+    const channelShutdown = this.channelManager.stopAll();
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        logger.warn(
+          `Channel shutdown timed out after ${SHUTDOWN_TIMEOUT_MS}ms, force-continuing`,
+        );
+        resolve();
+      }, SHUTDOWN_TIMEOUT_MS);
+    });
+
+    await Promise.race([channelShutdown, timeout]);
+
     await this.discoveryManager.stop();
     this.resourceMonitor.stop();
     this.eventLogger.stop();

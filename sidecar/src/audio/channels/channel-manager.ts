@@ -880,6 +880,14 @@ export class ChannelManager extends EventEmitter {
             errorCode: error.code,
             technicalDetails: error.technicalDetails,
           });
+
+          // When crash recovery gives up, clean up monitor state for the
+          // abandoned pipeline to prevent unbounded Map growth.
+          if (error.code === "MAX_RESTARTS_EXCEEDED") {
+            this.resourceMonitor.untrackPipeline(pipelineId);
+            this.levelMonitor.clearPipeline(pipelineId);
+          }
+
           this.updateChannelStatus(channelId);
         }
       },

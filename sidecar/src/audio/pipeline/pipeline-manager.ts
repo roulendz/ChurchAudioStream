@@ -27,6 +27,7 @@ export interface RecoveryConfig {
   readonly autoRestart: boolean;
   readonly maxRestartAttempts: number;
   readonly restartDelayMs: number;
+  readonly maxRestartDelayMs: number;
   readonly drainTimeoutMs: number;
 }
 
@@ -226,11 +227,14 @@ export class PipelineManager extends EventEmitter {
   }
 
   /**
-   * Schedule a restart for a crashed pipeline after the configured delay.
+   * Schedule a restart for a crashed pipeline with exponential backoff.
    *
    * Increments the restart attempt counter. If max attempts are reached,
    * emits an error and does not restart. Successful streaming (detected via
    * state-change listener) resets the counter to zero.
+   *
+   * Backoff formula: `baseDelay * 2^(attempt-1)`, capped at `maxRestartDelayMs`.
+   * This prevents rapid restart loops when a device is unplugged or driver crashes.
    */
   private scheduleRestart(pipelineId: string): void {
     const attempts = (this.restartAttempts.get(pipelineId) ?? 0) + 1;
@@ -256,8 +260,10 @@ export class PipelineManager extends EventEmitter {
       return;
     }
 
+    const backoffDelayMs = this.computeBackoffDelay(attempts);
+
     logger.info(
-      `Scheduling restart for pipeline "${label}" (attempt ${attempts}/${this.recoveryConfig.maxRestartAttempts}) in ${this.recoveryConfig.restartDelayMs}ms`,
+      `Scheduling restart for pipeline "${label}" (attempt ${attempts}/${this.recoveryConfig.maxRestartAttempts}) in ${backoffDelayMs}ms`,
       { pipelineId },
     );
 
@@ -274,9 +280,22 @@ export class PipelineManager extends EventEmitter {
           { pipelineId },
         );
       }
-    }, this.recoveryConfig.restartDelayMs);
+    }, backoffDelayMs);
 
     this.restartTimers.set(pipelineId, timer);
+  }
+
+  /**
+   * Compute exponential backoff delay: `baseDelay * 2^(attempt-1)`, capped.
+   *
+   * Attempt 1 = baseDelay, attempt 2 = 2x, attempt 3 = 4x, etc.
+   * Capped at maxRestartDelayMs to prevent absurdly long waits.
+   */
+  private computeBackoffDelay(attempt: number): number {
+    const baseDelay = this.recoveryConfig.restartDelayMs;
+    const maxDelay = this.recoveryConfig.maxRestartDelayMs;
+    const exponentialDelay = baseDelay * Math.pow(2, attempt - 1);
+    return Math.min(exponentialDelay, maxDelay);
   }
 
   /** Clear a pending restart timer for a specific pipeline. */

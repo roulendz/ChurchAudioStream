@@ -116,6 +116,7 @@ export const PipelineRecoverySchema = z.object({
   autoRestart: z.boolean().default(true),
   maxRestartAttempts: z.number().int().min(0).max(20).default(5),
   restartDelayMs: z.number().int().min(500).max(30000).default(2000),
+  maxRestartDelayMs: z.number().int().min(1000).max(60000).default(30000),
   drainTimeoutMs: z.number().int().min(0).max(5000).default(500),
 });
 
