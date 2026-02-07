@@ -5,34 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 2 - Audio Capture Pipeline
+**Current focus:** Phase 2 complete -- ready for Phase 3
 
 ## Current Position
 
 Phase: 2 of 10 (Audio Capture Pipeline)
-Plan: 8 of 9 in current phase (02-01 through 02-08 complete)
-Status: In progress
-Last activity: 2026-02-07 -- Completed 02-08-PLAN.md (channel manager)
+Plan: 9 of 9 in current phase (02-01 through 02-09 complete)
+Status: Phase complete
+Last activity: 2026-02-07 -- Completed 02-09-PLAN.md (audio subsystem integration)
 
-Progress: [================] 46% (16/35 plans)
+Progress: [=================] 49% (17/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
+- Total plans completed: 17
 - Average duration: 7 minutes
-- Total execution time: 2.0 hours
+- Total execution time: 2.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 8/8 | 67 min | 8 min |
-| 02 | 8/9 | 51 min | 6 min |
+| 02 | 9/9 | 56 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-04 (12m), 02-02 (14m), 02-06 (4m), 02-07 (5m), 02-08 (3m)
-- Trend: fast execution; 02-08 channel manager wired cleanly to existing subsystems
+- Last 5 plans: 02-02 (14m), 02-06 (4m), 02-07 (5m), 02-08 (3m), 02-09 (5m)
+- Trend: Phase 2 complete; consistent fast execution
 
 *Updated after each plan completion*
 
@@ -93,6 +93,10 @@ Recent decisions affecting current work:
 - [02-08]: PipelineManager does not expose PIDs; ResourceMonitor PID tracking limited to cleanup until PipelineManager extension
 - [02-08]: Partial<AppConfig> cast needed for configStore.update() with nested partial objects (deepMerge handles at runtime)
 - [02-08]: Source assignment index as string key in pipeline mapping; rekeyPipelineMappings shifts on splice
+- [02-09]: 100ms level broadcast throttle interval (balances real-time VU meters with bandwidth)
+- [02-09]: Audio message handler extracted as separate function (SRP: main switch routes, audio handler processes)
+- [02-09]: AudioSubsystem persists across server restarts (created once in main, not per-restart)
+- [02-09]: Audio subsystem starts after server is ready; stops before servers on graceful shutdown
 
 ### Pending Todos
 
@@ -116,6 +120,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 02-08-PLAN.md (channel manager)
+Stopped at: Completed 02-09-PLAN.md (audio subsystem integration) -- Phase 2 complete
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
