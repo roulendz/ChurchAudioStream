@@ -214,7 +214,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Foundation & Configuration | 8/8 | Verified (UAT v3: 12/12) | 2026-02-07 |
-| 2. Audio Capture Pipeline | 0/9 | Planning complete | - |
+| 2. Audio Capture Pipeline | 4/9 | In progress | - |
 | 3. Audio Processing | 0/2 | Not started | - |
 | 4. WebRTC Streaming Core | 0/3 | Not started | - |
 | 5. Listener Web UI | 0/4 | Not started | - |

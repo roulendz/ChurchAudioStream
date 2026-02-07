@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 2 of 10 (Audio Capture Pipeline)
-Plan: 4 of 9 in current phase (02-01, 02-04, 02-05 complete)
+Plan: 5 of 9 in current phase (02-01, 02-02, 02-04, 02-05 complete)
 Status: In progress
-Last activity: 2026-02-07 -- Completed 02-04-PLAN.md (SAP listener and SDP parser)
+Last activity: 2026-02-07 -- Completed 02-02-PLAN.md (pipeline builder and metering parser)
 
-Progress: [==========] 31% (11/35 plans)
+Progress: [==========] 34% (12/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
+- Total plans completed: 12
 - Average duration: 8 minutes
-- Total execution time: 1.5 hours
+- Total execution time: 1.7 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 8/8 | 67 min | 8 min |
-| 02 | 3/9 | 20 min | 7 min |
+| 02 | 4/9 | 34 min | 9 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-08 (4m), 01-06 (7m), 01-03 (3m), 02-05 (4m), 02-04 (12m)
-- Trend: steady execution; 02-04 slightly longer due to sdp-transform limitation workarounds
+- Last 5 plans: 01-06 (7m), 01-03 (3m), 02-05 (4m), 02-04 (12m), 02-02 (14m)
+- Trend: steady execution; 02-02 thorough due to 7 source type variants and 43 metering parser assertions
 
 *Updated after each plan completion*
 
@@ -76,6 +76,9 @@ Recent decisions affecting current work:
 - [02-04]: Use originAddress:originSessionId as unique stream key (SAP hash is only 16-bit, not unique across origins)
 - [02-04]: Parse channel labels from raw SDP (sdp-transform treats a=label: as scalar, loses multi-value)
 - [02-04]: Strip TTL suffix from multicast connection address (sdp-transform preserves /TTL from c= line)
+- [02-02]: Dispatch table (Record<AudioApi, builderFn>) for local pipeline builders -- extensible without switch/case
+- [02-02]: Separate channel selection for AES67 (knows total channels from SDP) vs local devices (may not know total)
+- [02-02]: -60 dB silence floor in dbToNormalized to prevent display artifacts from near-zero floating point noise
 
 ### Pending Todos
 
@@ -99,6 +102,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 02-04-PLAN.md (SAP listener and SDP parser)
+Stopped at: Completed 02-02-PLAN.md (pipeline builder and metering parser)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
