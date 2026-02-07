@@ -71,6 +71,8 @@ Recent decisions affecting current work:
 - [quick-002]: Domain changes auto-regenerate server cert only (no UAC); issuer mismatch triggers regen of old self-signed certs
 - [02-05]: Composite device ID format ${api}:${deviceId} ensures same physical device appears separately per audio API
 - [02-05]: Polling errors log and continue (don't stop timer) for transient GStreamer failure resilience
+- [02-01]: PipelineConfig uses discriminated union with never-typed exclusions (exactly one config block per source type)
+- [02-01]: Readonly properties on discovery data, mutable only on status and lastSeenAt fields
 
 ### Pending Todos
 
