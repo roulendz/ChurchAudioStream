@@ -208,6 +208,11 @@ body {
   color: var(--error);
 }
 
+.field-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 /* Checkbox field */
 .form-field--checkbox label {
   display: flex;

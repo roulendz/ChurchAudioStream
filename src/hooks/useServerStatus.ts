@@ -12,13 +12,12 @@ export interface AppConfig {
     interface?: string;
   };
   network: {
+    domain: string;
     mdns: {
       enabled: boolean;
-      domain: string;
     };
     hostsFile: {
       enabled: boolean;
-      domain: string;
     };
   };
   certificate: {
@@ -55,7 +54,14 @@ interface UseServerStatusReturn {
 }
 
 const DEFAULT_HTTPS_PORT = 7777;
-const LOOPBACK_PORT_OFFSET = 1;
+
+/**
+ * Fixed loopback port for the admin WebSocket connection.
+ * Must match ADMIN_LOOPBACK_PORT in sidecar/src/server.ts.
+ * Intentionally NOT derived from config.server.port so that
+ * changing the external HTTPS port never breaks the admin connection.
+ */
+const ADMIN_LOOPBACK_PORT = 7778;
 
 function isTauriEnvironment(): boolean {
   return (
@@ -69,14 +75,14 @@ function resolveWebSocketUrl(): string {
   // Phone browsers connect via wss:// to the HTTPS server (encrypted for WiFi)
   if (typeof window !== "undefined" && window.location) {
     if (isTauriEnvironment()) {
-      return `ws://127.0.0.1:${DEFAULT_HTTPS_PORT + LOOPBACK_PORT_OFFSET}`;
+      return `ws://127.0.0.1:${ADMIN_LOOPBACK_PORT}`;
     }
     // Running in browser: derive from current URL
     const host = window.location.hostname;
     const port = window.location.port || String(DEFAULT_HTTPS_PORT);
     return `wss://${host}:${port}`;
   }
-  return `ws://127.0.0.1:${DEFAULT_HTTPS_PORT + LOOPBACK_PORT_OFFSET}`;
+  return `ws://127.0.0.1:${ADMIN_LOOPBACK_PORT}`;
 }
 
 let requestIdCounter = 0;
@@ -168,12 +174,12 @@ export function useServerStatus(): UseServerStatusReturn {
 
   function updateWsUrlFromConfig(newConfig: AppConfig): void {
     if (isTauriEnvironment()) {
-      const loopbackPort = newConfig.server.port + LOOPBACK_PORT_OFFSET;
-      setWsUrl(`ws://127.0.0.1:${loopbackPort}`);
-    } else {
-      const host = window.location.hostname;
-      setWsUrl(`wss://${host}:${newConfig.server.port}`);
+      // Loopback port is fixed -- no update needed for Tauri admin.
+      // Only browser clients need to track config port changes.
+      return;
     }
+    const host = window.location.hostname;
+    setWsUrl(`wss://${host}:${newConfig.server.port}`);
   }
 
   const updateConfig = useCallback(

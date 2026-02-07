@@ -16,16 +16,18 @@ type SaveStatus = "idle" | "saving" | "restarting" | "saved" | "error";
 interface FormState {
   port: string;
   selectedInterface: string;
+  domain: string;
   mdnsEnabled: boolean;
-  mdnsDomain: string;
+  hostsFileEnabled: boolean;
 }
 
 function buildFormStateFromConfig(config: AppConfig): FormState {
   return {
     port: String(config.server.port),
     selectedInterface: config.server.interface ?? "",
+    domain: config.network.domain,
     mdnsEnabled: config.network.mdns.enabled,
-    mdnsDomain: config.network.mdns.domain,
+    hostsFileEnabled: config.network.hostsFile.enabled,
   };
 }
 
@@ -42,7 +44,6 @@ function buildConfigDiff(
     hasChanges = true;
   }
 
-  // Find the host address for the selected interface
   if (formState.selectedInterface !== (originalConfig.server.interface ?? "")) {
     diff.server = {
       ...diff.server,
@@ -51,26 +52,26 @@ function buildConfigDiff(
     hasChanges = true;
   }
 
-  if (formState.mdnsEnabled !== originalConfig.network.mdns.enabled) {
+  if (formState.domain !== originalConfig.network.domain) {
     diff.network = {
       ...diff.network,
-      mdns: {
-        ...originalConfig.network.mdns,
-        ...diff.network?.mdns,
-        enabled: formState.mdnsEnabled,
-      },
+      domain: formState.domain,
     } as AppConfig["network"];
     hasChanges = true;
   }
 
-  if (formState.mdnsDomain !== originalConfig.network.mdns.domain) {
+  if (formState.mdnsEnabled !== originalConfig.network.mdns.enabled) {
     diff.network = {
       ...diff.network,
-      mdns: {
-        ...originalConfig.network.mdns,
-        ...diff.network?.mdns,
-        domain: formState.mdnsDomain,
-      },
+      mdns: { enabled: formState.mdnsEnabled },
+    } as AppConfig["network"];
+    hasChanges = true;
+  }
+
+  if (formState.hostsFileEnabled !== originalConfig.network.hostsFile.enabled) {
+    diff.network = {
+      ...diff.network,
+      hostsFile: { enabled: formState.hostsFileEnabled },
     } as AppConfig["network"];
     hasChanges = true;
   }
@@ -94,8 +95,9 @@ export function SettingsPanel({
   const [formState, setFormState] = useState<FormState>({
     port: "7777",
     selectedInterface: "",
+    domain: "church.audio",
     mdnsEnabled: true,
-    mdnsDomain: "churchaudio.local",
+    hostsFileEnabled: true,
   });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [errorMessages, setErrorMessages] = useState<string[]>([]);
@@ -133,22 +135,23 @@ export function SettingsPanel({
     [],
   );
 
-  const handleMdnsEnabledChange = useCallback(
+  const handleDomainChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      setFormState((prev) => ({
-        ...prev,
-        mdnsEnabled: e.target.checked,
-      }));
+      setFormState((prev) => ({ ...prev, domain: e.target.value }));
     },
     [],
   );
 
-  const handleMdnsDomainChange = useCallback(
+  const handleMdnsEnabledChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      setFormState((prev) => ({
-        ...prev,
-        mdnsDomain: e.target.value,
-      }));
+      setFormState((prev) => ({ ...prev, mdnsEnabled: e.target.checked }));
+    },
+    [],
+  );
+
+  const handleHostsFileEnabledChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFormState((prev) => ({ ...prev, hostsFileEnabled: e.target.checked }));
     },
     [],
   );
@@ -167,7 +170,6 @@ export function SettingsPanel({
     if (result.success) {
       if (result.requiresRestart) {
         setSaveStatus("restarting");
-        // The status will update when reconnection happens
         setTimeout(() => {
           setSaveStatus("idle");
         }, 5000);
@@ -227,6 +229,20 @@ export function SettingsPanel({
           </select>
         </div>
 
+        <div className="form-field">
+          <label htmlFor="settings-domain">Domain</label>
+          <input
+            id="settings-domain"
+            type="text"
+            value={formState.domain}
+            onChange={handleDomainChange}
+            placeholder="church.audio"
+          />
+          <span className="field-hint">
+            Used for mDNS discovery, hosts file, and TLS certificate
+          </span>
+        </div>
+
         <div className="form-field form-field--checkbox">
           <label htmlFor="settings-mdns">
             <input
@@ -239,16 +255,19 @@ export function SettingsPanel({
           </label>
         </div>
 
-        <div className="form-field">
-          <label htmlFor="settings-mdns-domain">mDNS Domain</label>
-          <input
-            id="settings-mdns-domain"
-            type="text"
-            value={formState.mdnsDomain}
-            onChange={handleMdnsDomainChange}
-            disabled={!formState.mdnsEnabled}
-            placeholder="churchaudio.local"
-          />
+        <div className="form-field form-field--checkbox">
+          <label htmlFor="settings-hosts-file">
+            <input
+              id="settings-hosts-file"
+              type="checkbox"
+              checked={formState.hostsFileEnabled}
+              onChange={handleHostsFileEnabledChange}
+            />
+            Update Hosts File
+          </label>
+          <span className="field-hint">
+            Maps domain to server IP in system hosts file (requires admin)
+          </span>
         </div>
 
         {errorMessages.length > 0 && (
