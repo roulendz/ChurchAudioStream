@@ -67,6 +67,8 @@ export type ServerMessageType =
   | "channel:updated"
   | "channel:removed"
   | "channel:state"
+  // Audio: processing config
+  | "channel:processing:updated"
   // Audio: level metering
   | "levels:update"
   // Audio: resource stats
@@ -152,4 +154,35 @@ export interface StatsPayload {
 export interface ChannelEventsPayload {
   channelId: string;
   events: unknown[];
+}
+
+// ---------------------------------------------------------------------------
+// Processing config WebSocket payload types
+// ---------------------------------------------------------------------------
+
+/** Request payload for channel:processing:update. */
+export interface ProcessingUpdatePayload {
+  channelId: string;
+  mode?: "speech" | "music";
+  agc?: {
+    enabled?: boolean;
+    targetLufs?: number;
+  };
+  opus?: {
+    enabled?: boolean;
+    bitrateKbps?: number;
+    frameSize?: "10" | "20" | "40";
+    fec?: boolean;
+    bitrateMode?: "vbr" | "cbr";
+  };
+}
+
+/** Request payload for channel:processing:reset. */
+export interface ProcessingResetPayload {
+  channelId: string;
+}
+
+/** Request payload for channel:processing:get. */
+export interface ProcessingGetPayload {
+  channelId: string;
 }

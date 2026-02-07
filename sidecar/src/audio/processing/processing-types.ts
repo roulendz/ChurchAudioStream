@@ -114,6 +114,20 @@ export interface ProcessingConfig {
   readonly rtpOutput: RtpOutputConfig;
 }
 
+/**
+ * Partial update type for processing config changes.
+ *
+ * All nested objects are also partial, allowing callers to update individual
+ * fields (e.g., just `{ agc: { targetLufs: -18 } }`) without providing
+ * the complete sub-config. The channel manager deep-merges these updates.
+ */
+export interface ProcessingConfigUpdate {
+  mode?: AudioModeType;
+  agc?: Partial<AgcConfig>;
+  opus?: Partial<OpusEncodingConfig>;
+  rtpOutput?: Partial<RtpOutputConfig>;
+}
+
 // ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------

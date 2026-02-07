@@ -32,7 +32,7 @@ import type { ResourceMonitor } from "../monitor/resource-monitor.js";
 import type { EventLogger, ChannelEventType } from "../monitor/event-logger.js";
 import type { ConfigStore } from "../../config/store.js";
 import type { AppConfig } from "../../config/schema.js";
-import type { ProcessingConfig } from "../processing/processing-types.js";
+import type { ProcessingConfig, ProcessingConfigUpdate } from "../processing/processing-types.js";
 import { ProcessingDefaults, deriveSettingsFromMode } from "../processing/processing-types.js";
 import { getPortsForChannel, generateSsrc } from "../processing/port-allocator.js";
 import { logger } from "../../utils/logger.js";
@@ -211,7 +211,7 @@ export class ChannelManager extends EventEmitter {
    */
   updateProcessingConfig(
     channelId: string,
-    updates: Partial<ProcessingConfig>,
+    updates: ProcessingConfigUpdate,
   ): AppChannel {
     const channel = this.getChannelOrThrow(channelId);
 

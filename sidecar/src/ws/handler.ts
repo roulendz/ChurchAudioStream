@@ -5,6 +5,7 @@ import { EventEmitter } from "node:events";
 import WebSocket, { WebSocketServer } from "ws";
 import type { ConfigStore } from "../config/store";
 import type { AudioSubsystem } from "../audio/audio-subsystem";
+import type { ProcessingConfigUpdate } from "../audio/processing/processing-types";
 import { listNetworkInterfaces } from "../network/interfaces";
 import type {
   WsMessage,
@@ -18,6 +19,9 @@ import type {
   ChannelSourceRemovePayload,
   ChannelSourceUpdatePayload,
   ChannelActionPayload,
+  ProcessingUpdatePayload,
+  ProcessingResetPayload,
+  ProcessingGetPayload,
 } from "./types";
 import { logger } from "../utils/logger";
 
@@ -449,6 +453,7 @@ const AUDIO_MESSAGE_PREFIXES = [
   "channels:",
   "levels:",
   "stats:",
+  "processing:",
 ] as const;
 
 /** Check if a message type is an audio-related message. */
@@ -691,6 +696,88 @@ async function handleAudioMessageAsync(
       }
       const events = audioSubsystem.getChannelEvents(payload.channelId);
       sendMessage(socket, "channel:events", { channelId: payload.channelId, events }, message.requestId);
+      break;
+    }
+
+    // -- Processing config --
+    case "channel:processing:get": {
+      const payload = message.payload as ProcessingGetPayload | undefined;
+      if (!payload?.channelId) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required field: channelId", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      const processingConfig = audioSubsystem.getProcessingConfig(payload.channelId);
+      if (!processingConfig) {
+        sendMessage(
+          socket,
+          "error",
+          { message: `Channel not found: ${payload.channelId}`, originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      sendMessage(
+        socket,
+        "channel:processing:updated",
+        { channelId: payload.channelId, processing: processingConfig },
+        message.requestId,
+      );
+      break;
+    }
+
+    case "channel:processing:update": {
+      const payload = message.payload as ProcessingUpdatePayload | undefined;
+      if (!payload?.channelId) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required field: channelId", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      // Convert frameSize from string ("20") to number (20) if present
+      let opusUpdate: ProcessingConfigUpdate["opus"];
+      if (payload.opus) {
+        const { frameSize: frameSizeStr, ...restOpus } = payload.opus;
+        opusUpdate = {
+          ...restOpus,
+          ...(frameSizeStr !== undefined
+            ? { frameSize: Number(frameSizeStr) as 10 | 20 | 40 }
+            : {}),
+        };
+      }
+
+      const updatedChannel = audioSubsystem.updateProcessingConfig(
+        payload.channelId,
+        {
+          mode: payload.mode,
+          agc: payload.agc,
+          opus: opusUpdate,
+        },
+      );
+      sendMessage(socket, "channel:updated", updatedChannel, message.requestId);
+      break;
+    }
+
+    case "channel:processing:reset": {
+      const payload = message.payload as ProcessingResetPayload | undefined;
+      if (!payload?.channelId) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required field: channelId", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      const resetChannel = audioSubsystem.resetProcessingDefaults(payload.channelId);
+      sendMessage(socket, "channel:updated", resetChannel, message.requestId);
       break;
     }
 

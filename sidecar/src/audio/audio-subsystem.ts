@@ -28,6 +28,7 @@ import { EventLogger, type ChannelEvent } from "./monitor/event-logger.js";
 import { ChannelManager, type ChannelUpdatableFields, type SourceUpdatableFields } from "./channels/channel-manager.js";
 import type { DiscoveredSource } from "./sources/source-types.js";
 import type { AppChannel, ChannelOutputFormat, SourceAssignment } from "./channels/channel-types.js";
+import type { ProcessingConfig, ProcessingConfigUpdate } from "./processing/processing-types.js";
 import type { PipelineStats } from "./pipeline/pipeline-types.js";
 import type { ConfigStore } from "../config/store.js";
 import { logger } from "../utils/logger.js";
@@ -152,6 +153,26 @@ export class AudioSubsystem extends EventEmitter {
 
   async stopChannel(id: string): Promise<void> {
     return this.channelManager.stopChannel(id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Processing config (delegate to ChannelManager)
+  // ---------------------------------------------------------------------------
+
+  updateProcessingConfig(
+    channelId: string,
+    updates: ProcessingConfigUpdate,
+  ): AppChannel {
+    return this.channelManager.updateProcessingConfig(channelId, updates);
+  }
+
+  resetProcessingDefaults(channelId: string): AppChannel {
+    return this.channelManager.resetProcessingDefaults(channelId);
+  }
+
+  getProcessingConfig(channelId: string): ProcessingConfig | undefined {
+    const channel = this.channelManager.getChannel(channelId);
+    return channel?.processing;
   }
 
   // ---------------------------------------------------------------------------
