@@ -45,10 +45,64 @@ export const CertificateSchema = z.object({
   caKeyPath: z.string().default("ca-key.pem"),
 });
 
+// ---------------------------------------------------------------------------
+// Audio capture pipeline schemas
+// ---------------------------------------------------------------------------
+
+/** Level metering update frequency for GStreamer `level` element. */
+export const LevelMeteringSchema = z.object({
+  intervalMs: z.number().int().min(10).max(1000).default(100),
+});
+
+/** A source assigned to an app channel with gain, mute, and delay controls. */
+export const SourceAssignmentSchema = z.object({
+  sourceId: z.string(),
+  selectedChannels: z.array(z.number().int().min(0)).min(1),
+  gain: z.number().min(0).max(2).default(1.0),
+  muted: z.boolean().default(false),
+  delayMs: z.number().min(0).max(5000).default(0),
+});
+
+/** An app-level audio channel (mix bus) persisted in config. */
+export const ChannelSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  sources: z.array(SourceAssignmentSchema).default([]),
+  outputFormat: z.enum(["mono", "stereo"]).default("mono"),
+  autoStart: z.boolean().default(true),
+});
+
+/** Pipeline crash recovery settings. */
+export const PipelineRecoverySchema = z.object({
+  autoRestart: z.boolean().default(true),
+  maxRestartAttempts: z.number().int().min(0).max(20).default(5),
+  restartDelayMs: z.number().int().min(500).max(30000).default(2000),
+  drainTimeoutMs: z.number().int().min(0).max(5000).default(500),
+});
+
+/** Discovery cache and device polling settings. */
+export const DiscoveryCacheSchema = z.object({
+  enabled: z.boolean().default(true),
+  devicePollIntervalMs: z.number().int().min(1000).max(30000).default(5000),
+});
+
+/** Top-level audio configuration grouping channels, metering, recovery, and discovery. */
+export const AudioSchema = z.object({
+  channels: z.array(ChannelSchema).default([]),
+  levelMetering: LevelMeteringSchema.default(() => LevelMeteringSchema.parse({})),
+  pipelineRecovery: PipelineRecoverySchema.default(() => PipelineRecoverySchema.parse({})),
+  discoveryCache: DiscoveryCacheSchema.default(() => DiscoveryCacheSchema.parse({})),
+});
+
+// ---------------------------------------------------------------------------
+// Root config schema
+// ---------------------------------------------------------------------------
+
 export const ConfigSchema = z.object({
   server: ServerSchema.default(() => ServerSchema.parse({})),
   network: NetworkSchema.default(() => NetworkSchema.parse({})),
   certificate: CertificateSchema.default(() => CertificateSchema.parse({})),
+  audio: AudioSchema.default(() => AudioSchema.parse({})),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
