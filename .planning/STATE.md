@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 2 of 10 (Audio Capture Pipeline)
-Plan: 5 of 9 in current phase
+Plan: 4 of 9 in current phase (02-01, 02-04, 02-05 complete)
 Status: In progress
-Last activity: 2026-02-07 -- Completed 02-05-PLAN.md (Local audio device enumeration)
+Last activity: 2026-02-07 -- Completed 02-04-PLAN.md (SAP listener and SDP parser)
 
-Progress: [=========.] 26% (9/35 plans)
+Progress: [==========] 31% (11/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 11
 - Average duration: 8 minutes
-- Total execution time: 1.3 hours
+- Total execution time: 1.5 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 8/8 | 67 min | 8 min |
-| 02 | 1/9 | 4 min | 4 min |
+| 02 | 3/9 | 20 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-07 (5m), 01-08 (4m), 01-06 (7m), 01-03 (3m), 02-05 (4m)
-- Trend: fast execution continues into Phase 2
+- Last 5 plans: 01-08 (4m), 01-06 (7m), 01-03 (3m), 02-05 (4m), 02-04 (12m)
+- Trend: steady execution; 02-04 slightly longer due to sdp-transform limitation workarounds
 
 *Updated after each plan completion*
 
@@ -73,6 +73,9 @@ Recent decisions affecting current work:
 - [02-05]: Polling errors log and continue (don't stop timer) for transient GStreamer failure resilience
 - [02-01]: PipelineConfig uses discriminated union with never-typed exclusions (exactly one config block per source type)
 - [02-01]: Readonly properties on discovery data, mutable only on status and lastSeenAt fields
+- [02-04]: Use originAddress:originSessionId as unique stream key (SAP hash is only 16-bit, not unique across origins)
+- [02-04]: Parse channel labels from raw SDP (sdp-transform treats a=label: as scalar, loses multi-value)
+- [02-04]: Strip TTL suffix from multicast connection address (sdp-transform preserves /TTL from c= line)
 
 ### Pending Todos
 
@@ -96,6 +99,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 02-05-PLAN.md (Local audio device enumeration)
+Stopped at: Completed 02-04-PLAN.md (SAP listener and SDP parser)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
