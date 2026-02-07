@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 Phase: 1 of 10 (Project Foundation & Configuration)
 Plan: 7 of 8 in current phase (01-03 pending, gap closure 06-08 done)
 Status: Human verification needed (4/5 must-haves verified, awaiting UAT v3)
-Last activity: 2026-02-06 -- Completed quick task 001 (local domain + hosts file + cert SAN)
+Last activity: 2026-02-07 -- Completed quick task 002 (trusted Root CA for HTTPS)
 
 Progress: [=====.....] 20% (7/35 plans)
 
@@ -61,7 +61,11 @@ Recent decisions affecting current work:
 - [01-06]: HTTP loopback port = HTTPS port + 1; Tauri uses ws:// (no TLS cert issues), phone browsers use wss://
 - [quick-001]: Default domain changed to church.audio (from churchaudio.local); hostsFile.enabled defaults to true
 - [quick-001]: execSync for elevation commands (intentional: elevation dialogs are blocking by nature)
-- [quick-001]: Cert regeneration on domain change deferred (TODO; user deletes cert files to force regen)
+- [quick-001]: Cert regeneration on domain change now handled by quick-002 (issuer + domain validation)
+- [quick-002]: 20-year Root CA validity (local-only, avoids repeat UAC); 825-day server cert (Apple max)
+- [quick-002]: VBS+UAC elevation pattern duplicated per SRP (trustedCa.ts and hosts.ts evolve independently)
+- [quick-002]: certutil CN search + SHA1 fingerprint cross-check for store detection
+- [quick-002]: Domain changes auto-regenerate server cert only (no UAC); issuer mismatch triggers regen of old self-signed certs
 
 ### Pending Todos
 
@@ -72,6 +76,7 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 001 | Local domain (church.audio) + hosts file auto-update + cert SAN | 2026-02-06 | 8f27c89 | [001-local-domain-hosts-cert](./quick/001-local-domain-hosts-cert/) |
+| 002 | Trusted Root CA for HTTPS (browser trust, no security warnings) | 2026-02-07 | f057dfc | [002-trusted-root-ca-for-https](./quick/002-trusted-root-ca-for-https/) |
 
 ### Blockers/Concerns
 
@@ -83,6 +88,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-06
-Stopped at: Completed quick task 001 (local domain + hosts file + cert SAN). 01-03 still pending.
+Last session: 2026-02-07
+Stopped at: Completed quick task 002 (trusted Root CA for HTTPS). 01-03 still pending.
 Resume file: None
