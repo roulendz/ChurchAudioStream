@@ -6,6 +6,8 @@
  * references a DiscoveredSource by ID and includes per-source gain, mute, and delay.
  */
 
+import type { ProcessingConfig } from "../processing/processing-types.js";
+
 /** Output format for an app channel. */
 export type ChannelOutputFormat = "mono" | "stereo";
 
@@ -39,5 +41,7 @@ export interface AppChannel {
   outputFormat: ChannelOutputFormat;
   autoStart: boolean;
   status: ChannelStatus;
+  /** Per-channel audio processing configuration (AGC, Opus, RTP output, mode). */
+  processing: ProcessingConfig;
   readonly createdAt: number;
 }

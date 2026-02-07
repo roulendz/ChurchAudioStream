@@ -32,7 +32,13 @@ import type { ResourceMonitor } from "../monitor/resource-monitor.js";
 import type { EventLogger, ChannelEventType } from "../monitor/event-logger.js";
 import type { ConfigStore } from "../../config/store.js";
 import type { AppConfig } from "../../config/schema.js";
+import type { ProcessingConfig } from "../processing/processing-types.js";
+import { ProcessingDefaults, deriveSettingsFromMode } from "../processing/processing-types.js";
+import { getPortsForChannel, generateSsrc } from "../processing/port-allocator.js";
 import { logger } from "../../utils/logger.js";
+
+/** Debounce delay (ms) before restarting pipelines after processing config change. */
+const PROCESSING_DEBOUNCE_MS = 1500;
 
 /** Subset of AppChannel fields that can be updated after creation. */
 export type ChannelUpdatableFields = Partial<
@@ -66,6 +72,9 @@ export class ChannelManager extends EventEmitter {
    * Source index is stringified because Map keys use identity comparison.
    */
   private readonly channelPipelines = new Map<string, Map<string, string>>();
+
+  /** Per-channel debounce timers for processing config change restarts. */
+  private readonly restartDebounceTimers = new Map<string, NodeJS.Timeout>();
 
   private readonly pipelineManager: PipelineManager;
   private readonly sourceRegistry: SourceRegistry;
@@ -108,13 +117,28 @@ export class ChannelManager extends EventEmitter {
     name: string,
     outputFormat: ChannelOutputFormat = "mono",
   ): AppChannel {
+    const channelId = randomUUID();
+    const channelIndex = this.channels.size;
+    const ports = getPortsForChannel(channelIndex);
+
     const channel: AppChannel = {
-      id: randomUUID(),
+      id: channelId,
       name,
       sources: [],
       outputFormat,
       autoStart: true,
       status: "stopped",
+      processing: {
+        ...ProcessingDefaults,
+        agc: { ...ProcessingDefaults.agc },
+        opus: { ...ProcessingDefaults.opus },
+        rtpOutput: {
+          ...ProcessingDefaults.rtpOutput,
+          rtpPort: ports.rtpPort,
+          rtcpPort: ports.rtcpPort,
+          ssrc: generateSsrc(channelId),
+        },
+      },
       createdAt: Date.now(),
     };
 
@@ -137,6 +161,7 @@ export class ChannelManager extends EventEmitter {
   async removeChannel(channelId: string): Promise<void> {
     const channel = this.getChannelOrThrow(channelId);
 
+    this.clearDebouncedRestart(channelId);
     await this.stopChannel(channelId);
 
     this.channels.delete(channelId);
@@ -169,6 +194,104 @@ export class ChannelManager extends EventEmitter {
     this.emit("channel-updated", channel);
 
     logger.info(`Channel updated: "${channel.name}"`, { channelId });
+    return channel;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Processing Config
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Update a channel's processing config with a partial update.
+   *
+   * Deep-merges nested objects (agc, opus, rtpOutput). When `mode` is provided,
+   * derives mode-dependent settings (audioType, maxTruePeakDbtp) via
+   * `deriveSettingsFromMode`. Persists immediately and schedules a debounced
+   * pipeline restart if the channel is actively streaming.
+   */
+  updateProcessingConfig(
+    channelId: string,
+    updates: Partial<ProcessingConfig>,
+  ): AppChannel {
+    const channel = this.getChannelOrThrow(channelId);
+
+    // Deep-merge each nested config object
+    if (updates.agc) {
+      channel.processing = {
+        ...channel.processing,
+        agc: { ...channel.processing.agc, ...updates.agc },
+      };
+    }
+    if (updates.opus) {
+      channel.processing = {
+        ...channel.processing,
+        opus: { ...channel.processing.opus, ...updates.opus },
+      };
+    }
+    if (updates.rtpOutput) {
+      channel.processing = {
+        ...channel.processing,
+        rtpOutput: { ...channel.processing.rtpOutput, ...updates.rtpOutput },
+      };
+    }
+
+    // Mode switch derives dependent settings (audioType, maxTruePeakDbtp)
+    if (updates.mode !== undefined) {
+      channel.processing = deriveSettingsFromMode(
+        updates.mode,
+        channel.processing,
+      );
+    }
+
+    this.persistChannels();
+
+    if (channel.status === "streaming" || channel.status === "starting") {
+      this.scheduleDebouncedRestart(channelId);
+    }
+
+    this.emit("channel-updated", channel);
+
+    logger.info(`Processing config updated for channel "${channel.name}"`, {
+      channelId,
+    });
+    return channel;
+  }
+
+  /**
+   * Reset a channel's processing config to defaults.
+   *
+   * Preserves the channel's allocated RTP ports and SSRC.
+   * Persists immediately and schedules debounced restart if streaming.
+   */
+  resetProcessingDefaults(channelId: string): AppChannel {
+    const channel = this.getChannelOrThrow(channelId);
+
+    const channelIndex = this.getChannelIndex(channelId);
+    const ports = getPortsForChannel(channelIndex);
+
+    channel.processing = {
+      ...ProcessingDefaults,
+      agc: { ...ProcessingDefaults.agc },
+      opus: { ...ProcessingDefaults.opus },
+      rtpOutput: {
+        ...ProcessingDefaults.rtpOutput,
+        rtpPort: ports.rtpPort,
+        rtcpPort: ports.rtcpPort,
+        ssrc: generateSsrc(channelId),
+      },
+    };
+
+    this.persistChannels();
+
+    if (channel.status === "streaming" || channel.status === "starting") {
+      this.scheduleDebouncedRestart(channelId);
+    }
+
+    this.emit("channel-updated", channel);
+
+    logger.info(`Processing config reset to defaults for channel "${channel.name}"`, {
+      channelId,
+    });
     return channel;
   }
 
@@ -384,6 +507,8 @@ export class ChannelManager extends EventEmitter {
    * Unregisters from resource monitor and clears level data for each pipeline.
    */
   async stopChannel(channelId: string): Promise<void> {
+    this.clearDebouncedRestart(channelId);
+
     const pipelineMap = this.channelPipelines.get(channelId);
     if (!pipelineMap || pipelineMap.size === 0) {
       const channel = this.channels.get(channelId);
@@ -504,6 +629,15 @@ export class ChannelManager extends EventEmitter {
 
     const pipelineMap = this.getOrCreatePipelineMap(channelId);
     pipelineMap.set(String(sourceIndex), pipelineId);
+
+    // Set AGC target on level monitor so gain reduction is computed
+    const channel = this.channels.get(channelId);
+    if (channel?.processing.agc.enabled) {
+      this.levelMonitor.setProcessingTarget(
+        pipelineId,
+        channel.processing.agc.targetLufs,
+      );
+    }
   }
 
   /** Stop and remove a single pipeline, cleaning up monitor state. */
@@ -569,6 +703,8 @@ export class ChannelManager extends EventEmitter {
    * Build a PipelineConfig from a source assignment and registry data.
    *
    * Returns null if the source is not found in the registry (stale config).
+   * Includes processing config from the channel when present, with port
+   * allocation and SSRC computed from the channel's position and ID.
    */
   private buildPipelineConfigFromAssignment(
     channelId: string,
@@ -589,11 +725,14 @@ export class ChannelManager extends EventEmitter {
     const levelIntervalMs =
       this.configStore.get().audio.levelMetering.intervalMs;
 
+    // Compute processing config with proper port allocation and SSRC
+    const processing = channel ? this.buildProcessingForPipeline(channel) : undefined;
+
     if (source.type === "aes67") {
-      return this.buildAes67PipelineConfig(source, assignment, label, levelIntervalMs);
+      return this.buildAes67PipelineConfig(source, assignment, label, levelIntervalMs, processing);
     }
 
-    return this.buildLocalPipelineConfig(source, assignment, label, levelIntervalMs);
+    return this.buildLocalPipelineConfig(source, assignment, label, levelIntervalMs, processing);
   }
 
   /** Build PipelineConfig for an AES67 multicast source. */
@@ -602,11 +741,13 @@ export class ChannelManager extends EventEmitter {
     assignment: SourceAssignment,
     label: string,
     levelIntervalMs: number,
+    processing?: ProcessingConfig,
   ): PipelineConfig {
     return {
       sourceType: "aes67",
       label,
       levelIntervalMs,
+      processing,
       aes67Config: {
         multicastAddress: source.multicastAddress,
         port: source.port,
@@ -625,11 +766,13 @@ export class ChannelManager extends EventEmitter {
     assignment: SourceAssignment,
     label: string,
     levelIntervalMs: number,
+    processing?: ProcessingConfig,
   ): PipelineConfig {
     return {
       sourceType: "local",
       label,
       levelIntervalMs,
+      processing,
       localConfig: {
         deviceId: source.deviceId,
         api: source.api,
@@ -759,12 +902,20 @@ export class ChannelManager extends EventEmitter {
   // Private: Config persistence
   // ---------------------------------------------------------------------------
 
-  /** Load channels from the config store on startup. */
+  /**
+   * Load channels from the config store on startup.
+   *
+   * The Zod ProcessingSchema provides factory defaults for channels that
+   * were saved before Phase 3 (no processing field in stored config).
+   */
   private loadChannelsFromConfig(): void {
     const config = this.configStore.get();
     const savedChannels = config.audio.channels;
 
-    for (const saved of savedChannels) {
+    for (let i = 0; i < savedChannels.length; i++) {
+      const saved = savedChannels[i];
+      const ports = getPortsForChannel(i);
+
       const channel: AppChannel = {
         id: saved.id,
         name: saved.name,
@@ -778,6 +929,29 @@ export class ChannelManager extends EventEmitter {
         outputFormat: saved.outputFormat,
         autoStart: saved.autoStart,
         status: "stopped",
+        processing: {
+          mode: saved.processing.mode as ProcessingConfig["mode"],
+          agc: {
+            enabled: saved.processing.agc.enabled,
+            targetLufs: saved.processing.agc.targetLufs,
+            maxTruePeakDbtp: saved.processing.agc.maxTruePeakDbtp,
+          },
+          opus: {
+            enabled: saved.processing.opus.enabled,
+            bitrateKbps: saved.processing.opus.bitrateKbps,
+            frameSize: Number(saved.processing.opus.frameSize) as 10 | 20 | 40,
+            fec: saved.processing.opus.fec,
+            dtx: false,
+            bitrateMode: saved.processing.opus.bitrateMode,
+            audioType: saved.processing.mode === "music" ? "generic" : "voice",
+          },
+          rtpOutput: {
+            rtpPort: ports.rtpPort,
+            rtcpPort: ports.rtcpPort,
+            host: "127.0.0.1",
+            ssrc: generateSsrc(saved.id),
+          },
+        },
         createdAt: Date.now(),
       };
 
@@ -794,6 +968,7 @@ export class ChannelManager extends EventEmitter {
    * Persist all channels to the config store.
    *
    * Strips runtime-only fields (status, createdAt) to match ChannelSchema.
+   * Includes processing config (agc, opus, rtpOutput, mode) for persistence.
    */
   private persistChannels(): void {
     const channelArray = Array.from(this.channels.values()).map((ch) => ({
@@ -808,6 +983,26 @@ export class ChannelManager extends EventEmitter {
       })),
       outputFormat: ch.outputFormat,
       autoStart: ch.autoStart,
+      processing: {
+        mode: ch.processing.mode,
+        agc: {
+          enabled: ch.processing.agc.enabled,
+          targetLufs: ch.processing.agc.targetLufs,
+          maxTruePeakDbtp: ch.processing.agc.maxTruePeakDbtp,
+        },
+        opus: {
+          enabled: ch.processing.opus.enabled,
+          bitrateKbps: ch.processing.opus.bitrateKbps,
+          frameSize: String(ch.processing.opus.frameSize) as "10" | "20" | "40",
+          fec: ch.processing.opus.fec,
+          bitrateMode: ch.processing.opus.bitrateMode,
+        },
+        rtpOutput: {
+          rtpPort: ch.processing.rtpOutput.rtpPort,
+          rtcpPort: ch.processing.rtpOutput.rtcpPort,
+          ssrc: ch.processing.rtpOutput.ssrc,
+        },
+      },
     }));
 
     const result = this.configStore.update({
@@ -819,6 +1014,150 @@ export class ChannelManager extends EventEmitter {
         errors: result.errors,
       });
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private: Debounced pipeline restart
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Schedule a debounced pipeline restart for a channel.
+   *
+   * Clears any existing pending restart for the channel and sets a new timer.
+   * After the debounce delay, all pipelines for the channel are stopped and
+   * restarted with the updated processing config baked into the pipeline string.
+   */
+  private scheduleDebouncedRestart(channelId: string): void {
+    this.clearDebouncedRestart(channelId);
+
+    const timer = setTimeout(() => {
+      this.restartDebounceTimers.delete(channelId);
+      this.restartChannelPipelines(channelId).catch((err) => {
+        logger.error(`Failed to restart pipelines for channel ${channelId}`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }, PROCESSING_DEBOUNCE_MS);
+
+    this.restartDebounceTimers.set(channelId, timer);
+  }
+
+  /** Clear a pending debounced restart for a channel if one exists. */
+  private clearDebouncedRestart(channelId: string): void {
+    const existing = this.restartDebounceTimers.get(channelId);
+    if (existing) {
+      clearTimeout(existing);
+      this.restartDebounceTimers.delete(channelId);
+    }
+  }
+
+  /**
+   * Restart all pipelines for a channel with the current processing config.
+   *
+   * Stops all existing pipelines (clearing monitors), then starts fresh
+   * pipelines using the latest processing config. Produces new GStreamer
+   * processes with updated pipeline strings.
+   */
+  private async restartChannelPipelines(channelId: string): Promise<void> {
+    const channel = this.channels.get(channelId);
+    if (!channel) return;
+
+    logger.info(`Restarting pipelines for channel "${channel.name}" (processing config changed)`, {
+      channelId,
+    });
+
+    // Stop all pipelines for this channel
+    const pipelineMap = this.channelPipelines.get(channelId);
+    if (pipelineMap && pipelineMap.size > 0) {
+      const pipelineIds = Array.from(pipelineMap.values());
+      await Promise.allSettled(
+        pipelineIds.map(async (pipelineId) => {
+          try {
+            await this.pipelineManager.removePipeline(pipelineId);
+          } catch (err) {
+            logger.warn(`Failed to stop pipeline ${pipelineId} during restart`, {
+              channelId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+          this.resourceMonitor.untrackPipeline(pipelineId);
+          this.levelMonitor.clearPipeline(pipelineId);
+        }),
+      );
+      pipelineMap.clear();
+    }
+
+    // Restart all source pipelines with the updated config
+    for (let i = 0; i < channel.sources.length; i++) {
+      const assignment = channel.sources[i];
+      const source = this.sourceRegistry.getById(assignment.sourceId);
+
+      if (!source) {
+        logger.warn(`Skipping stale source during restart: ${assignment.sourceId}`, {
+          channelId,
+          sourceIndex: i,
+        });
+        continue;
+      }
+
+      try {
+        await this.startPipelineForSource(channelId, i, assignment);
+      } catch (err) {
+        logger.error(`Failed to restart pipeline for source "${source.name}"`, {
+          channelId,
+          sourceIndex: i,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    this.logChannelEvent(
+      channelId,
+      "info",
+      "Pipelines restarted (processing config changed)",
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private: Processing config helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Build the processing config for a pipeline, ensuring port allocation
+   * and SSRC are correctly set based on the channel's current position.
+   */
+  private buildProcessingForPipeline(channel: AppChannel): ProcessingConfig {
+    const channelIndex = this.getChannelIndex(channel.id);
+    const ports = getPortsForChannel(channelIndex);
+
+    return {
+      ...channel.processing,
+      agc: { ...channel.processing.agc },
+      opus: {
+        ...channel.processing.opus,
+        audioType: channel.processing.mode === "music" ? "generic" : "voice",
+      },
+      rtpOutput: {
+        ...channel.processing.rtpOutput,
+        rtpPort: ports.rtpPort,
+        rtcpPort: ports.rtcpPort,
+        host: "127.0.0.1",
+        ssrc: generateSsrc(channel.id),
+      },
+    };
+  }
+
+  /**
+   * Get the zero-based index of a channel in the channel map.
+   * Used for deterministic port allocation.
+   */
+  private getChannelIndex(channelId: string): number {
+    let index = 0;
+    for (const id of this.channels.keys()) {
+      if (id === channelId) return index;
+      index++;
+    }
+    return index;
   }
 
   // ---------------------------------------------------------------------------
