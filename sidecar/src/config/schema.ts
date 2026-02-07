@@ -26,15 +26,14 @@ export const ServerSchema = z.object({
 
 export const MdnsSchema = z.object({
   enabled: z.boolean().default(true),
-  domain: z.string().default("church.audio"),
 });
 
 export const HostsFileSchema = z.object({
   enabled: z.boolean().default(true),
-  domain: z.string().default("church.audio"),
 });
 
 export const NetworkSchema = z.object({
+  domain: z.string().default("church.audio"),
   mdns: MdnsSchema.default(() => MdnsSchema.parse({})),
   hostsFile: HostsFileSchema.default(() => HostsFileSchema.parse({})),
 });
@@ -42,6 +41,8 @@ export const NetworkSchema = z.object({
 export const CertificateSchema = z.object({
   certPath: z.string().default("cert.pem"),
   keyPath: z.string().default("key.pem"),
+  caCertPath: z.string().default("ca-cert.pem"),
+  caKeyPath: z.string().default("ca-key.pem"),
 });
 
 export const ConfigSchema = z.object({
