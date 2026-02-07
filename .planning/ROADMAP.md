@@ -78,11 +78,12 @@ Plans:
   1. A quiet audio source and a loud audio source on different channels produce similar perceived volume for the listener (normalization/AGC working)
   2. Admin can toggle Speech/Music mode per channel, and music content (choir, instruments) passes through without warbling artifacts when in Music mode
   3. GStreamer outputs Opus-encoded RTP at the configured bitrate (default ~120kbps) to a localhost UDP port ready for mediasoup ingestion
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: GStreamer normalization and AGC pipeline elements
-- [ ] 03-02: Speech/Music mode toggle and Opus encoding output
+- [ ] 03-01-PLAN.md -- Processing config types, Zod schemas, port allocator, and PipelineConfig extension
+- [ ] 03-02-PLAN.md -- Pipeline builder processing chain (audioloudnorm + Opus/RTP output) and gain reduction tracking
+- [ ] 03-03-PLAN.md -- Channel manager integration, debounced pipeline restart, and WebSocket processing API
 
 ### Phase 4: WebRTC Streaming Core
 **Goal**: Opus audio from GStreamer pipelines flows through mediasoup SFU to browser listeners over WebRTC, achieving sub-100ms end-to-end latency
@@ -215,7 +216,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 |-------|----------------|--------|-----------|
 | 1. Project Foundation & Configuration | 8/8 | Verified (UAT v3: 12/12) | 2026-02-07 |
 | 2. Audio Capture Pipeline | 9/9 | Verified (5/5 must-haves) | 2026-02-07 |
-| 3. Audio Processing | 0/2 | Not started | - |
+| 3. Audio Processing | 0/3 | Not started | - |
 | 4. WebRTC Streaming Core | 0/3 | Not started | - |
 | 5. Listener Web UI | 0/4 | Not started | - |
 | 6. Admin Dashboard | 0/4 | Not started | - |
