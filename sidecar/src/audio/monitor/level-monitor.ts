@@ -5,6 +5,10 @@
  * and converts them to a normalized 0.0-1.0 range suitable for VU meter
  * display in the admin UI. Tracks momentary clipping per pipeline.
  *
+ * Phase 3 addition: computes estimated gain reduction (dB) by comparing
+ * post-AGC output levels to the AGC target LUFS. The admin dashboard
+ * displays this as a simple compression activity indicator.
+ *
  * Consumers subscribe to "levels-updated" events for real-time VU meters
  * or call getLevels()/getAllLevels() for snapshot access.
  */
@@ -28,10 +32,32 @@ export interface NormalizedLevels {
   readonly clipping: boolean;
   /** Unix timestamp (ms) when these levels were captured. */
   readonly timestamp: number;
+  /**
+   * Estimated gain reduction in dB.
+   *
+   * Computed as (average RMS dB - target LUFS).
+   * - Negative: AGC is compressing (reducing gain) -- normal operation.
+   * - Near zero: AGC has converged on target.
+   * - Positive: output momentarily louder than target (transient overshoot).
+   * - Zero when no processing target is set or input is silence.
+   */
+  readonly gainReductionDb: number;
 }
 
 export interface LevelMonitorEvents {
   "levels-updated": [levels: NormalizedLevels];
+}
+
+/**
+ * Compute the arithmetic mean of an array of dB values, ignoring -Infinity (silence).
+ * Returns -Infinity if all values are -Infinity (complete silence).
+ */
+function computeAverageRmsDb(rmsDbValues: number[]): number {
+  const finiteValues = rmsDbValues.filter((v) => isFinite(v));
+  if (finiteValues.length === 0) {
+    return Number.NEGATIVE_INFINITY;
+  }
+  return finiteValues.reduce((sum, v) => sum + v, 0) / finiteValues.length;
 }
 
 /**
@@ -44,12 +70,30 @@ export class LevelMonitor extends EventEmitter<LevelMonitorEvents> {
     string,
     { clipping: boolean; clearedAt: number }
   >();
+  private readonly processingTargets = new Map<
+    string,
+    { targetLufs: number }
+  >();
+
+  /**
+   * Register the AGC target LUFS for a pipeline.
+   * When set, gain reduction will be estimated from post-AGC levels vs this target.
+   */
+  setProcessingTarget(pipelineId: string, targetLufs: number): void {
+    this.processingTargets.set(pipelineId, { targetLufs });
+  }
+
+  /** Remove the processing target for a pipeline. */
+  clearProcessingTarget(pipelineId: string): void {
+    this.processingTargets.delete(pipelineId);
+  }
 
   /**
    * Process raw audio levels from a pipeline's GStreamer level element.
    *
    * Converts dB values to normalized 0.0-1.0 range, detects clipping,
-   * stores the result, and emits a "levels-updated" event.
+   * computes gain reduction estimate, stores the result, and emits
+   * a "levels-updated" event.
    */
   handleLevels(pipelineId: string, rawLevels: AudioLevels): void {
     const peakNormalized = rawLevels.peak.map(dbToNormalized);
@@ -65,6 +109,8 @@ export class LevelMonitor extends EventEmitter<LevelMonitorEvents> {
     const clippingEntry = this.clippingState.get(pipelineId);
     const isClipping = clippingEntry?.clipping ?? false;
 
+    const gainReductionDb = this.computeGainReduction(pipelineId, rawLevels.rms);
+
     const normalized: NormalizedLevels = {
       pipelineId,
       peak: peakNormalized,
@@ -73,6 +119,7 @@ export class LevelMonitor extends EventEmitter<LevelMonitorEvents> {
       rmsDb: [...rawLevels.rms],
       clipping: isClipping,
       timestamp: rawLevels.timestamp,
+      gainReductionDb,
     };
 
     this.latestLevels.set(pipelineId, normalized);
@@ -104,5 +151,27 @@ export class LevelMonitor extends EventEmitter<LevelMonitorEvents> {
   clearPipeline(pipelineId: string): void {
     this.latestLevels.delete(pipelineId);
     this.clippingState.delete(pipelineId);
+    this.clearProcessingTarget(pipelineId);
+  }
+
+  /**
+   * Compute estimated gain reduction for a pipeline.
+   *
+   * Gain reduction = avgRmsDb - targetLufs
+   * - When input is silence (-Infinity), returns 0 (no meaningful estimate).
+   * - When no processing target is set, returns 0.
+   */
+  private computeGainReduction(pipelineId: string, rmsDbValues: number[]): number {
+    const target = this.processingTargets.get(pipelineId);
+    if (!target) {
+      return 0;
+    }
+
+    const avgRmsDb = computeAverageRmsDb(rmsDbValues);
+    if (!isFinite(avgRmsDb)) {
+      return 0;
+    }
+
+    return avgRmsDb - target.targetLufs;
   }
 }
