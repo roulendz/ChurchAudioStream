@@ -2,6 +2,7 @@ import path from "node:path";
 import { EventEmitter } from "node:events";
 import { logger, stderrLog } from "./utils/logger";
 import { ConfigStore } from "./config/store";
+import { AudioSubsystem } from "./audio/audio-subsystem";
 import { createServer, startServer, ADMIN_LOOPBACK_PORT, type StopServerFunction } from "./server";
 import { logFirewallReminder } from "./network/firewall";
 import { removeHostsEntry } from "./network/hosts";
@@ -27,12 +28,17 @@ function setupOrphanPrevention(): void {
 
 function setupGracefulShutdown(
   getStopServer: () => StopServerFunction | null,
+  audioSubsystem?: AudioSubsystem,
 ): void {
   const shutdownSignals: NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
 
   for (const signal of shutdownSignals) {
     process.on(signal, async () => {
       logger.info(`Received ${signal}, shutting down gracefully`);
+      // Stop audio subsystem first (drains pipelines before closing servers)
+      if (audioSubsystem) {
+        await audioSubsystem.stop();
+      }
       const stopServer = getStopServer();
       if (stopServer) {
         await stopServer();
@@ -70,6 +76,7 @@ function setupRestartListener(
   basePath: string,
   setStopServer: (stopFn: StopServerFunction) => void,
   getStopServer: () => StopServerFunction | null,
+  audioSubsystem?: AudioSubsystem,
 ): void {
   let isRestarting = false;
 
@@ -102,6 +109,7 @@ function setupRestartListener(
         basePath,
         configStore,
         serverEvents,
+        audioSubsystem,
       );
       const newStopServer = await startServer(components, newConfig);
       setStopServer(newStopServer);
@@ -125,6 +133,7 @@ function setupRestartListener(
           basePath,
           configStore,
           serverEvents,
+          audioSubsystem,
         );
         const fallbackStopServer = await startServer(components, fallbackConfig);
         setStopServer(fallbackStopServer);
@@ -163,6 +172,9 @@ async function main(): Promise<void> {
 
   logFirewallReminder(config.server.port);
 
+  // Create audio subsystem (wires all audio components together)
+  const audioSubsystem = new AudioSubsystem(configStore, basePath);
+
   const serverEvents = new EventEmitter();
 
   const components = await createServer(
@@ -170,6 +182,7 @@ async function main(): Promise<void> {
     basePath,
     configStore,
     serverEvents,
+    audioSubsystem,
   );
 
   let currentStopServer: StopServerFunction | null = await startServer(
@@ -177,7 +190,7 @@ async function main(): Promise<void> {
     config,
   );
 
-  setupGracefulShutdown(() => currentStopServer);
+  setupGracefulShutdown(() => currentStopServer, audioSubsystem);
 
   setupRestartListener(
     serverEvents,
@@ -187,10 +200,15 @@ async function main(): Promise<void> {
       currentStopServer = stopFn;
     },
     () => currentStopServer,
+    audioSubsystem,
   );
 
+  // Start audio subsystem after server is ready (discovery, monitoring, auto-start channels)
+  await audioSubsystem.start();
+
+  const channelCount = audioSubsystem.getChannels().length;
   logger.info(
-    `Sidecar ready — phones: https://${config.server.host}:${config.server.port} | admin: http://127.0.0.1:${ADMIN_LOOPBACK_PORT}`,
+    `Sidecar ready — phones: https://${config.server.host}:${config.server.port} | admin: http://127.0.0.1:${ADMIN_LOOPBACK_PORT} | audio: ${channelCount} channel(s)`,
   );
 }
 

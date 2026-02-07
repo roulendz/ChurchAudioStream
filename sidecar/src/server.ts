@@ -7,6 +7,7 @@ import express from "express";
 import { WebSocket } from "ws";
 import type { AppConfig } from "./config/schema";
 import type { ConfigStore } from "./config/store";
+import type { AudioSubsystem } from "./audio/audio-subsystem";
 import { loadOrGenerateCert } from "./network/certificate";
 import { ensureHostsEntry } from "./network/hosts";
 import { publishService, unpublishService } from "./network/mdns";
@@ -44,6 +45,7 @@ export async function createServer(
   basePath: string,
   configStore: ConfigStore,
   serverEvents: EventEmitter,
+  audioSubsystem?: AudioSubsystem,
 ): Promise<ServerComponents> {
   const { key, cert } = await loadOrGenerateCert(basePath, config);
 
@@ -62,10 +64,10 @@ export async function createServer(
   });
 
   const httpsServer = https.createServer({ key, cert }, app);
-  const httpsWsSetup = setupWebSocket(httpsServer, configStore, serverEvents);
+  const httpsWsSetup = setupWebSocket(httpsServer, configStore, serverEvents, audioSubsystem);
 
   const httpServer = http.createServer(app);
-  const httpWsSetup = setupWebSocket(httpServer, configStore, serverEvents);
+  const httpWsSetup = setupWebSocket(httpServer, configStore, serverEvents, audioSubsystem);
 
   return { httpsServer, httpServer, app, httpsWsSetup, httpWsSetup, key, cert };
 }

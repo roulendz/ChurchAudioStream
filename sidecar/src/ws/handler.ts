@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { EventEmitter } from "node:events";
 import WebSocket, { WebSocketServer } from "ws";
 import type { ConfigStore } from "../config/store";
+import type { AudioSubsystem } from "../audio/audio-subsystem";
 import { listNetworkInterfaces } from "../network/interfaces";
 import type {
   WsMessage,
@@ -11,6 +12,12 @@ import type {
   ClientMetadata,
   ServerStatusPayload,
   ConfigUpdateResponsePayload,
+  ChannelCreatePayload,
+  ChannelUpdatePayload,
+  ChannelSourceAddPayload,
+  ChannelSourceRemovePayload,
+  ChannelSourceUpdatePayload,
+  ChannelActionPayload,
 } from "./types";
 import { logger } from "../utils/logger";
 
@@ -18,6 +25,9 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
 const IDENTIFY_TIMEOUT_MS = 10_000;
 const RESTART_SIGNAL_DELAY_MS = 1_000;
+
+/** Interval (ms) for flushing buffered level data to admin clients. */
+const LEVEL_BROADCAST_INTERVAL_MS = 100;
 
 const SIDECAR_VERSION = "0.1.0";
 
@@ -40,11 +50,16 @@ export function setupWebSocket(
   server: HttpServer | HttpsServer,
   configStore: ConfigStore,
   serverEvents: EventEmitter,
+  audioSubsystem?: AudioSubsystem,
 ): WebSocketSetupResult {
   const wss = new WebSocketServer({ server });
   const clientMap = new Map<string, ExtendedWebSocket>();
 
   startHeartbeat(wss, clientMap);
+
+  if (audioSubsystem) {
+    wireAudioBroadcasts(audioSubsystem, clientMap, wss);
+  }
 
   wss.on("connection", (rawSocket) => {
     const clientId = crypto.randomUUID();
@@ -85,6 +100,7 @@ export function setupWebSocket(
         serverEvents,
         clientMap,
         identifyTimeout,
+        audioSubsystem,
       );
     });
 
@@ -145,6 +161,7 @@ function handleIncomingMessage(
   serverEvents: EventEmitter,
   clientMap: Map<string, ExtendedWebSocket>,
   identifyTimeout: NodeJS.Timeout,
+  audioSubsystem?: AudioSubsystem,
 ): void {
   let message: WsMessage;
   try {
@@ -163,6 +180,12 @@ function handleIncomingMessage(
       { message: "Missing or invalid message type" },
       message.requestId,
     );
+    return;
+  }
+
+  // Route audio message types to the dedicated handler
+  if (isAudioMessageType(message.type)) {
+    handleAudioMessage(socket, message, audioSubsystem);
     return;
   }
 
@@ -413,6 +436,351 @@ function handleInterfacesList(
     { interfaces },
     message.requestId,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Audio message handling (SRP: separate from core WebSocket message router)
+// ---------------------------------------------------------------------------
+
+/** Audio-related message type prefixes that route to the audio handler. */
+const AUDIO_MESSAGE_PREFIXES = [
+  "sources:",
+  "channel:",
+  "channels:",
+  "levels:",
+  "stats:",
+] as const;
+
+/** Check if a message type is an audio-related message. */
+function isAudioMessageType(type: string): boolean {
+  return AUDIO_MESSAGE_PREFIXES.some((prefix) => type.startsWith(prefix));
+}
+
+/**
+ * Handle all audio-related WebSocket messages.
+ *
+ * All audio operations require admin role. If audioSubsystem is not available
+ * (e.g., during early startup), returns an error.
+ */
+function handleAudioMessage(
+  socket: ExtendedWebSocket,
+  message: WsMessage,
+  audioSubsystem?: AudioSubsystem,
+): void {
+  if (socket.metadata.role !== "admin") {
+    sendMessage(
+      socket,
+      "error",
+      { message: "Unauthorized: admin role required", originalType: message.type },
+      message.requestId,
+    );
+    return;
+  }
+
+  if (!audioSubsystem) {
+    sendMessage(
+      socket,
+      "error",
+      { message: "Audio subsystem not available", originalType: message.type },
+      message.requestId,
+    );
+    return;
+  }
+
+  // Wrap all handlers in a promise to catch async errors uniformly
+  handleAudioMessageAsync(socket, message, audioSubsystem).catch((err) => {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    logger.error("Audio message handler error", {
+      type: message.type,
+      error: errorMessage,
+    });
+    sendMessage(
+      socket,
+      "error",
+      { message: errorMessage, originalType: message.type },
+      message.requestId,
+    );
+  });
+}
+
+/** Async handler for audio messages -- dispatches to specific operations. */
+async function handleAudioMessageAsync(
+  socket: ExtendedWebSocket,
+  message: WsMessage,
+  audioSubsystem: AudioSubsystem,
+): Promise<void> {
+  switch (message.type) {
+    // -- Source discovery --
+    case "sources:list": {
+      const sources = audioSubsystem.getSources();
+      sendMessage(socket, "sources:list", { sources }, message.requestId);
+      break;
+    }
+
+    // -- Channel listing --
+    case "channels:list": {
+      const channels = audioSubsystem.getChannels();
+      sendMessage(socket, "channels:list", { channels }, message.requestId);
+      break;
+    }
+
+    // -- Channel CRUD --
+    case "channel:create": {
+      const payload = message.payload as ChannelCreatePayload | undefined;
+      if (!payload?.name) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required field: name", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      const created = audioSubsystem.createChannel(payload.name, payload.outputFormat);
+      sendMessage(socket, "channel:created", created, message.requestId);
+      break;
+    }
+
+    case "channel:update": {
+      const payload = message.payload as ChannelUpdatePayload | undefined;
+      if (!payload?.channelId) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required field: channelId", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      const updated = audioSubsystem.updateChannel(payload.channelId, {
+        name: payload.name,
+        outputFormat: payload.outputFormat,
+        autoStart: payload.autoStart,
+      });
+      sendMessage(socket, "channel:updated", updated, message.requestId);
+      break;
+    }
+
+    case "channel:remove": {
+      const payload = message.payload as ChannelActionPayload | undefined;
+      if (!payload?.channelId) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required field: channelId", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      await audioSubsystem.removeChannel(payload.channelId);
+      sendMessage(socket, "channel:removed", { channelId: payload.channelId }, message.requestId);
+      break;
+    }
+
+    // -- Source assignment --
+    case "channel:source:add": {
+      const payload = message.payload as ChannelSourceAddPayload | undefined;
+      if (!payload?.channelId || !payload.sourceId || !payload.selectedChannels) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required fields: channelId, sourceId, selectedChannels", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      const channelAfterAdd = await audioSubsystem.addSource(payload.channelId, {
+        sourceId: payload.sourceId,
+        selectedChannels: payload.selectedChannels,
+        gain: payload.gain ?? 1.0,
+        muted: payload.muted ?? false,
+        delayMs: payload.delayMs ?? 0,
+      });
+      sendMessage(socket, "channel:updated", channelAfterAdd, message.requestId);
+      break;
+    }
+
+    case "channel:source:remove": {
+      const payload = message.payload as ChannelSourceRemovePayload | undefined;
+      if (!payload?.channelId || payload.sourceIndex === undefined) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required fields: channelId, sourceIndex", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      const channelAfterRemove = await audioSubsystem.removeSource(
+        payload.channelId,
+        payload.sourceIndex,
+      );
+      sendMessage(socket, "channel:updated", channelAfterRemove, message.requestId);
+      break;
+    }
+
+    case "channel:source:update": {
+      const payload = message.payload as ChannelSourceUpdatePayload | undefined;
+      if (!payload?.channelId || payload.sourceIndex === undefined) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required fields: channelId, sourceIndex", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      const channelAfterUpdate = await audioSubsystem.updateSource(
+        payload.channelId,
+        payload.sourceIndex,
+        {
+          gain: payload.gain,
+          muted: payload.muted,
+          delayMs: payload.delayMs,
+          selectedChannels: payload.selectedChannels,
+        },
+      );
+      sendMessage(socket, "channel:updated", channelAfterUpdate, message.requestId);
+      break;
+    }
+
+    // -- Channel lifecycle --
+    case "channel:start": {
+      const payload = message.payload as ChannelActionPayload | undefined;
+      if (!payload?.channelId) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required field: channelId", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      await audioSubsystem.startChannel(payload.channelId);
+      sendMessage(socket, "channel:state", { channelId: payload.channelId, action: "started" }, message.requestId);
+      break;
+    }
+
+    case "channel:stop": {
+      const payload = message.payload as ChannelActionPayload | undefined;
+      if (!payload?.channelId) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required field: channelId", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      await audioSubsystem.stopChannel(payload.channelId);
+      sendMessage(socket, "channel:state", { channelId: payload.channelId, action: "stopped" }, message.requestId);
+      break;
+    }
+
+    // -- Channel events --
+    case "channel:events": {
+      const payload = message.payload as ChannelActionPayload | undefined;
+      if (!payload?.channelId) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing required field: channelId", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      const events = audioSubsystem.getChannelEvents(payload.channelId);
+      sendMessage(socket, "channel:events", { channelId: payload.channelId, events }, message.requestId);
+      break;
+    }
+
+    // -- Stats --
+    case "stats:get": {
+      const allStats = audioSubsystem.getAllStats();
+      const statsObject: Record<string, unknown> = {};
+      for (const [pipelineId, stats] of allStats) {
+        statsObject[pipelineId] = stats;
+      }
+      sendMessage(socket, "stats:update", { stats: statsObject }, message.requestId);
+      break;
+    }
+
+    default:
+      sendMessage(
+        socket,
+        "error",
+        { message: `Unknown audio message type: ${message.type}`, originalType: message.type },
+        message.requestId,
+      );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Audio event broadcasting to admin clients
+// ---------------------------------------------------------------------------
+
+/**
+ * Wire AudioSubsystem events to broadcast to admin WebSocket clients.
+ *
+ * Level data is buffered and flushed at a fixed interval to avoid flooding
+ * clients with per-pipeline, per-frame updates. Source and channel change
+ * events are broadcast immediately (low frequency).
+ */
+function wireAudioBroadcasts(
+  audioSubsystem: AudioSubsystem,
+  clientMap: Map<string, ExtendedWebSocket>,
+  wss: WebSocketServer,
+): void {
+  // -- Level data buffering and broadcast --
+  let levelBuffer: Record<string, unknown> = {};
+  let hasBufferedLevels = false;
+
+  audioSubsystem.on("levels-updated", (levels: { pipelineId: string }) => {
+    levelBuffer[levels.pipelineId] = levels;
+    hasBufferedLevels = true;
+  });
+
+  const levelFlushInterval = setInterval(() => {
+    if (!hasBufferedLevels) return;
+
+    const payload = { levels: levelBuffer };
+    broadcastToAdminClients(clientMap, "levels:update", payload);
+
+    levelBuffer = {};
+    hasBufferedLevels = false;
+  }, LEVEL_BROADCAST_INTERVAL_MS);
+
+  // Clean up level flush timer when WebSocket server closes
+  wss.on("close", () => clearInterval(levelFlushInterval));
+
+  // -- Source change broadcast --
+  audioSubsystem.on("sources-changed", () => {
+    broadcastToAdminClients(clientMap, "sources:changed", {});
+  });
+
+  // -- Channel change broadcasts --
+  audioSubsystem.on("channel-created", (channel: unknown) => {
+    broadcastToAdminClients(clientMap, "channel:created", channel);
+  });
+
+  audioSubsystem.on("channel-updated", (channel: unknown) => {
+    broadcastToAdminClients(clientMap, "channel:updated", channel);
+  });
+
+  audioSubsystem.on("channel-removed", (channelId: string) => {
+    broadcastToAdminClients(clientMap, "channel:removed", { channelId });
+  });
+
+  audioSubsystem.on("channel-state-changed", (channelId: string, status: string) => {
+    broadcastToAdminClients(clientMap, "channel:state", { channelId, status });
+  });
+
+  // -- Resource stats broadcast --
+  audioSubsystem.on("stats-updated", (pipelineId: string, stats: unknown) => {
+    broadcastToAdminClients(clientMap, "stats:update", {
+      stats: { [pipelineId]: stats },
+    });
+  });
 }
 
 function sendMessage(
