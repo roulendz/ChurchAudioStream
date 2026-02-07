@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Project Foundation & Configuration** - Tauri 2.x app shell with Node.js sidecar, Express web server, and JSON config persistence
 - [x] **Phase 2: Audio Capture Pipeline** - GStreamer-based capture from AES67 multicast and local audio devices with stream discovery
-- [ ] **Phase 3: Audio Processing** - Per-channel normalization, Speech/Music mode, and Opus encoding via GStreamer
+- [x] **Phase 3: Audio Processing** - Per-channel normalization, Speech/Music mode, and Opus encoding via GStreamer
 - [ ] **Phase 4: WebRTC Streaming Core** - mediasoup SFU distributing Opus audio to browser listeners with sub-100ms latency
 - [ ] **Phase 5: Listener Web UI** - Mobile-first PWA with channel selection, volume control, and QR code access
 - [ ] **Phase 6: Admin Dashboard** - Channel configuration, real-time VU meters, listener counts, and server status monitoring
@@ -216,7 +216,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 |-------|----------------|--------|-----------|
 | 1. Project Foundation & Configuration | 8/8 | Verified (UAT v3: 12/12) | 2026-02-07 |
 | 2. Audio Capture Pipeline | 9/9 | Verified (5/5 must-haves) | 2026-02-07 |
-| 3. Audio Processing | 0/3 | Not started | - |
+| 3. Audio Processing | 3/3 | Verified (12/12 must-haves) | 2026-02-07 |
 | 4. WebRTC Streaming Core | 0/3 | Not started | - |
 | 5. Listener Web UI | 0/4 | Not started | - |
 | 6. Admin Dashboard | 0/4 | Not started | - |

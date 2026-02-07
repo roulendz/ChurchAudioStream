@@ -15,9 +15,9 @@
 
 ### Audio Processing
 
-- [ ] **PROC-01**: Audio normalization/AGC applied per channel to even out volume levels
-- [ ] **PROC-02**: Speech/Music mode toggle per channel to prevent audio processing from destroying non-speech content (choir, instruments)
-- [ ] **PROC-03**: GStreamer encodes processed audio to Opus at configurable bitrate (~120kbps default)
+- [x] **PROC-01**: Audio normalization/AGC applied per channel to even out volume levels
+- [x] **PROC-02**: Speech/Music mode toggle per channel to prevent audio processing from destroying non-speech content (choir, instruments)
+- [x] **PROC-03**: GStreamer encodes processed audio to Opus at configurable bitrate (~120kbps default)
 - [ ] **PROC-04**: Each channel runs as an independent GStreamer process for fault isolation
 
 ### WebRTC Streaming
