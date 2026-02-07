@@ -13,7 +13,7 @@ ChurchAudioStream delivers a Tauri 2.x desktop application with a Node.js sideca
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Project Foundation & Configuration** - Tauri 2.x app shell with Node.js sidecar, Express web server, and JSON config persistence
-- [ ] **Phase 2: Audio Capture Pipeline** - GStreamer-based capture from AES67 multicast and local audio devices with stream discovery
+- [x] **Phase 2: Audio Capture Pipeline** - GStreamer-based capture from AES67 multicast and local audio devices with stream discovery
 - [ ] **Phase 3: Audio Processing** - Per-channel normalization, Speech/Music mode, and Opus encoding via GStreamer
 - [ ] **Phase 4: WebRTC Streaming Core** - mediasoup SFU distributing Opus audio to browser listeners with sub-100ms latency
 - [ ] **Phase 5: Listener Web UI** - Mobile-first PWA with channel selection, volume control, and QR code access
@@ -214,7 +214,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Foundation & Configuration | 8/8 | Verified (UAT v3: 12/12) | 2026-02-07 |
-| 2. Audio Capture Pipeline | 4/9 | In progress | - |
+| 2. Audio Capture Pipeline | 9/9 | Verified (5/5 must-haves) | 2026-02-07 |
 | 3. Audio Processing | 0/2 | Not started | - |
 | 4. WebRTC Streaming Core | 0/3 | Not started | - |
 | 5. Listener Web UI | 0/4 | Not started | - |

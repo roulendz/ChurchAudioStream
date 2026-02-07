@@ -113,15 +113,15 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CAPT-01 | Phase 2 | Pending |
-| CAPT-02 | Phase 2 | Pending |
-| CAPT-03 | Phase 2 | Pending |
-| CAPT-04 | Phase 2 | Pending |
-| CAPT-05 | Phase 2 | Pending |
+| CAPT-01 | Phase 2 | Complete |
+| CAPT-02 | Phase 2 | Complete |
+| CAPT-03 | Phase 2 | Complete |
+| CAPT-04 | Phase 2 | Complete |
+| CAPT-05 | Phase 2 | Complete |
 | PROC-01 | Phase 3 | Pending |
 | PROC-02 | Phase 3 | Pending |
 | PROC-03 | Phase 3 | Pending |
-| PROC-04 | Phase 2 | Pending |
+| PROC-04 | Phase 2 | Complete |
 | STRM-01 | Phase 4 | Pending |
 | STRM-02 | Phase 8 | Pending |
 | STRM-03 | Phase 7 | Pending |
@@ -145,11 +145,11 @@
 | AGUI-09 | Phase 6 | Pending |
 | AGUI-10 | Phase 6 | Pending |
 | AGUI-11 | Phase 9 | Pending |
-| CONF-01 | Phase 1 | Pending |
-| CONF-02 | Phase 1 | Pending |
+| CONF-01 | Phase 1 | Complete |
+| CONF-02 | Phase 1 | Complete |
 | CONF-03 | Phase 9 | Pending |
-| CONF-04 | Phase 1 | Pending |
-| PLAT-01 | Phase 1 | Pending |
+| CONF-04 | Phase 1 | Complete |
+| PLAT-01 | Phase 1 | Complete |
 | PLAT-02 | Phase 10 | Pending |
 | PLAT-03 | Phase 10 | Pending |
 | PLAT-04 | Phase 10 | Pending |
