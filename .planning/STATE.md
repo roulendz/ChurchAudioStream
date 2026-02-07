@@ -82,6 +82,10 @@ Recent decisions affecting current work:
 - [02-06]: SAP deletion reverse map (sapHash+originAddress->sourceId) because deletion packets lack originSessionId
 - [02-06]: mDNS RAVENNA discovery is log-only; sources not created without SDP from SAP
 - [02-06]: Preserve discoveredAt on AES67 source updates by reading existing value from registry
+- [02-03]: shell:true on spawn for Windows gst-launch-1.0 compatibility (pipeline strings contain !, =, quotes)
+- [02-03]: First level data triggers state transition to streaming (no separate handshake needed)
+- [02-03]: Pipeline IDs are UUIDs not channel IDs -- 1:N channel-to-pipeline mapping deferred to Plan 08
+- [02-03]: Restart counter resets on streaming state to allow recovery cycles after stable operation
 - [02-07]: 5-second pidusage polling interval (wmic on Windows is slow)
 - [02-07]: JSONL format for event logs (append-only, crash-safe, line-by-line parsing)
 - [02-07]: 1000-event in-memory cache per channel with oldest-first eviction
