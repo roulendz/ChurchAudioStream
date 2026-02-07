@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 3 in progress -- pipeline builder processing chain and gain reduction
+**Current focus:** Phase 3 complete -- ready for Phase 4 (mediasoup/WebRTC)
 
 ## Current Position
 
 Phase: 3 of 10 (Audio Processing)
-Plan: 2 of 3 in current phase (03-02 complete)
-Status: In progress
-Last activity: 2026-02-07 -- Completed 03-02-PLAN.md (pipeline builder processing chain and gain reduction)
+Plan: 3 of 3 in current phase (03-03 complete)
+Status: Phase complete
+Last activity: 2026-02-07 -- Completed 03-03-PLAN.md (processing config runtime integration)
 
-Progress: [===================] 54% (19/35 plans)
+Progress: [====================] 57% (20/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
+- Total plans completed: 20
 - Average duration: 7 minutes
-- Total execution time: 2.3 hours
+- Total execution time: 2.4 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [===================] 54% (19/35 plans)
 |-------|-------|-------|----------|
 | 01 | 8/8 | 67 min | 8 min |
 | 02 | 9/9 | 56 min | 6 min |
-| 03 | 2/3 | 9 min | 5 min |
+| 03 | 3/3 | 17 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-08 (3m), 02-09 (5m), 03-01 (5m), 03-02 (4m)
+- Last 5 plans: 02-09 (5m), 03-01 (5m), 03-02 (4m), 03-03 (8m)
 - Trend: Consistent fast execution through Phase 3
 
 *Updated after each plan completion*
@@ -105,6 +105,11 @@ Recent decisions affecting current work:
 - [03-02]: Source-head/tail separation pattern: source builders return head only, buildPipelineString appends tail
 - [03-02]: 4-case processing matrix handles all AGC x Opus enable/disable combinations
 - [03-02]: Gain reduction estimated as (avgRmsDb - targetLufs) approximation
+- [03-03]: ProcessingConfigUpdate type for partial nested updates (avoids requiring full sub-config objects)
+- [03-03]: 1.5s debounce delay for processing config change restarts (within 1-2s spec)
+- [03-03]: RTP ports not exposed in WebSocket update payload (auto-allocated, prevents admin errors)
+- [03-03]: frameSize converted from string to number at WebSocket boundary
+- [03-03]: Processing config separate from ChannelUpdatableFields (dedicated method with debounce, per SRP)
 
 ### Pending Todos
 
@@ -121,13 +126,12 @@ None.
 
 - [Research Gap]: PTP clock synchronization on Windows has sparse documentation -- needs validation in Phase 2
 - [Research Gap]: GStreamer Windows minimal bundling approach unclear -- impacts Phase 10
-- [Research Flag]: Phase 3 audio processing (RNNoise latency) may need deeper research during planning
 - [Environment]: Rust builds require PATH to include /c/Users/rolan/.cargo/bin and /c/mingw64/bin
 - [Build Note]: Compiled sidecar binary (69 MB) does not bundle public/ directory -- needs to be shipped alongside or Tauri resources config
 
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 03-02-PLAN.md (pipeline builder processing chain and gain reduction)
+Stopped at: Completed 03-03-PLAN.md (processing config runtime integration) -- Phase 3 complete
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
