@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 1 of 10 (Project Foundation & Configuration)
-Plan: 7 of 8 in current phase (01-03 pending, gap closure 06-08 done)
-Status: Human verification needed (4/5 must-haves verified, awaiting UAT v3)
-Last activity: 2026-02-07 -- Completed quick task 002 (trusted Root CA for HTTPS)
+Plan: 8 of 8 in current phase (all plans complete)
+Status: Phase complete -- awaiting human verification (Task 3 checkpoint)
+Last activity: 2026-02-07 -- Completed 01-03-PLAN.md (admin UI shell + server restart wiring)
 
-Progress: [=====.....] 20% (7/35 plans)
+Progress: [========..] 23% (8/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 9 minutes
-- Total execution time: 1.1 hours
+- Total plans completed: 8
+- Average duration: 8 minutes
+- Total execution time: 1.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 7/8 | 64 min | 9 min |
+| 01 | 8/8 | 67 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-04 (4m), 01-05 (3m), 01-07 (5m), 01-08 (4m), 01-06 (7m)
-- Trend: accelerating (gap closure plans are surgical fixes)
+- Last 5 plans: 01-05 (3m), 01-07 (5m), 01-08 (4m), 01-06 (7m), 01-03 (3m)
+- Trend: accelerating (alignment work is fast when foundation is solid)
 
 *Updated after each plan completion*
 
@@ -59,6 +59,8 @@ Recent decisions affecting current work:
 - [01-07]: Use `net session` for elevation detection; early return with actionable netsh command when not admin
 - [01-08]: aborted flag pattern for async useEffect StrictMode safety; Rust LogBuffer with drain semantics for one-shot early log replay
 - [01-06]: HTTP loopback port = HTTPS port + 1; Tauri uses ws:// (no TLS cert issues), phone browsers use wss://
+- [01-03]: Fixed ADMIN_LOOPBACK_PORT (7778) replaces port+1 offset -- admin GUI never breaks when HTTPS port changes
+- [01-03]: Tauri admin connects via ws://127.0.0.1:7778 (fixed); browser clients connect via wss://{host}:{port} (dynamic)
 - [quick-001]: Default domain changed to church.audio (from churchaudio.local); hostsFile.enabled defaults to true
 - [quick-001]: execSync for elevation commands (intentional: elevation dialogs are blocking by nature)
 - [quick-001]: Cert regeneration on domain change now handled by quick-002 (issuer + domain validation)
@@ -89,5 +91,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed quick task 002 (trusted Root CA for HTTPS). 01-03 still pending.
+Stopped at: Completed 01-03-PLAN.md. Phase 1 all plans done. Task 3 human verification checkpoint pending.
 Resume file: None
