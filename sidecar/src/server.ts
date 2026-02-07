@@ -103,19 +103,17 @@ export async function startServer(
   );
 
   if (config.network.mdns.enabled) {
-    publishService(config.server.port, config.network.mdns.domain);
+    publishService(config.server.port, config.network.domain);
   }
 
   if (config.network.hostsFile.enabled) {
     try {
-      ensureHostsEntry(config.server.host, config.network.hostsFile.domain);
+      ensureHostsEntry(config.server.host, config.network.domain);
     } catch (hostsError) {
       const errorMessage = hostsError instanceof Error ? hostsError.message : String(hostsError);
-      logger.warn("Failed to update hosts file (user may have cancelled elevation prompt)", {
-        domain: config.network.hostsFile.domain,
-        ip: config.server.host,
-        error: errorMessage,
-      });
+      logger.warn(
+        `Failed to update hosts file for ${config.network.domain} → ${config.server.host}: ${errorMessage}`,
+      );
     }
   }
 

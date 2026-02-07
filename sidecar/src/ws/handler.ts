@@ -25,7 +25,7 @@ const RESTART_TRIGGERING_FIELDS = new Set([
   "server.port",
   "server.host",
   "server.interface",
-  "network.hostsFile.domain",
+  "network.domain",
   "network.hostsFile.enabled",
 ]);
 
@@ -327,7 +327,7 @@ function handleServerStatus(
     config: {
       port: config.server.port,
       host: config.server.host,
-      mdnsDomain: config.network.mdns.domain,
+      domain: config.network.domain,
     },
   };
 

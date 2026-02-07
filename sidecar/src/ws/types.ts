@@ -30,7 +30,7 @@ export interface ServerStatusPayload {
   config: {
     port: number;
     host: string;
-    mdnsDomain: string;
+    domain: string;
   };
 }
 

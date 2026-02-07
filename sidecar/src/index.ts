@@ -158,7 +158,7 @@ async function main(): Promise<void> {
   const config = configStore.get();
 
   logger.info(
-    `Config loaded from ${configStore.getPath()} — port=${config.server.port}, host=${config.server.host}, mdns=${config.network.mdns.enabled ? config.network.mdns.domain : "off"}`,
+    `Config loaded from ${configStore.getPath()} — port=${config.server.port}, host=${config.server.host}, domain=${config.network.domain}, mdns=${config.network.mdns.enabled ? "on" : "off"}, hostsFile=${config.network.hostsFile.enabled ? "on" : "off"}`,
   );
 
   logFirewallReminder(config.server.port);
