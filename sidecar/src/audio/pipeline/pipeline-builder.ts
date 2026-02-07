@@ -4,8 +4,12 @@
  * Constructs `gst-launch-1.0` CLI pipeline strings for all supported audio source types:
  * AES67 multicast, WASAPI, ASIO, DirectSound, and WASAPI Loopback.
  *
+ * Phase 3 processing support: when `PipelineConfig.processing` is present,
+ * the pipeline includes audioloudnorm (AGC), opusenc + rtpopuspay (Opus/RTP encoding),
+ * and a tee splitting to metering and encoding branches.
+ *
  * Pure function module -- no side effects, no state, no I/O.
- * The process manager (Plan 03) consumes these strings to spawn GStreamer child processes.
+ * The process manager consumes these strings to spawn GStreamer child processes.
  */
 
 import type {
@@ -14,15 +18,27 @@ import type {
   LocalPipelineConfig,
 } from "./pipeline-types";
 import type { AudioApi } from "../sources/source-types";
+import type {
+  AgcConfig,
+  OpusEncodingConfig,
+  ProcessingConfig,
+  RtpOutputConfig,
+} from "../processing/processing-types";
 
 /** Convert a millisecond value to GStreamer nanoseconds (level element `interval` property). */
 function msToGstNanoseconds(ms: number): number {
   return ms * 1_000_000;
 }
 
+// ---------------------------------------------------------------------------
+// Shared tail builders (metering and processing)
+// ---------------------------------------------------------------------------
+
 /**
- * Append the standard audio processing tail shared by all pipeline types:
+ * Build the standard Phase 2 metering tail:
  * audioconvert -> audioresample -> level metering -> fakesink.
+ *
+ * Used when no processing config is present (backward-compatible Phase 2 pipelines).
  */
 function buildMeteringTail(levelIntervalNs: number): string {
   return (
@@ -31,6 +47,119 @@ function buildMeteringTail(levelIntervalNs: number): string {
     `fakesink sync=false`
   );
 }
+
+/**
+ * Build the AGC (loudness normalization) chain using audioloudnorm.
+ *
+ * CRITICAL: audioloudnorm from gst-plugins-rs requires 192kHz internal sample rate.
+ * The audioresample wrappers (48kHz -> 192kHz -> 48kHz) are mandatory --
+ * without them, audioloudnorm will crash or produce silence.
+ *
+ * When AGC is bypassed (enabled=false), returns empty string.
+ */
+function buildAgcChain(agc: AgcConfig): string {
+  if (!agc.enabled) {
+    return "";
+  }
+
+  return (
+    `audioconvert ! audioresample ! audio/x-raw,rate=192000 ! ` +
+    `audioloudnorm loudness-target=${agc.targetLufs} max-true-peak=${agc.maxTruePeakDbtp} ! ` +
+    `audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1 ! `
+  );
+}
+
+/**
+ * Build the Opus encoding and RTP output chain.
+ *
+ * Maps config values to GStreamer element properties:
+ * - bitrateMode "vbr" -> bitrate-type=constrained-vbr
+ * - bitrateMode "cbr" -> bitrate-type=cbr
+ * - audioType "voice" / "generic" passed directly to opusenc audio-type
+ *
+ * Uses unique rtpbin name (includes SSRC) to avoid element name collisions
+ * when multiple pipelines run simultaneously.
+ *
+ * When Opus is bypassed (enabled=false), returns empty string.
+ */
+function buildOpusRtpChain(opus: OpusEncodingConfig, rtp: RtpOutputConfig): string {
+  if (!opus.enabled) {
+    return "";
+  }
+
+  const bitrateTypeGst = opus.bitrateMode === "vbr" ? "constrained-vbr" : "cbr";
+  const frameSizeNumber = Number(opus.frameSize);
+  const bitrateBps = opus.bitrateKbps * 1000;
+
+  return (
+    `opusenc bitrate=${bitrateBps} frame-size=${frameSizeNumber} ` +
+    `audio-type=${opus.audioType} bitrate-type=${bitrateTypeGst} ` +
+    `inband-fec=${opus.fec} dtx=false ! ` +
+    `rtpopuspay pt=101 ssrc=${rtp.ssrc} ! ` +
+    `rtpbin name=rtpbin_${rtp.ssrc} ! ` +
+    `udpsink host=${rtp.host} port=${rtp.rtpPort} sync=false ` +
+    `rtpbin_${rtp.ssrc}.send_rtcp_src_0 ! ` +
+    `udpsink host=${rtp.host} port=${rtp.rtcpPort} sync=false async=false`
+  );
+}
+
+/**
+ * Build the Phase 3 processing and output tail.
+ *
+ * Replaces `buildMeteringTail` when processing config is present.
+ * Handles all 4 combinations of AGC enabled/disabled x Opus enabled/disabled:
+ *
+ * Case A (both on):     AGC -> tee -> [metering branch, Opus/RTP branch]
+ * Case B (AGC only):    AGC -> metering (no tee needed)
+ * Case C (Opus only):   caps enforcement -> tee -> [metering branch, Opus/RTP branch]
+ * Case D (both off):    Same as Phase 2 metering tail
+ */
+function buildProcessingAndOutputTail(
+  processing: ProcessingConfig,
+  levelIntervalNs: number,
+): string {
+  const { agc, opus, rtpOutput } = processing;
+  const agcChain = buildAgcChain(agc);
+  const opusRtpChain = buildOpusRtpChain(opus, rtpOutput);
+
+  const meteringElements =
+    `level interval=${levelIntervalNs} post-messages=true ! fakesink sync=false`;
+
+  const agcEnabled = agc.enabled;
+  const opusEnabled = opus.enabled;
+
+  // Case A: Both AGC and Opus enabled (full processing pipeline)
+  if (agcEnabled && opusEnabled) {
+    return (
+      `${agcChain}` +
+      `tee name=t ` +
+      `t. ! queue ! ${meteringElements} ` +
+      `t. ! queue ! ${opusRtpChain}`
+    );
+  }
+
+  // Case B: AGC enabled, Opus bypassed (processing without encoding)
+  if (agcEnabled && !opusEnabled) {
+    return `${agcChain}${meteringElements}`;
+  }
+
+  // Case C: AGC bypassed, Opus enabled (encoding without processing)
+  if (!agcEnabled && opusEnabled) {
+    return (
+      `audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1 ! ` +
+      `tee name=t ` +
+      `t. ! queue ! ${meteringElements} ` +
+      `t. ! queue ! ${opusRtpChain}`
+    );
+  }
+
+  // Case D: Both bypassed (metering only, same as Phase 2)
+  return buildMeteringTail(levelIntervalNs);
+}
+
+// ---------------------------------------------------------------------------
+// Channel selection helpers
+// ---------------------------------------------------------------------------
 
 /**
  * Build deinterleave + optional interleave elements for channel selection
@@ -97,11 +226,12 @@ function rtpDepayloaderForBitDepth(bitDepth: number): string {
   );
 }
 
-/** Build an AES67 multicast RTP receive pipeline. */
-function buildAes67Pipeline(
-  config: Aes67PipelineConfig,
-  levelIntervalNs: number,
-): string {
+// ---------------------------------------------------------------------------
+// Source head builders (return source + channel selection, no tail)
+// ---------------------------------------------------------------------------
+
+/** Build the AES67 multicast RTP receive source head. */
+function buildAes67SourceHead(config: Aes67PipelineConfig): string {
   const {
     multicastAddress,
     port,
@@ -123,46 +253,7 @@ function buildAes67Pipeline(
 
   const channelSelect = buildChannelSelection(selectedChannels, channelCount);
 
-  return (
-    `${source} ! ` +
-    `${jitterBuffer} ! ` +
-    `${depayloader} ! ` +
-    `${channelSelect}` +
-    buildMeteringTail(levelIntervalNs)
-  );
-}
-
-/** Build a WASAPI2 capture pipeline (regular capture or loopback). */
-function buildWasapiPipeline(
-  config: LocalPipelineConfig,
-  levelIntervalNs: number,
-): string {
-  const { deviceId, selectedChannels, isLoopback } = config;
-
-  let sourceElement: string;
-
-  if (isLoopback) {
-    // Loopback capture -- device param is optional (default output device if omitted)
-    sourceElement = deviceId
-      ? `wasapi2src device=${quoteDeviceId(deviceId)} loopback=true`
-      : `wasapi2src loopback=true`;
-  } else {
-    sourceElement = `wasapi2src device=${quoteDeviceId(deviceId)} low-latency=true`;
-  }
-
-  // WASAPI does not expose total channel count in config, so deinterleave
-  // is only applied when selectedChannels is explicitly a subset.
-  // The caller is responsible for setting selectedChannels correctly.
-  // For WASAPI, if selectedChannels length > 0 and the device has more channels,
-  // we add deinterleave. Since we don't have totalChannels here, we skip
-  // deinterleave when selectedChannels is not explicitly a mono/stereo subset.
-  // The process manager will provide the correct selectedChannels.
-  const channelSelect =
-    selectedChannels.length > 0 && selectedChannels.length <= 2
-      ? buildChannelSelectionForLocal(selectedChannels)
-      : "";
-
-  return `${sourceElement} ! ${channelSelect}${buildMeteringTail(levelIntervalNs)}`;
+  return `${source} ! ${jitterBuffer} ! ${depayloader} ! ${channelSelect}`;
 }
 
 /**
@@ -188,16 +279,34 @@ function buildChannelSelectionForLocal(selectedChannels: number[]): string {
   return "";
 }
 
-/** Build an ASIO capture pipeline. ASIO supports native channel selection. */
-function buildAsioPipeline(
-  config: LocalPipelineConfig,
-  levelIntervalNs: number,
-): string {
+/** Build a WASAPI2 capture source head (regular capture or loopback). */
+function buildWasapiSourceHead(config: LocalPipelineConfig): string {
+  const { deviceId, selectedChannels, isLoopback } = config;
+
+  let sourceElement: string;
+
+  if (isLoopback) {
+    sourceElement = deviceId
+      ? `wasapi2src device=${quoteDeviceId(deviceId)} loopback=true`
+      : `wasapi2src loopback=true`;
+  } else {
+    sourceElement = `wasapi2src device=${quoteDeviceId(deviceId)} low-latency=true`;
+  }
+
+  const channelSelect =
+    selectedChannels.length > 0 && selectedChannels.length <= 2
+      ? buildChannelSelectionForLocal(selectedChannels)
+      : "";
+
+  return `${sourceElement} ! ${channelSelect}`;
+}
+
+/** Build an ASIO capture source head. ASIO supports native channel selection. */
+function buildAsioSourceHead(config: LocalPipelineConfig): string {
   const { deviceId, selectedChannels, bufferSize } = config;
 
   let sourceElement = `asiosrc device-clsid=${quoteDeviceId(deviceId)}`;
 
-  // ASIO element supports native channel selection via input-channels property
   if (selectedChannels.length > 0) {
     sourceElement += ` input-channels="${selectedChannels.join(",")}"`;
   }
@@ -206,14 +315,11 @@ function buildAsioPipeline(
     sourceElement += ` buffer-size=${bufferSize}`;
   }
 
-  return `${sourceElement} ! ${buildMeteringTail(levelIntervalNs)}`;
+  return `${sourceElement} ! `;
 }
 
-/** Build a DirectSound capture pipeline (fallback for legacy compatibility). */
-function buildDirectSoundPipeline(
-  config: LocalPipelineConfig,
-  levelIntervalNs: number,
-): string {
+/** Build a DirectSound capture source head (fallback for legacy compatibility). */
+function buildDirectSoundSourceHead(config: LocalPipelineConfig): string {
   const { deviceId, selectedChannels } = config;
 
   const sourceElement = `directsoundsrc device-name=${quoteDeviceId(deviceId)}`;
@@ -223,37 +329,37 @@ function buildDirectSoundPipeline(
       ? buildChannelSelectionForLocal(selectedChannels)
       : "";
 
-  return `${sourceElement} ! ${channelSelect}${buildMeteringTail(levelIntervalNs)}`;
+  return `${sourceElement} ! ${channelSelect}`;
 }
 
-/** Dispatch table mapping AudioApi values to their pipeline builder functions. */
-const LOCAL_PIPELINE_BUILDERS: Record<
+/** Dispatch table mapping AudioApi values to their source head builder functions. */
+const LOCAL_SOURCE_HEAD_BUILDERS: Record<
   AudioApi,
-  (config: LocalPipelineConfig, levelIntervalNs: number) => string
+  (config: LocalPipelineConfig) => string
 > = {
-  wasapi2: buildWasapiPipeline,
-  asio: buildAsioPipeline,
-  directsound: buildDirectSoundPipeline,
+  wasapi2: buildWasapiSourceHead,
+  asio: buildAsioSourceHead,
+  directsound: buildDirectSoundSourceHead,
 };
 
+// ---------------------------------------------------------------------------
+// Top-level source head dispatcher
+// ---------------------------------------------------------------------------
+
 /**
- * Build a complete GStreamer pipeline string from a PipelineConfig.
- *
- * The returned string is ready to be passed as arguments to `gst-launch-1.0 -m -e`.
- * Each source type produces a valid pipeline ending with level metering and fakesink.
+ * Build the source-specific head of the pipeline (source element + channel selection).
+ * Does NOT include the tail (metering or processing).
  *
  * @throws Error if configuration is invalid (missing required config for source type).
  */
-export function buildPipelineString(config: PipelineConfig): string {
-  const levelIntervalNs = msToGstNanoseconds(config.levelIntervalMs);
-
+function buildSourceHead(config: PipelineConfig): string {
   if (config.sourceType === "aes67") {
     if (!config.aes67Config) {
       throw new Error(
         `Pipeline config has sourceType "aes67" but aes67Config is missing.`,
       );
     }
-    return buildAes67Pipeline(config.aes67Config, levelIntervalNs);
+    return buildAes67SourceHead(config.aes67Config);
   }
 
   if (config.sourceType === "local") {
@@ -263,17 +369,43 @@ export function buildPipelineString(config: PipelineConfig): string {
       );
     }
 
-    const builderFn = LOCAL_PIPELINE_BUILDERS[config.localConfig.api];
+    const builderFn = LOCAL_SOURCE_HEAD_BUILDERS[config.localConfig.api];
     if (!builderFn) {
       throw new Error(
         `Unsupported audio API: "${config.localConfig.api}". ` +
-        `Supported APIs: ${Object.keys(LOCAL_PIPELINE_BUILDERS).join(", ")}.`,
+        `Supported APIs: ${Object.keys(LOCAL_SOURCE_HEAD_BUILDERS).join(", ")}.`,
       );
     }
 
-    return builderFn(config.localConfig, levelIntervalNs);
+    return builderFn(config.localConfig);
   }
 
   // TypeScript exhaustiveness -- should never reach here with discriminated union
   throw new Error(`Unknown source type: "${(config as { sourceType: string }).sourceType}".`);
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a complete GStreamer pipeline string from a PipelineConfig.
+ *
+ * The returned string is ready to be passed as arguments to `gst-launch-1.0 -m -e`.
+ *
+ * When `config.processing` is present, produces a Phase 3 pipeline with
+ * AGC (audioloudnorm), Opus encoding, and RTP output.
+ * When absent, produces the Phase 2 metering-only pipeline.
+ *
+ * @throws Error if configuration is invalid (missing required config for source type).
+ */
+export function buildPipelineString(config: PipelineConfig): string {
+  const levelIntervalNs = msToGstNanoseconds(config.levelIntervalMs);
+  const sourceHead = buildSourceHead(config);
+
+  if (config.processing) {
+    return sourceHead + buildProcessingAndOutputTail(config.processing, levelIntervalNs);
+  }
+
+  return sourceHead + buildMeteringTail(levelIntervalNs);
 }
