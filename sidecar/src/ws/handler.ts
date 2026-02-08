@@ -51,14 +51,31 @@ export interface WebSocketSetupResult {
   getClients: () => Map<string, ClientMetadata>;
 }
 
+/** WebSocket path reserved for protoo listener connections (do not route to admin WS). */
+export const LISTENER_WS_PATH = "/ws/listener";
+
 export function setupWebSocket(
   server: HttpServer | HttpsServer,
   configStore: ConfigStore,
   serverEvents: EventEmitter,
   audioSubsystem?: AudioSubsystem,
 ): WebSocketSetupResult {
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({ noServer: true });
   const clientMap = new Map<string, ExtendedWebSocket>();
+
+  // Route HTTP upgrade requests to this admin WebSocket server.
+  // Requests to /ws/listener are skipped (handled by protoo via WebSocket-Node).
+  server.on("upgrade", (request, socket, head) => {
+    const pathname = request.url ?? "";
+    if (pathname.startsWith(LISTENER_WS_PATH)) {
+      // Reserved for protoo listener WebSocket -- do not handle here
+      return;
+    }
+
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit("connection", ws, request);
+    });
+  });
 
   startHeartbeat(wss, clientMap);
 

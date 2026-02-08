@@ -4,6 +4,7 @@ import { logger, stderrLog } from "./utils/logger";
 import { toErrorMessage } from "./utils/error-message";
 import { ConfigStore } from "./config/store";
 import { AudioSubsystem } from "./audio/audio-subsystem";
+import { StreamingSubsystem } from "./streaming/streaming-subsystem";
 import { createServer, startServer, ADMIN_LOOPBACK_PORT, type StopServerFunction } from "./server";
 import { logFirewallReminder } from "./network/firewall";
 import { removeHostsEntry } from "./network/hosts";
@@ -29,17 +30,18 @@ function setupOrphanPrevention(): void {
 
 function setupGracefulShutdown(
   getStopServer: () => StopServerFunction | null,
-  audioSubsystem?: AudioSubsystem,
+  audioSubsystem: AudioSubsystem,
+  streamingSubsystem: StreamingSubsystem,
 ): void {
   const shutdownSignals: NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
 
   for (const signal of shutdownSignals) {
     process.on(signal, async () => {
       logger.info(`Received ${signal}, shutting down gracefully`);
-      // Stop audio subsystem first (drains pipelines before closing servers)
-      if (audioSubsystem) {
-        await audioSubsystem.stop();
-      }
+      // Shutdown order: streaming first (notify listeners, drain, close mediasoup)
+      // then audio (close GStreamer pipelines), then servers
+      await streamingSubsystem.stop();
+      await audioSubsystem.stop();
       const stopServer = getStopServer();
       if (stopServer) {
         await stopServer();
@@ -77,7 +79,8 @@ function setupRestartListener(
   basePath: string,
   setStopServer: (stopFn: StopServerFunction) => void,
   getStopServer: () => StopServerFunction | null,
-  audioSubsystem?: AudioSubsystem,
+  audioSubsystem: AudioSubsystem,
+  streamingSubsystem: StreamingSubsystem,
 ): void {
   let isRestarting = false;
 
@@ -96,6 +99,9 @@ function setupRestartListener(
     });
 
     try {
+      // Stop streaming before stopping server (listener WS is on httpsServer)
+      await streamingSubsystem.stop();
+
       const stopServer = getStopServer();
       if (stopServer) {
         await stopServer(newConfig.server.host, newConfig.server.port);
@@ -114,6 +120,9 @@ function setupRestartListener(
       );
       const newStopServer = await startServer(components, newConfig);
       setStopServer(newStopServer);
+
+      // Restart streaming on the new HTTPS server
+      await streamingSubsystem.start(components.httpsServer);
 
       logger.info(
         `Server restarted — phones: https://${newConfig.server.host}:${newConfig.server.port} | admin: http://127.0.0.1:${ADMIN_LOOPBACK_PORT}`,
@@ -138,6 +147,9 @@ function setupRestartListener(
         );
         const fallbackStopServer = await startServer(components, fallbackConfig);
         setStopServer(fallbackStopServer);
+
+        // Restart streaming on fallback server
+        await streamingSubsystem.start(components.httpsServer);
         logger.info("Fallback restart succeeded");
       } catch (fallbackErr) {
         const fallbackMessage =
@@ -176,6 +188,9 @@ async function main(): Promise<void> {
   // Create audio subsystem (wires all audio components together)
   const audioSubsystem = new AudioSubsystem(configStore, basePath);
 
+  // Create streaming subsystem (wires mediasoup components, syncs with audio)
+  const streamingSubsystem = new StreamingSubsystem(configStore, audioSubsystem);
+
   const serverEvents = new EventEmitter();
 
   const components = await createServer(
@@ -191,7 +206,7 @@ async function main(): Promise<void> {
     config,
   );
 
-  setupGracefulShutdown(() => currentStopServer, audioSubsystem);
+  setupGracefulShutdown(() => currentStopServer, audioSubsystem, streamingSubsystem);
 
   setupRestartListener(
     serverEvents,
@@ -202,9 +217,14 @@ async function main(): Promise<void> {
     },
     () => currentStopServer,
     audioSubsystem,
+    streamingSubsystem,
   );
 
-  // Start audio subsystem after server is ready (discovery, monitoring, auto-start channels)
+  // Start streaming subsystem (creates workers, attaches to httpsServer for listener WS)
+  await streamingSubsystem.start(components.httpsServer);
+
+  // Start audio subsystem after server and streaming are ready
+  // (discovery, monitoring, auto-start channels -- channels emit events that streaming subscribes to)
   await audioSubsystem.start();
 
   const channelCount = audioSubsystem.getChannels().length;
