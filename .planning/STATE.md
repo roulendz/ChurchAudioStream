@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 3 complete -- ready for Phase 4 (mediasoup/WebRTC)
+**Current focus:** Phase 4 in progress -- WebRTC Streaming Core
 
 ## Current Position
 
-Phase: 3 of 10 (Audio Processing)
-Plan: 3 of 3 in current phase (03-03 complete)
-Status: Phase complete
-Last activity: 2026-02-07 -- Completed 03-03-PLAN.md (processing config runtime integration)
+Phase: 4 of 10 (WebRTC Streaming Core)
+Plan: 1 of 6 in current phase (04-01 complete)
+Status: In progress
+Last activity: 2026-02-08 -- Completed 04-01-PLAN.md (pre-Phase 04 audit DRY/SRP cleanup)
 
-Progress: [====================] 57% (20/35 plans)
+Progress: [=====================] 60% (21/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20
+- Total plans completed: 21
 - Average duration: 7 minutes
-- Total execution time: 2.4 hours
+- Total execution time: 2.6 hours
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [====================] 57% (20/35 plans)
 | 01 | 8/8 | 67 min | 8 min |
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
+| 04 | 1/6 | 9 min | 9 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-09 (5m), 03-01 (5m), 03-02 (4m), 03-03 (8m)
-- Trend: Consistent fast execution through Phase 3
+- Last 5 plans: 03-01 (5m), 03-02 (4m), 03-03 (8m), 04-01 (9m)
+- Trend: Consistent execution, 04-01 slightly longer due to broad refactor scope (15 files)
 
 *Updated after each plan completion*
 
@@ -110,6 +111,10 @@ Recent decisions affecting current work:
 - [03-03]: RTP ports not exposed in WebSocket update payload (auto-allocated, prevents admin errors)
 - [03-03]: frameSize converted from string to number at WebSocket boundary
 - [03-03]: Processing config separate from ChannelUpdatableFields (dedicated method with debounce, per SRP)
+- [04-01]: pipeline-manager.ts exponential backoff is not a debounce pattern -- left as-is during debounce extraction
+- [04-01]: source-registry single timer converted to Map<string, Timeout> for consistency with shared scheduleDebounced utility
+- [04-01]: toErrorMessage applied to all 11 files with the pattern (broader than plan's 5 targets, for complete DRY)
+- [04-01]: buildChannelSelectionString with optional totalSourceChannels handles both AES67 and local device cases
 
 ### Pending Todos
 
@@ -131,7 +136,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-07
-Stopped at: Completed 03-03-PLAN.md (processing config runtime integration) -- Phase 3 complete
+Last session: 2026-02-08
+Stopped at: Completed 04-01-PLAN.md (pre-Phase 04 audit DRY/SRP cleanup)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
