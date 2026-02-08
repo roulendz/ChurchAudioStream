@@ -17,50 +17,10 @@ Key architectural insight: mediasoup is audio-only in this use case, which means
 ---
 
 <user_constraints>
-## User Constraints (from CONTEXT.md)
+## User Constraints
 
-### Locked Decisions
-- Listeners connect via protoo on separate WebSocket path (`/ws/listener`) from admin (`/ws/admin`)
-- No hard cap on simultaneous listeners -- let mediasoup handle as many as the server supports
-- Gentle auto-reconnect: wait a few seconds on disconnect, then retry with exponential backoff; show "tap to reconnect" button if auto-reconnect fails after 15-30 seconds
-- Each listener gets an anonymous random session ID (not tied to person)
-- When a channel has no active pipeline, listeners connect but hear silence; UI shows "Channel not active" status; audio starts automatically when pipeline comes online
-- Periodic heartbeat for zombie connection detection -- relaxed interval (30-60 seconds)
-- Basic rate limiting on connection attempts (e.g., 5 per 10 seconds per IP) to prevent accidental DoS from rapid refreshing
-- Graceful shutdown notification: send "server shutting down" message via WebSocket before closing connections
-- HTTPS everywhere for WebRTC signaling; no plain HTTP exception for listeners
-- mediasoup default DTLS handling (no custom certs)
-- Local WiFi only -- no TURN server; direct UDP connectivity expected on church network
-- Server pushes active channel list on initial WebSocket connect (no request-response round-trip)
-- Hard cut when switching channels -- old audio stops instantly, new channel starts when consumer is ready
-- Reuse existing WebRTC transport on channel switch -- just swap the mediasoup consumer; faster switch (~100ms)
-- One channel at a time in Phase 4
-- "Live / Stable" mode toggle per channel
-- NACK vs Opus PLC per-channel admin setting
-- Dedicated UDP port per channel for GStreamer-to-mediasoup PlainTransport
-- Configurable worker count -- admin sets number of mediasoup workers; default to 1
-- Basic worker memory monitoring in Phase 4 -- track usage, log warnings; auto-rotation deferred to Phase 8
-- Basic auto-restart on worker crash -- respawn worker, recreate routers/transports; listeners reconnect via auto-reconnect
-- WebRTC transports created on-demand per listener (no pre-created pool)
-- Graceful shutdown: send notification to listeners -> brief drain period (5-10 seconds) -> close mediasoup workers -> close GStreamer pipelines
-
-### Claude's Discretion
-- Audio start behavior on initial connect (instant vs brief connecting state)
-- WebSocket signaling lifecycle (keep open vs disconnect after WebRTC setup)
-- ICE candidate strategy (LAN IP only vs LAN + loopback for admin)
-- Router strategy (one router for all channels vs one per channel)
-- SSRC matching on PlainTransport (explicit Phase 3 SSRC vs auto-detect)
-- Adaptive quality on WiFi degradation (reduce bitrate vs rely on WebRTC congestion control)
-- Worker configuration exposure (log level, RTC port range -- balance simplicity vs flexibility)
-- RTC port range configurability
-
-### Deferred Ideas (OUT OF SCOPE)
-None -- discussion stayed within phase scope
-
-### Audit Findings to Address in Phase 4
-- DRY: Extract `scheduleDebounced()`, `normalizeSourceAssignment()`, `buildChannelSelectionString()`, `clearFlushTimer()`, `toErrorMessage()` utilities
-- SRP: ChannelManager at ~1220 lines -- consider splitting into ChannelRegistry, ChannelPipelineOrchestrator, ChannelProcessingManager
-- Architecture: PlainTransport persist across GStreamer restarts, pipeline stall detection, serialize concurrent channel updates
+See [04-CONTEXT.md](./04-CONTEXT.md) for all locked decisions, discretion areas, and deferred ideas.
+See [04-AUDIT.md](./04-AUDIT.md) for pre-Phase 04 audit findings (DRY/SRP violations, architecture improvements, best practices).
 </user_constraints>
 
 ---

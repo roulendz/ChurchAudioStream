@@ -22,11 +22,11 @@
 
 ### WebRTC Streaming
 
-- [ ] **STRM-01**: mediasoup SFU distributes audio streams to multiple simultaneous browser listeners
+- [x] **STRM-01**: mediasoup SFU distributes audio streams to multiple simultaneous browser listeners
 - [ ] **STRM-02**: Automatic reconnection on WiFi drops with exponential backoff and ICE restart
 - [ ] **STRM-03**: Listener can blend two channels (original + translation) with a mix balance slider
 - [ ] **STRM-04**: Listener can toggle audio processing (normalization) on/off from their phone
-- [ ] **STRM-05**: Sub-100ms end-to-end latency from Dante input to listener's earbuds
+- [x] **STRM-05**: Sub-100ms end-to-end latency from Dante input to listener's earbuds
 
 ### Listener Web UI
 
@@ -118,15 +118,15 @@
 | CAPT-03 | Phase 2 | Complete |
 | CAPT-04 | Phase 2 | Complete |
 | CAPT-05 | Phase 2 | Complete |
-| PROC-01 | Phase 3 | Pending |
-| PROC-02 | Phase 3 | Pending |
-| PROC-03 | Phase 3 | Pending |
+| PROC-01 | Phase 3 | Complete |
+| PROC-02 | Phase 3 | Complete |
+| PROC-03 | Phase 3 | Complete |
 | PROC-04 | Phase 2 | Complete |
-| STRM-01 | Phase 4 | Pending |
+| STRM-01 | Phase 4 | Complete |
 | STRM-02 | Phase 8 | Pending |
 | STRM-03 | Phase 7 | Pending |
 | STRM-04 | Phase 7 | Pending |
-| STRM-05 | Phase 4 | Pending |
+| STRM-05 | Phase 4 | Complete |
 | LWEB-01 | Phase 5 | Pending |
 | LWEB-02 | Phase 5 | Pending |
 | LWEB-03 | Phase 5 | Pending |
