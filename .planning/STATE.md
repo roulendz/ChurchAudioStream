@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 4 in progress -- WebRTC Streaming Core
+**Current focus:** Phase 4 complete -- WebRTC Streaming Core
 
 ## Current Position
 
 Phase: 4 of 10 (WebRTC Streaming Core)
-Plan: 5 of 6 in current phase (04-05 complete)
-Status: In progress
-Last activity: 2026-02-08 -- Completed 04-05-PLAN.md (streaming subsystem integration)
+Plan: 6 of 6 in current phase (04-06 complete)
+Status: Phase complete
+Last activity: 2026-02-08 -- Completed 04-06-PLAN.md (channel switching, latency estimation, admin metrics)
 
-Progress: [=========================] 71% (25/35 plans)
+Progress: [==========================] 74% (26/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 25
+- Total plans completed: 26
 - Average duration: 7 minutes
-- Total execution time: 3.1 hours
+- Total execution time: 3.3 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [=========================] 71% (25/35 plans)
 | 01 | 8/8 | 67 min | 8 min |
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
-| 04 | 5/6 | 35 min | 7 min |
+| 04 | 6/6 | 47 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-01 (9m), 04-02 (6m), 04-03 (5m), 04-04 (5m), 04-05 (10m)
-- Trend: Integration plan took longer due to multi-file wiring (3 files modified, event sync across subsystems)
+- Last 5 plans: 04-02 (6m), 04-03 (5m), 04-04 (5m), 04-05 (10m), 04-06 (12m)
+- Trend: Final phase plans larger (7 files, multi-concern wiring). Phase 4 complete.
 
 *Updated after each plan completion*
 
@@ -135,6 +135,14 @@ Recent decisions affecting current work:
 - [04-05]: Streaming started after server, before audio (audio events need streaming listeners registered first)
 - [04-05]: streaming:restart-workers deferred to Phase 8 (worker rotation adds coordination complexity)
 - [04-05]: MetadataResolver callback reused from RouterManager (avoids circular dependency with ChannelManager)
+- [04-06]: ChannelStreamingConfigResolver callback decouples SignalingHandler from config store (latencyMode, lossRecovery, defaultChannel)
+- [04-06]: PLC mode strips NACK and transport-cc from consumer rtpCapabilities (mediasoup skips retransmission)
+- [04-06]: ListenerChannelInfo extended with latencyMode and lossRecovery for Phase 5 client config
+- [04-06]: disconnectListenersFromChannel: hard-cut + notify with remaining channels (replaces simple consumerClosed)
+- [04-06]: defaultChannelId pushed on initial connect for first-time listener auto-connect
+- [04-06]: 30s latency monitoring loop with 200ms threshold emits latency-warning event
+- [04-06]: streaming:listeners displayMode (all/flagged/off) filters per admin preference
+- [04-06]: buildMetadataResolver() extracted for DRY -- used by 3 call sites in StreamingSubsystem
 
 ### Pending Todos
 
@@ -157,6 +165,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 04-05-PLAN.md (streaming subsystem integration)
+Stopped at: Completed 04-06-PLAN.md (channel switching, latency estimation, admin metrics) -- Phase 4 complete
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
