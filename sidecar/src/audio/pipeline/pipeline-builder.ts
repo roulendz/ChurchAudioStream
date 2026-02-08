@@ -165,16 +165,21 @@ function buildProcessingAndOutputTail(
  * Build deinterleave + optional interleave elements for channel selection
  * from a multichannel stream.
  *
- * - 1 channel selected from N: deinterleave -> pick one pad
- * - 2 channels selected from N (stereo pair): deinterleave -> interleave two pads
- * - All channels selected: no deinterleave (pass through)
+ * When `totalSourceChannels` is provided (AES67 sources), all-channel selection
+ * is detected and deinterleave is skipped. When omitted (local devices), only
+ * explicit mono/stereo extraction is supported.
+ *
+ * - 1 channel selected: deinterleave -> pick one pad
+ * - 2 channels selected: deinterleave -> interleave two pads
+ * - All channels selected (totalSourceChannels known): pass through
+ * - N channels selected (N > 2, totalSourceChannels known): deinterleave + interleave N pads
  */
-function buildChannelSelection(
+function buildChannelSelectionString(
   selectedChannels: number[],
-  totalChannels: number,
+  totalSourceChannels?: number,
 ): string {
-  if (selectedChannels.length === totalChannels) {
-    // All channels selected -- no deinterleave needed
+  // When total is known and all channels are selected, no deinterleave needed
+  if (totalSourceChannels !== undefined && selectedChannels.length === totalSourceChannels) {
     return "";
   }
 
@@ -192,6 +197,11 @@ function buildChannelSelection(
       `d.src_${chB} ! queue ! i. ` +
       `i. ! `
     );
+  }
+
+  // More than 2 but total unknown (local devices) -- cannot deinterleave safely
+  if (totalSourceChannels === undefined) {
+    return "";
   }
 
   // More than 2 but fewer than total: deinterleave + interleave N pads
@@ -251,32 +261,9 @@ function buildAes67SourceHead(config: Aes67PipelineConfig): string {
 
   const jitterBuffer = `rtpjitterbuffer latency=5`;
 
-  const channelSelect = buildChannelSelection(selectedChannels, channelCount);
+  const channelSelect = buildChannelSelectionString(selectedChannels, channelCount);
 
   return `${source} ! ${jitterBuffer} ! ${depayloader} ! ${channelSelect}`;
-}
-
-/**
- * Build channel selection for local devices.
- * Unlike AES67 where we know total channel count, local devices
- * use deinterleave only when explicitly selecting a subset.
- */
-function buildChannelSelectionForLocal(selectedChannels: number[]): string {
-  if (selectedChannels.length === 1) {
-    return `deinterleave name=d d.src_${selectedChannels[0]} ! queue ! `;
-  }
-
-  if (selectedChannels.length === 2) {
-    const [chA, chB] = selectedChannels;
-    return (
-      `deinterleave name=d ` +
-      `d.src_${chA} ! queue ! interleave name=i ` +
-      `d.src_${chB} ! queue ! i. ` +
-      `i. ! `
-    );
-  }
-
-  return "";
 }
 
 /** Build a WASAPI2 capture source head (regular capture or loopback). */
@@ -295,7 +282,7 @@ function buildWasapiSourceHead(config: LocalPipelineConfig): string {
 
   const channelSelect =
     selectedChannels.length > 0 && selectedChannels.length <= 2
-      ? buildChannelSelectionForLocal(selectedChannels)
+      ? buildChannelSelectionString(selectedChannels)
       : "";
 
   return `${sourceElement} ! ${channelSelect}`;
@@ -326,7 +313,7 @@ function buildDirectSoundSourceHead(config: LocalPipelineConfig): string {
 
   const channelSelect =
     selectedChannels.length > 0 && selectedChannels.length <= 2
-      ? buildChannelSelectionForLocal(selectedChannels)
+      ? buildChannelSelectionString(selectedChannels)
       : "";
 
   return `${sourceElement} ! ${channelSelect}`;
