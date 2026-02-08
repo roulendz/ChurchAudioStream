@@ -929,23 +929,13 @@ export class ChannelManager extends EventEmitter {
       const channel: AppChannel = {
         id: saved.id,
         name: saved.name,
-        sources: saved.sources.map((s) => ({
-          sourceId: s.sourceId,
-          selectedChannels: [...s.selectedChannels],
-          gain: s.gain,
-          muted: s.muted,
-          delayMs: s.delayMs,
-        })),
+        sources: saved.sources.map(normalizeSourceAssignment),
         outputFormat: saved.outputFormat,
         autoStart: saved.autoStart,
         status: "stopped",
         processing: {
           mode: saved.processing.mode as ProcessingConfig["mode"],
-          agc: {
-            enabled: saved.processing.agc.enabled,
-            targetLufs: saved.processing.agc.targetLufs,
-            maxTruePeakDbtp: saved.processing.agc.maxTruePeakDbtp,
-          },
+          agc: normalizeAgcConfig(saved.processing.agc),
           opus: {
             enabled: saved.processing.opus.enabled,
             bitrateKbps: saved.processing.opus.bitrateKbps,
@@ -984,22 +974,12 @@ export class ChannelManager extends EventEmitter {
     const channelArray = Array.from(this.channels.values()).map((ch) => ({
       id: ch.id,
       name: ch.name,
-      sources: ch.sources.map((s) => ({
-        sourceId: s.sourceId,
-        selectedChannels: [...s.selectedChannels],
-        gain: s.gain,
-        muted: s.muted,
-        delayMs: s.delayMs,
-      })),
+      sources: ch.sources.map(normalizeSourceAssignment),
       outputFormat: ch.outputFormat,
       autoStart: ch.autoStart,
       processing: {
         mode: ch.processing.mode,
-        agc: {
-          enabled: ch.processing.agc.enabled,
-          targetLufs: ch.processing.agc.targetLufs,
-          maxTruePeakDbtp: ch.processing.agc.maxTruePeakDbtp,
-        },
+        agc: normalizeAgcConfig(ch.processing.agc),
         opus: {
           enabled: ch.processing.opus.enabled,
           bitrateKbps: ch.processing.opus.bitrateKbps,
@@ -1228,6 +1208,37 @@ export class ChannelManager extends EventEmitter {
 // ---------------------------------------------------------------------------
 // Module-level helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Normalize a source assignment to a plain object with a fresh selectedChannels copy.
+ * Used by both load-from-config and persist-to-config paths to avoid duplicating
+ * the field mapping.
+ */
+function normalizeSourceAssignment(
+  s: SourceAssignment,
+): { sourceId: string; selectedChannels: number[]; gain: number; muted: boolean; delayMs: number } {
+  return {
+    sourceId: s.sourceId,
+    selectedChannels: [...s.selectedChannels],
+    gain: s.gain,
+    muted: s.muted,
+    delayMs: s.delayMs,
+  };
+}
+
+/**
+ * Normalize an AGC config to a plain object.
+ * Used by both load-from-config and persist-to-config paths.
+ */
+function normalizeAgcConfig(
+  agc: { enabled: boolean; targetLufs: number; maxTruePeakDbtp: number },
+): { enabled: boolean; targetLufs: number; maxTruePeakDbtp: number } {
+  return {
+    enabled: agc.enabled,
+    targetLufs: agc.targetLufs,
+    maxTruePeakDbtp: agc.maxTruePeakDbtp,
+  };
+}
 
 /** Shallow comparison of two number arrays. */
 function arraysEqual(a: readonly number[], b: readonly number[]): boolean {
