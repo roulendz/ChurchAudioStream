@@ -109,6 +109,9 @@ export const ChannelSchema = z.object({
   outputFormat: z.enum(["mono", "stereo"]).default("mono"),
   autoStart: z.boolean().default(true),
   processing: ProcessingSchema.default(() => ProcessingSchema.parse({})),
+  latencyMode: z.enum(["live", "stable"]).default("live"),
+  lossRecovery: z.enum(["nack", "plc"]).default("nack"),
+  defaultChannel: z.boolean().default(false),
 });
 
 /** Pipeline crash recovery settings. */
@@ -135,6 +138,30 @@ export const AudioSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// mediasoup worker configuration
+// ---------------------------------------------------------------------------
+
+/** mediasoup C++ worker process settings. */
+export const MediasoupSchema = z.object({
+  workerCount: z.number().int().min(1).max(8).default(1),
+  rtcMinPort: z.number().int().min(1024).max(65535).default(40000),
+  rtcMaxPort: z.number().int().min(1024).max(65535).default(49999),
+  logLevel: z.enum(["debug", "warn", "error", "none"]).default("warn"),
+});
+
+// ---------------------------------------------------------------------------
+// WebRTC streaming configuration
+// ---------------------------------------------------------------------------
+
+/** Listener connection and lifecycle settings for WebRTC streaming. */
+export const StreamingSchema = z.object({
+  heartbeatIntervalMs: z.number().int().min(10000).max(120000).default(30000),
+  rateLimitPerIp: z.number().int().min(1).max(50).default(5),
+  rateLimitWindowMs: z.number().int().min(1000).max(60000).default(10000),
+  shutdownDrainMs: z.number().int().min(1000).max(30000).default(5000),
+});
+
+// ---------------------------------------------------------------------------
 // Root config schema
 // ---------------------------------------------------------------------------
 
@@ -143,6 +170,8 @@ export const ConfigSchema = z.object({
   network: NetworkSchema.default(() => NetworkSchema.parse({})),
   certificate: CertificateSchema.default(() => CertificateSchema.parse({})),
   audio: AudioSchema.default(() => AudioSchema.parse({})),
+  mediasoup: MediasoupSchema.default(() => MediasoupSchema.parse({})),
+  streaming: StreamingSchema.default(() => StreamingSchema.parse({})),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
