@@ -24,11 +24,29 @@ import type {
   ListenerPeerData,
   ListenerSessionInfo,
   ListenerChannelInfo,
+  LatencyMode,
+  LossRecoveryMode,
 } from "./streaming-types.js";
 import type { RouterManager, ChannelMetadataResolver } from "./router-manager.js";
 import type { TransportManager } from "./transport-manager.js";
 import { logger } from "../utils/logger.js";
 import { toErrorMessage } from "../utils/error-message.js";
+
+// ---------------------------------------------------------------------------
+// Channel config resolver (provides streaming-specific config per channel)
+// ---------------------------------------------------------------------------
+
+/**
+ * Callback that resolves per-channel streaming configuration from the config store.
+ * Keeps SignalingHandler decoupled from the config store / ChannelManager.
+ */
+export type ChannelStreamingConfigResolver = (channelId: string) =>
+  | {
+      latencyMode: LatencyMode;
+      lossRecovery: LossRecoveryMode;
+      defaultChannel: boolean;
+    }
+  | undefined;
 
 // ---------------------------------------------------------------------------
 // PeerHeartbeatTracker (private helper -- SRP)
@@ -88,6 +106,7 @@ export class SignalingHandler extends EventEmitter {
   private readonly routerManager: RouterManager;
   private readonly transportManager: TransportManager;
   private readonly metadataResolver: ChannelMetadataResolver;
+  private readonly channelConfigResolver: ChannelStreamingConfigResolver;
   private readonly heartbeatTracker: PeerHeartbeatTracker;
   private readonly peers: Map<string, ProtooPeer> = new Map();
 
@@ -95,12 +114,14 @@ export class SignalingHandler extends EventEmitter {
     routerManager: RouterManager,
     transportManager: TransportManager,
     metadataResolver: ChannelMetadataResolver,
+    channelConfigResolver: ChannelStreamingConfigResolver,
     heartbeatIntervalMs: number,
   ) {
     super();
     this.routerManager = routerManager;
     this.transportManager = transportManager;
     this.metadataResolver = metadataResolver;
+    this.channelConfigResolver = channelConfigResolver;
     this.heartbeatTracker = new PeerHeartbeatTracker(heartbeatIntervalMs);
   }
 
@@ -509,10 +530,18 @@ export class SignalingHandler extends EventEmitter {
       peerData.currentConsumer = null;
     }
 
+    // Resolve channel streaming config for NACK/PLC setting
+    const channelConfig = this.channelConfigResolver(channelId);
+    const lossRecovery = channelConfig?.lossRecovery ?? "nack";
+    const consumerRtpCapabilities = this.buildConsumerRtpCapabilities(
+      peerData.rtpCapabilities,
+      lossRecovery,
+    );
+
     // Create consumer paused (anti-pattern avoidance: never send RTP before client is ready)
     const consumer = await peerData.webRtcTransport.consume({
       producerId: producer.id,
-      rtpCapabilities: peerData.rtpCapabilities,
+      rtpCapabilities: consumerRtpCapabilities,
       paused: true,
     });
 
@@ -526,12 +555,15 @@ export class SignalingHandler extends EventEmitter {
       producerId: consumer.producerId,
       kind: consumer.kind,
       rtpParameters: consumer.rtpParameters,
+      latencyMode: channelConfig?.latencyMode ?? "live",
+      lossRecovery,
     });
 
     logger.info("Consumer created for listener", {
       peerId: peer.id,
       channelId,
       consumerId: consumer.id,
+      lossRecovery,
       paused: true,
     });
   }
@@ -627,10 +659,18 @@ export class SignalingHandler extends EventEmitter {
       peerData.webRtcTransport =
         this.transportManager.getTransport(peer.id) ?? null;
 
+      // Resolve channel streaming config for NACK/PLC
+      const targetConfig = this.channelConfigResolver(targetChannelId);
+      const targetLossRecovery = targetConfig?.lossRecovery ?? "nack";
+      const switchRtpCapabilities = this.buildConsumerRtpCapabilities(
+        peerData.rtpCapabilities,
+        targetLossRecovery,
+      );
+
       // Create consumer paused on new transport
       const consumer = await peerData.webRtcTransport!.consume({
         producerId: targetProducer.id,
-        rtpCapabilities: peerData.rtpCapabilities,
+        rtpCapabilities: switchRtpCapabilities,
         paused: true,
       });
 
@@ -650,12 +690,15 @@ export class SignalingHandler extends EventEmitter {
         producerId: consumer.producerId,
         kind: consumer.kind,
         rtpParameters: consumer.rtpParameters,
+        latencyMode: targetConfig?.latencyMode ?? "live",
+        lossRecovery: targetLossRecovery,
       });
 
       logger.info("Channel switch successful", {
         peerId: peer.id,
         from: previousChannelId,
         to: targetChannelId,
+        lossRecovery: targetLossRecovery,
       });
     } catch (switchError) {
       logger.error("Channel switch failed, attempting fallback", {
@@ -694,6 +737,48 @@ export class SignalingHandler extends EventEmitter {
 
       reject(500, "Channel switch failed, select a new channel");
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // Internal: loss recovery configuration
+  // -----------------------------------------------------------------------
+
+  /**
+   * Build consumer options based on the channel's loss recovery setting.
+   *
+   * - NACK mode ("nack"): default mediasoup behavior, NACK retransmission enabled.
+   *   Just pass rtpCapabilities as-is.
+   * - PLC mode ("plc"): strip NACK and transport-cc from the consumer's
+   *   rtpCapabilities so mediasoup does not set up retransmission. The browser's
+   *   Opus decoder uses Packet Loss Concealment instead.
+   *
+   * NOTE: The client-side jitter buffer configuration is controlled by
+   * mediasoup-client in Phase 5. The server-side distinction here is:
+   * 1. Whether NACK retransmission is enabled for the consumer
+   * 2. Channel metadata (latencyMode) sent to listeners for client config
+   */
+  private buildConsumerRtpCapabilities(
+    rtpCapabilities: mediasoupTypes.RtpCapabilities,
+    lossRecovery: LossRecoveryMode,
+  ): mediasoupTypes.RtpCapabilities {
+    if (lossRecovery === "nack") {
+      // Default behavior -- mediasoup handles NACK retransmission
+      return rtpCapabilities;
+    }
+
+    // PLC mode: strip NACK-related RTCP feedback from codec capabilities
+    // so the consumer does not request retransmission
+    const strippedCodecs = (rtpCapabilities.codecs ?? []).map((codec) => ({
+      ...codec,
+      rtcpFeedback: (codec.rtcpFeedback ?? []).filter(
+        (fb) => fb.type !== "nack" && fb.type !== "transport-cc",
+      ),
+    }));
+
+    return {
+      ...rtpCapabilities,
+      codecs: strippedCodecs,
+    };
   }
 
   // -----------------------------------------------------------------------
@@ -801,10 +886,18 @@ export class SignalingHandler extends EventEmitter {
       throw new Error("Failed to create transport");
     }
 
+    // Resolve loss recovery setting for the fallback channel
+    const channelConfig = this.channelConfigResolver(channelId);
+    const lossRecovery = channelConfig?.lossRecovery ?? "nack";
+    const fallbackRtpCapabilities = this.buildConsumerRtpCapabilities(
+      peerData.rtpCapabilities,
+      lossRecovery,
+    );
+
     // Create consumer paused
     const consumer = await peerData.webRtcTransport.consume({
       producerId: producer.id,
-      rtpCapabilities: peerData.rtpCapabilities,
+      rtpCapabilities: fallbackRtpCapabilities,
       paused: true,
     });
 

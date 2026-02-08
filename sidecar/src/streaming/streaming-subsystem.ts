@@ -27,6 +27,7 @@ import { PlainTransportManager } from "./plain-transport-manager.js";
 import { RouterManager } from "./router-manager.js";
 import { TransportManager } from "./transport-manager.js";
 import { SignalingHandler } from "./signaling-handler.js";
+import type { ChannelStreamingConfigResolver } from "./signaling-handler.js";
 import { ListenerWebSocketHandler } from "../ws/listener-handler.js";
 import { logger } from "../utils/logger.js";
 import { toErrorMessage } from "../utils/error-message.js";
@@ -93,18 +94,25 @@ export class StreamingSubsystem extends EventEmitter {
     const metadataResolver: ChannelMetadataResolver = (channelId: string) => {
       const channel = this.audioSubsystem.getChannel(channelId);
       if (!channel) return undefined;
+      const channelConfig = this.resolveChannelConfig(channelId);
       return {
         name: channel.name,
         outputFormat: channel.outputFormat,
-        defaultChannel: false, // Phase 6 adds admin-set default channel
+        defaultChannel: channelConfig?.defaultChannel ?? false,
       };
     };
 
-    // 6. Create SignalingHandler
+    // 6. Create channel streaming config resolver (latencyMode, lossRecovery, defaultChannel)
+    const channelConfigResolver: ChannelStreamingConfigResolver = (
+      channelId: string,
+    ) => this.resolveChannelConfig(channelId);
+
+    // 7. Create SignalingHandler
     this.signalingHandler = new SignalingHandler(
       this.routerManager,
       this.transportManager,
       metadataResolver,
+      channelConfigResolver,
       config.streaming.heartbeatIntervalMs,
     );
 
@@ -214,16 +222,38 @@ export class StreamingSubsystem extends EventEmitter {
   /** Get the list of channels with active streaming routers. */
   getActiveStreamingChannels(): ListenerChannelInfo[] {
     if (!this.routerManager) return [];
-    const metadataResolver: ChannelMetadataResolver = (channelId: string) => {
-      const channel = this.audioSubsystem.getChannel(channelId);
-      if (!channel) return undefined;
-      return {
-        name: channel.name,
-        outputFormat: channel.outputFormat,
-        defaultChannel: false,
-      };
+    return this.routerManager.getActiveChannelList(
+      this.buildMetadataResolver(),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Private: channel config resolution
+  // -------------------------------------------------------------------------
+
+  /**
+   * Resolve per-channel streaming config (latencyMode, lossRecovery, defaultChannel)
+   * from the config store. Returns undefined if channel not found in config.
+   */
+  private resolveChannelConfig(channelId: string):
+    | { latencyMode: "live" | "stable"; lossRecovery: "nack" | "plc"; defaultChannel: boolean }
+    | undefined {
+    const config = this.configStore.get();
+    const channelConfigs = (config.audio as Record<string, unknown>).channels as Array<{
+      id: string;
+      latencyMode?: "live" | "stable";
+      lossRecovery?: "nack" | "plc";
+      defaultChannel?: boolean;
+    }>;
+
+    const found = channelConfigs?.find((ch) => ch.id === channelId);
+    if (!found) return undefined;
+
+    return {
+      latencyMode: found.latencyMode ?? "live",
+      lossRecovery: found.lossRecovery ?? "nack",
+      defaultChannel: found.defaultChannel ?? false,
     };
-    return this.routerManager.getActiveChannelList(metadataResolver);
   }
 
   // -------------------------------------------------------------------------
@@ -350,20 +380,26 @@ export class StreamingSubsystem extends EventEmitter {
   private async pushActiveChannelList(): Promise<void> {
     if (!this.signalingHandler || !this.routerManager) return;
 
-    const metadataResolver: ChannelMetadataResolver = (channelId: string) => {
-      const channel = this.audioSubsystem.getChannel(channelId);
-      if (!channel) return undefined;
-      return {
-        name: channel.name,
-        outputFormat: channel.outputFormat,
-        defaultChannel: false,
-      };
-    };
-
-    const channels = this.routerManager.getActiveChannelList(metadataResolver);
+    const channels = this.routerManager.getActiveChannelList(
+      this.buildMetadataResolver(),
+    );
     await this.signalingHandler.notifyAllListeners("activeChannels", {
       channels,
     });
+  }
+
+  /** Build a ChannelMetadataResolver using AudioSubsystem and config store. */
+  private buildMetadataResolver(): ChannelMetadataResolver {
+    return (channelId: string) => {
+      const channel = this.audioSubsystem.getChannel(channelId);
+      if (!channel) return undefined;
+      const channelConfig = this.resolveChannelConfig(channelId);
+      return {
+        name: channel.name,
+        outputFormat: channel.outputFormat,
+        defaultChannel: channelConfig?.defaultChannel ?? false,
+      };
+    };
   }
 
   // -------------------------------------------------------------------------
