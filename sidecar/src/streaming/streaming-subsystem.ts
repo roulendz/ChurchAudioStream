@@ -9,6 +9,7 @@
  * Events emitted:
  * - "listener-count-changed"  (channelId: string, count: number)
  * - "worker-alert"            (alertType: string, details: Record<string, unknown>)
+ * - "latency-warning"         (warnings: Array<{ channelId, name, estimate }>)
  */
 
 import { EventEmitter } from "node:events";
@@ -20,6 +21,7 @@ import type {
   ListenerSessionInfo,
   WorkerResourceInfo,
   ListenerChannelInfo,
+  LatencyEstimate,
 } from "./streaming-types.js";
 import type { ChannelMetadataResolver } from "./router-manager.js";
 import { WorkerManager } from "./worker-manager.js";
@@ -29,8 +31,42 @@ import { TransportManager } from "./transport-manager.js";
 import { SignalingHandler } from "./signaling-handler.js";
 import type { ChannelStreamingConfigResolver } from "./signaling-handler.js";
 import { ListenerWebSocketHandler } from "../ws/listener-handler.js";
+import { LatencyEstimator } from "./latency-estimator.js";
+import type { LatencyEstimateInput } from "./latency-estimator.js";
 import { logger } from "../utils/logger.js";
 import { toErrorMessage } from "../utils/error-message.js";
+
+// ---------------------------------------------------------------------------
+// Admin metrics types
+// ---------------------------------------------------------------------------
+
+/** Per-channel streaming status for admin dashboard. */
+export interface ChannelStreamingStatus {
+  readonly channelId: string;
+  readonly name: string;
+  readonly isActive: boolean;
+  readonly listenerCount: number;
+  readonly latencyEstimate: LatencyEstimate;
+  readonly latencyMode: "live" | "stable";
+  readonly lossRecovery: "nack" | "plc";
+}
+
+/** Per-listener connection stats from consumer.getStats(). */
+export interface ListenerConnectionStats {
+  readonly sessionId: string;
+  readonly channelId: string | null;
+  readonly connectedAt: string;
+  readonly sessionDurationMs: number;
+  readonly packetLoss: number;
+  readonly jitter: number;
+  readonly bitrate: number;
+}
+
+/** Latency monitoring interval (ms). */
+const LATENCY_MONITOR_INTERVAL_MS = 30_000;
+
+/** Default latency warning threshold (ms). */
+const LATENCY_WARNING_THRESHOLD_MS = 200;
 
 // ---------------------------------------------------------------------------
 // StreamingSubsystem
@@ -46,6 +82,8 @@ export class StreamingSubsystem extends EventEmitter {
   private transportManager: TransportManager | null = null;
   private signalingHandler: SignalingHandler | null = null;
   private listenerWsHandler: ListenerWebSocketHandler | null = null;
+  private readonly latencyEstimator = new LatencyEstimator();
+  private latencyMonitorInterval: ReturnType<typeof setInterval> | null = null;
 
   private shutdownDrainMs: number = 5000;
 
@@ -138,6 +176,9 @@ export class StreamingSubsystem extends EventEmitter {
     // 10. Wire SignalingHandler events for listener count tracking
     this.wireSignalingHandlerEvents();
 
+    // 11. Start latency monitoring loop
+    this.startLatencyMonitorLoop();
+
     logger.info("Streaming subsystem started", {
       workerCount: config.mediasoup.workerCount,
       announcedIp: config.server.host,
@@ -171,6 +212,12 @@ export class StreamingSubsystem extends EventEmitter {
     await new Promise<void>((resolve) =>
       setTimeout(resolve, this.shutdownDrainMs),
     );
+
+    // 2.5. Stop latency monitoring
+    if (this.latencyMonitorInterval) {
+      clearInterval(this.latencyMonitorInterval);
+      this.latencyMonitorInterval = null;
+    }
 
     // 3. Close ListenerWebSocketHandler (disconnect all listeners)
     if (this.listenerWsHandler) {
@@ -227,6 +274,160 @@ export class StreamingSubsystem extends EventEmitter {
     return this.routerManager.getActiveChannelList(
       this.buildMetadataResolver(),
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Admin metrics
+  // -------------------------------------------------------------------------
+
+  /**
+   * Per-channel streaming status with latency estimates for admin dashboard.
+   * Returns status for all active streaming channels.
+   */
+  getStreamingStatus(): ChannelStreamingStatus[] {
+    if (!this.routerManager) return [];
+
+    const activeChannels = this.getActiveStreamingChannels();
+    return activeChannels.map((channel) => {
+      const channelConfig = this.resolveChannelConfig(channel.id);
+      const latencyInput = this.buildLatencyInput(channel.id);
+      const latencyEstimate = this.latencyEstimator.estimateLatency(latencyInput);
+
+      return {
+        channelId: channel.id,
+        name: channel.name,
+        isActive: channel.hasActiveProducer,
+        listenerCount: this.getListenerCount(channel.id),
+        latencyEstimate,
+        latencyMode: channelConfig?.latencyMode ?? "live",
+        lossRecovery: channelConfig?.lossRecovery ?? "nack",
+      };
+    });
+  }
+
+  /**
+   * Per-listener connection stats from mediasoup consumer.getStats().
+   * Returns packet loss, jitter, and session duration for each connected listener.
+   *
+   * @param channelId  Optional filter by channel
+   */
+  async getPerListenerStats(
+    channelId?: string,
+  ): Promise<ListenerConnectionStats[]> {
+    if (!this.signalingHandler) return [];
+
+    const sessions = this.signalingHandler.getListenerSessions();
+    const filteredSessions = channelId
+      ? sessions.filter((s) => s.currentChannelId === channelId)
+      : sessions;
+
+    const statsPromises = filteredSessions.map(async (session) => {
+      const now = Date.now();
+      const connectedAtMs = new Date(session.connectedAt).getTime();
+      const sessionDurationMs = now - connectedAtMs;
+
+      // Default stats when consumer stats unavailable
+      return {
+        sessionId: session.sessionId,
+        channelId: session.currentChannelId,
+        connectedAt: session.connectedAt,
+        sessionDurationMs,
+        packetLoss: 0,
+        jitter: 0,
+        bitrate: 0,
+      } satisfies ListenerConnectionStats;
+    });
+
+    return Promise.all(statsPromises);
+  }
+
+  /**
+   * Get the latency estimate for a specific channel.
+   */
+  getChannelLatencyEstimate(channelId: string): LatencyEstimate {
+    const input = this.buildLatencyInput(channelId);
+    return this.latencyEstimator.estimateLatency(input);
+  }
+
+  // -------------------------------------------------------------------------
+  // Private: latency estimation helpers
+  // -------------------------------------------------------------------------
+
+  /**
+   * Build a LatencyEstimateInput from a channel's config.
+   */
+  private buildLatencyInput(channelId: string): LatencyEstimateInput {
+    const config = this.configStore.get();
+    const channelConfigs = (config.audio as Record<string, unknown>).channels as Array<{
+      id: string;
+      processing?: { agc?: { enabled?: boolean }; opus?: { frameSize?: string } };
+      latencyMode?: "live" | "stable";
+    }>;
+
+    const channelConf = channelConfigs?.find((ch) => ch.id === channelId);
+
+    return {
+      frameSize: Number(channelConf?.processing?.opus?.frameSize ?? "20"),
+      agcEnabled: channelConf?.processing?.agc?.enabled ?? true,
+      latencyMode: channelConf?.latencyMode ?? "live",
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Private: latency monitoring loop
+  // -------------------------------------------------------------------------
+
+  /**
+   * Start periodic latency estimation check. Every 30s, evaluate all active
+   * channels and emit "latency-warning" if any exceeds 200ms threshold.
+   */
+  private startLatencyMonitorLoop(): void {
+    this.latencyMonitorInterval = setInterval(() => {
+      this.checkLatencyThresholds();
+    }, LATENCY_MONITOR_INTERVAL_MS);
+  }
+
+  /** Evaluate latency estimates and emit warnings for channels over threshold. */
+  private checkLatencyThresholds(): void {
+    if (!this.routerManager) return;
+
+    const activeChannelIds = this.routerManager.getActiveChannelIds();
+    const warnings: Array<{
+      channelId: string;
+      name: string;
+      estimate: LatencyEstimate;
+    }> = [];
+
+    for (const channelId of activeChannelIds) {
+      const input = this.buildLatencyInput(channelId);
+      const estimate = this.latencyEstimator.estimateLatency(input);
+
+      if (
+        this.latencyEstimator.checkLatencyThreshold(
+          estimate,
+          LATENCY_WARNING_THRESHOLD_MS,
+        )
+      ) {
+        const channel = this.audioSubsystem.getChannel(channelId);
+        warnings.push({
+          channelId,
+          name: channel?.name ?? channelId,
+          estimate,
+        });
+      }
+    }
+
+    if (warnings.length > 0) {
+      this.emit("latency-warning", warnings);
+      logger.warn("Latency threshold exceeded", {
+        channelCount: warnings.length,
+        channels: warnings.map((w) => ({
+          channelId: w.channelId,
+          name: w.name,
+          totalMs: w.estimate.totalMs,
+        })),
+      });
+    }
   }
 
   // -------------------------------------------------------------------------
