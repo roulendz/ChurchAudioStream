@@ -15,6 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { logger } from "../../utils/logger.js";
+import { scheduleDebounced, clearDebounceTimer, clearAllDebounceTimers } from "../../utils/debounce.js";
 
 /** Types of events that can occur on a channel. */
 export type ChannelEventType =
@@ -170,12 +171,7 @@ export class EventLogger {
   clearChannel(channelId: string): void {
     this.events.delete(channelId);
     this.pendingFlush.delete(channelId);
-
-    const existingTimer = this.flushTimers.get(channelId);
-    if (existingTimer !== undefined) {
-      clearTimeout(existingTimer);
-      this.flushTimers.delete(channelId);
-    }
+    clearDebounceTimer(this.flushTimers, channelId);
 
     const filePath = this.channelFilePath(channelId);
     try {
@@ -200,10 +196,7 @@ export class EventLogger {
     }
 
     // Clear all debounce timers
-    for (const timer of this.flushTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.flushTimers.clear();
+    clearAllDebounceTimers(this.flushTimers);
 
     // Clear retention timer
     if (this.retentionTimer !== null) {
@@ -225,17 +218,9 @@ export class EventLogger {
 
   /** Schedule a debounced flush for a channel (500ms delay). */
   private scheduleDebouncedFlush(channelId: string): void {
-    const existingTimer = this.flushTimers.get(channelId);
-    if (existingTimer !== undefined) {
-      clearTimeout(existingTimer);
-    }
-
-    const timer = setTimeout(() => {
-      this.flushTimers.delete(channelId);
+    scheduleDebounced(this.flushTimers, channelId, FLUSH_DEBOUNCE_MS, () => {
       this.flushToDisk(channelId);
-    }, FLUSH_DEBOUNCE_MS);
-
-    this.flushTimers.set(channelId, timer);
+    });
   }
 
   /** Append pending events to the channel's JSONL file. */

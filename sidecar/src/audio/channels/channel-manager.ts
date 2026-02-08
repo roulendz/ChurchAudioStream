@@ -36,6 +36,7 @@ import type { ProcessingConfig, ProcessingConfigUpdate } from "../processing/pro
 import { ProcessingDefaults, deriveSettingsFromMode } from "../processing/processing-types.js";
 import { getPortsForChannel, generateSsrc } from "../processing/port-allocator.js";
 import { logger } from "../../utils/logger.js";
+import { scheduleDebounced, clearDebounceTimer } from "../../utils/debounce.js";
 
 /** Debounce delay (ms) before restarting pipelines after processing config change. */
 const PROCESSING_DEBOUNCE_MS = 1500;
@@ -1036,27 +1037,23 @@ export class ChannelManager extends EventEmitter {
    * restarted with the updated processing config baked into the pipeline string.
    */
   private scheduleDebouncedRestart(channelId: string): void {
-    this.clearDebouncedRestart(channelId);
-
-    const timer = setTimeout(() => {
-      this.restartDebounceTimers.delete(channelId);
-      this.restartChannelPipelines(channelId).catch((err) => {
-        logger.error(`Failed to restart pipelines for channel ${channelId}`, {
-          error: err instanceof Error ? err.message : String(err),
+    scheduleDebounced(
+      this.restartDebounceTimers,
+      channelId,
+      PROCESSING_DEBOUNCE_MS,
+      () => {
+        this.restartChannelPipelines(channelId).catch((err) => {
+          logger.error(`Failed to restart pipelines for channel ${channelId}`, {
+            error: err instanceof Error ? err.message : String(err),
+          });
         });
-      });
-    }, PROCESSING_DEBOUNCE_MS);
-
-    this.restartDebounceTimers.set(channelId, timer);
+      },
+    );
   }
 
   /** Clear a pending debounced restart for a channel if one exists. */
   private clearDebouncedRestart(channelId: string): void {
-    const existing = this.restartDebounceTimers.get(channelId);
-    if (existing) {
-      clearTimeout(existing);
-      this.restartDebounceTimers.delete(channelId);
-    }
+    clearDebounceTimer(this.restartDebounceTimers, channelId);
   }
 
   /**

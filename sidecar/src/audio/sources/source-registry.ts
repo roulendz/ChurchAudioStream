@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { DiscoveredSource, SourceStatus } from "./source-types.js";
 import { logger } from "../../utils/logger.js";
+import { scheduleDebounced } from "../../utils/debounce.js";
 
 /** Debounce delay for persisting sources to disk. */
 const PERSIST_DEBOUNCE_MS = 2_000;
@@ -30,7 +31,7 @@ const REQUIRED_SOURCE_FIELDS = ["id", "type", "name", "status"] as const;
 export class SourceRegistry extends EventEmitter {
   private sources = new Map<string, DiscoveredSource>();
   private readonly cacheFilePath: string;
-  private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(basePath: string) {
     super();
@@ -180,13 +181,9 @@ export class SourceRegistry extends EventEmitter {
    * Prevents excessive I/O during rapid discovery bursts.
    */
   private schedulePersist(): void {
-    if (this.persistTimer !== null) {
-      clearTimeout(this.persistTimer);
-    }
-    this.persistTimer = setTimeout(() => {
-      this.persistTimer = null;
+    scheduleDebounced(this.persistTimers, "persist", PERSIST_DEBOUNCE_MS, () => {
       this.writeToDisk();
-    }, PERSIST_DEBOUNCE_MS);
+    });
   }
 
   /** Serialize the sources map to JSON and write to the cache file. */
