@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 4 of 10 (WebRTC Streaming Core)
-Plan: 2 of 6 in current phase (04-02 complete)
+Plan: 3 of 6 in current phase (04-03 complete)
 Status: In progress
-Last activity: 2026-02-08 -- Completed 04-02-PLAN.md (dependencies, config schema, streaming types)
+Last activity: 2026-02-08 -- Completed 04-03-PLAN.md (mediasoup server-side infrastructure)
 
-Progress: [======================] 63% (22/35 plans)
+Progress: [=======================] 66% (23/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 22
+- Total plans completed: 23
 - Average duration: 7 minutes
-- Total execution time: 2.7 hours
+- Total execution time: 2.8 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [======================] 63% (22/35 plans)
 | 01 | 8/8 | 67 min | 8 min |
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
-| 04 | 2/6 | 15 min | 8 min |
+| 04 | 3/6 | 20 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-02 (4m), 03-03 (8m), 04-01 (9m), 04-02 (6m)
-- Trend: Consistent execution, 04-02 faster due to focused scope (types + config only)
+- Last 5 plans: 03-03 (8m), 04-01 (9m), 04-02 (6m), 04-03 (5m)
+- Trend: Consistent execution, 04-03 fast due to clean type foundation from 04-02
 
 *Updated after each plan completion*
 
@@ -119,6 +119,11 @@ Recent decisions affecting current work:
 - [04-02]: protoo-server ambient declarations (.d.ts) since library ships no TypeScript types
 - [04-02]: Re-export protoo types from streaming-types.ts for single import point
 - [04-02]: buildOpusRtpParameters(ssrc) helper encapsulates Opus RTP parameter construction (DRY)
+- [04-03]: Private WorkerMemoryMonitor helper class per SRP (Phase 8 rotation can extract without changing WorkerManager API)
+- [04-03]: Deterministic channel-to-worker mapping via hash modulo (not random assignment)
+- [04-03]: ChannelRouterEntry stores port/SSRC info for crash recovery recreation
+- [04-03]: ChannelMetadataResolver callback avoids RouterManager depending on ChannelManager
+- [04-03]: PlainTransportStats aligned to actual mediasoup BaseTransportStats fields (not hypothetical fields)
 
 ### Pending Todos
 
@@ -141,6 +146,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 04-02-PLAN.md (dependencies, config schema, streaming types)
+Stopped at: Completed 04-03-PLAN.md (mediasoup server-side infrastructure)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
