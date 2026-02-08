@@ -3,6 +3,7 @@ import path from "node:path";
 import { ConfigSchema, type AppConfig } from "./schema";
 import { defaultConfig } from "./defaults";
 import { logger } from "../utils/logger";
+import { toErrorMessage } from "../utils/error-message";
 
 interface ConfigUpdateResult {
   success: boolean;
@@ -67,8 +68,7 @@ export class ConfigStore {
       this.save(defaultConfig);
       return structuredClone(defaultConfig);
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = toErrorMessage(error);
       logger.warn("Cannot read config file, using defaults", {
         path: this.configFilePath,
         error: errorMessage,

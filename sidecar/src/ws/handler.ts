@@ -24,6 +24,7 @@ import type {
   ProcessingGetPayload,
 } from "./types";
 import { logger } from "../utils/logger";
+import { toErrorMessage } from "../utils/error-message";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
@@ -494,7 +495,7 @@ function handleAudioMessage(
 
   // Wrap all handlers in a promise to catch async errors uniformly
   handleAudioMessageAsync(socket, message, audioSubsystem).catch((err) => {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = toErrorMessage(err);
     logger.error("Audio message handler error", {
       type: message.type,
       error: errorMessage,

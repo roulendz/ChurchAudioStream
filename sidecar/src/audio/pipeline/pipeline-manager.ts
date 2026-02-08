@@ -21,6 +21,7 @@ import type {
   PipelineError,
 } from "./pipeline-types.js";
 import { logger } from "../../utils/logger.js";
+import { toErrorMessage } from "../../utils/error-message.js";
 
 /** Configuration for crash recovery behavior. */
 export interface RecoveryConfig {
@@ -276,7 +277,7 @@ export class PipelineManager extends EventEmitter {
         currentPipeline.start();
       } catch (err) {
         logger.error(
-          `Failed to restart pipeline "${label}": ${err instanceof Error ? err.message : String(err)}`,
+          `Failed to restart pipeline "${label}": ${toErrorMessage(err)}`,
           { pipelineId },
         );
       }

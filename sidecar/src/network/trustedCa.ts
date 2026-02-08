@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { generate } from "selfsigned";
 import type { AppConfig } from "../config/schema";
 import { logger } from "../utils/logger";
+import { toErrorMessage } from "../utils/error-message";
 
 const CA_COMMON_NAME = "ChurchAudioStream Local CA";
 const CA_VALIDITY_YEARS = 20;
@@ -161,7 +162,7 @@ export function isCaInstalledInStore(caCertPem: string): boolean {
 
     return false;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = toErrorMessage(error);
     logger.warn("Failed to check CA store status, assuming not installed", {
       error: errorMessage,
     });
@@ -205,7 +206,7 @@ export function removeCaFromStore(): void {
     runElevatedCaRemoval();
     logger.info("Root CA removed from Windows Trusted Root store");
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = toErrorMessage(error);
     logger.warn("Failed to remove Root CA from store (best-effort)", {
       error: errorMessage,
     });

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { logger } from "../../utils/logger.js";
+import { toErrorMessage } from "../../utils/error-message.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,16 +39,13 @@ export interface DeviceEnumeratorEvents {
 }
 
 // ---------------------------------------------------------------------------
-// gst-device-monitor JSON shape (defensive — fields may be absent)
+// Parsed device block from gst-device-monitor plain-text output
 // ---------------------------------------------------------------------------
 
 interface GstMonitorDevice {
-  name?: string;
-  "device-class"?: string;
-  properties?: Record<string, unknown>;
-  caps?: string;
-  // Some GStreamer builds nest caps in a structure
-  "caps-string"?: string;
+  name: string;
+  caps: string;
+  properties: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -66,58 +64,35 @@ const LOOPBACK_NAME_PATTERNS = [/loopback/i, /monitor/i];
 // ---------------------------------------------------------------------------
 
 /**
- * Determine the audio API from the GStreamer element factory name.
- * Returns `undefined` for unrecognised plugins (they are skipped).
+ * Determine the audio API from the device properties `device.api` field.
+ * Returns `undefined` for unrecognised APIs (they are skipped).
  */
-function detectApi(factoryNameOrProps: Record<string, unknown>): AudioApi | undefined {
-  // The factory/plugin name may appear under several keys depending on
-  // GStreamer version.  Check the most common locations.
-  const candidates: string[] = [];
+function detectApi(props: Record<string, string>): AudioApi | undefined {
+  const api = (props["device.api"] ?? "").toLowerCase();
 
-  for (const key of [
-    "device.api",
-    "device.plugin",
-    "object.factory.name",
-    "factory.name",
-    "node.name",
-  ]) {
-    const val = factoryNameOrProps[key];
-    if (typeof val === "string") candidates.push(val.toLowerCase());
-  }
+  if (api.includes("wasapi2")) return "wasapi2";
+  if (api.includes("asio")) return "asio";
+  if (api.includes("directsound")) return "directsound";
 
-  // Also use the top-level "name" of the device itself as a fallback
-  const devName = factoryNameOrProps["device.name"];
-  if (typeof devName === "string") candidates.push(devName.toLowerCase());
-
-  for (const c of candidates) {
-    if (c.includes("wasapi2")) return "wasapi2";
-    if (c.includes("asio")) return "asio";
-    if (c.includes("directsound")) return "directsound";
-  }
-
+  // Skip wasapi v1 and other unrecognised APIs
   return undefined;
 }
 
 /**
  * Extract the API-specific device identifier from device properties.
  *
- * - wasapi2  → device.id  or device.path  (Windows endpoint path)
- * - ASIO     → device.device-clsid        (GUID string)
- * - DirectSound → device.device-name       (human-readable name used by element)
+ * - wasapi2     → device.id     (Windows endpoint GUID or path)
+ * - ASIO        → device.clsid  (COM CLSID)
+ * - DirectSound → device.guid   (DirectSound GUID)
  */
-function extractDeviceId(api: AudioApi, props: Record<string, unknown>): string {
-  const str = (key: string): string => {
-    const v = props[key];
-    return typeof v === "string" ? v : "";
-  };
-
+function extractDeviceId(api: AudioApi, props: Record<string, string>): string {
   switch (api) {
     case "wasapi2":
-      return str("device.id") || str("device.path") || str("object.id") || "";
+      return props["device.id"] ?? "";
     case "asio":
-      return str("device.device-clsid") || str("device-clsid") || "";
+      return props["device.clsid"] ?? "";
     case "directsound":
-      return str("device.device-name") || str("device-name") || "";
+      return props["device.guid"] ?? "";
   }
 }
 
@@ -185,11 +160,11 @@ function formatStringToBitDepth(format: string): number {
 }
 
 /** Check whether a device is Bluetooth based on its name or path. */
-function isBluetooth(name: string, props: Record<string, unknown>): boolean {
+function isBluetooth(name: string, props: Record<string, string>): boolean {
   if (BLUETOOTH_NAME_PATTERNS.some((re) => re.test(name))) return true;
 
-  const devicePath = typeof props["device.path"] === "string" ? props["device.path"] : "";
-  const deviceId = typeof props["device.id"] === "string" ? props["device.id"] : "";
+  const devicePath = props["device.path"] ?? "";
+  const deviceId = props["device.id"] ?? "";
 
   return (
     BLUETOOTH_PATH_PATTERNS.some((re) => re.test(devicePath)) ||
@@ -201,20 +176,89 @@ function isBluetooth(name: string, props: Record<string, unknown>): boolean {
 function isLoopbackDevice(
   api: AudioApi,
   name: string,
-  props: Record<string, unknown>,
+  props: Record<string, string>,
 ): boolean {
   if (api !== "wasapi2") return false;
 
-  // Explicit property check
-  if (props["device.loopback"] === true || props["device.loopback"] === "true") return true;
+  // Explicit property check (plain-text output always gives string values)
+  if (props["wasapi2.device.loopback"] === "true") return true;
 
   // Name-based heuristic
   return LOOPBACK_NAME_PATTERNS.some((re) => re.test(name));
 }
 
 /**
+ * Parse gst-device-monitor-1.0 plain-text output into device blocks.
+ *
+ * Each block looks like:
+ * ```
+ * Device found:
+ *     name  : Some Device Name
+ *     class : Audio/Source
+ *     caps  : audio/x-raw, format=F32LE, ...
+ *     properties:
+ *         device.api = wasapi2
+ *         device.id = {GUID}
+ *     gst-launch-1.0 ...
+ * ```
+ */
+function parseDeviceMonitorOutput(stdout: string): GstMonitorDevice[] {
+  const blocks = stdout.split(/^Device found:\s*$/m).slice(1);
+  const devices: GstMonitorDevice[] = [];
+
+  for (const block of blocks) {
+    const lines = block.split("\n").map((l) => l.trimEnd());
+
+    let name = "";
+    let caps = "";
+    const properties: Record<string, string> = {};
+    let inProperties = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Skip empty lines and gst-launch suggestion lines
+      if (!trimmed || trimmed.startsWith("gst-launch-1.0")) {
+        inProperties = false;
+        continue;
+      }
+
+      if (inProperties) {
+        const eqIndex = trimmed.indexOf(" = ");
+        if (eqIndex !== -1) {
+          const key = trimmed.slice(0, eqIndex).trim();
+          const value = trimmed.slice(eqIndex + 3).trim();
+          properties[key] = value;
+        }
+        continue;
+      }
+
+      if (trimmed.startsWith("name")) {
+        const colonIdx = trimmed.indexOf(":");
+        if (colonIdx !== -1) name = trimmed.slice(colonIdx + 1).trim();
+      } else if (trimmed.startsWith("caps")) {
+        const colonIdx = trimmed.indexOf(":");
+        if (colonIdx !== -1) caps = trimmed.slice(colonIdx + 1).trim();
+      } else if (trimmed === "properties:") {
+        inProperties = true;
+      }
+    }
+
+    if (name) {
+      devices.push({ name, caps, properties });
+    }
+  }
+
+  return devices;
+}
+
+/**
  * Run `gst-device-monitor-1.0` with the given device class filter and parse
- * JSON output into `EnumeratedDevice[]`.
+ * plain-text output into `EnumeratedDevice[]`.
+ *
+ * Note: GStreamer 1.26 does NOT support `-f json`. The `-f` flag means
+ * `--follow` (continuous monitoring mode). We run without it so the
+ * process lists devices once and exits.
  *
  * @param deviceClass  "Audio/Source" for inputs, "Audio/Sink" for outputs
  */
@@ -222,7 +266,7 @@ function runDeviceMonitor(deviceClass: string): Promise<EnumeratedDevice[]> {
   return new Promise((resolve) => {
     execFile(
       GST_DEVICE_MONITOR_BIN,
-      [deviceClass, "-f", "json"],
+      [deviceClass],
       { timeout: EXEC_TIMEOUT_MS },
       (error, stdout, stderr) => {
         if (error) {
@@ -231,12 +275,9 @@ function runDeviceMonitor(deviceClass: string): Promise<EnumeratedDevice[]> {
             (stderr ?? "").includes("is not recognized");
 
           if (isNotFound) {
-            const gstError = new Error(
+            logger.error(
               "GStreamer not found. Install GStreamer 1.26 and add to PATH.",
             );
-            logger.error(gstError.message);
-            // We resolve with empty array; the caller (DeviceEnumerator)
-            // will also emit "error" event for listeners.
             resolve([]);
             return;
           }
@@ -256,44 +297,30 @@ function runDeviceMonitor(deviceClass: string): Promise<EnumeratedDevice[]> {
           return;
         }
 
-        try {
-          const parsed: unknown = JSON.parse(trimmed);
-          const rawDevices = Array.isArray(parsed) ? parsed : [];
-          resolve(mapRawDevices(rawDevices as GstMonitorDevice[]));
-        } catch {
-          logger.warn(
-            "gst-device-monitor-1.0 output is not valid JSON — " +
-              "the installed GStreamer version may not support -f json",
-            { deviceClass, outputPreview: trimmed.slice(0, 200) },
-          );
-          resolve([]);
-        }
+        const rawDevices = parseDeviceMonitorOutput(trimmed);
+        resolve(mapRawDevices(rawDevices));
       },
     );
   });
 }
 
-/** Convert raw GStreamer device objects to typed EnumeratedDevice array. */
+/** Convert parsed GStreamer device blocks to typed EnumeratedDevice array. */
 function mapRawDevices(rawDevices: GstMonitorDevice[]): EnumeratedDevice[] {
   const results: EnumeratedDevice[] = [];
 
   for (const raw of rawDevices) {
-    const props = (raw.properties ?? {}) as Record<string, unknown>;
-    const deviceName = raw.name ?? String(props["device.name"] ?? "Unknown Device");
+    const api = detectApi(raw.properties);
+    if (!api) continue; // Skip wasapi v1, unknown plugins
 
-    const api = detectApi(props);
-    if (!api) continue; // Skip unknown plugins
+    const deviceId = extractDeviceId(api, raw.properties);
+    const { sampleRate, bitDepth, channelCount } = parseCaps(raw.caps);
 
-    const deviceId = extractDeviceId(api, props);
-    const capsStr = raw.caps ?? raw["caps-string"] ?? (typeof props["caps"] === "string" ? props["caps"] : undefined);
-    const { sampleRate, bitDepth, channelCount } = parseCaps(capsStr as string | undefined);
-
-    const bluetoothFlag = isBluetooth(deviceName, props);
-    const loopbackFlag = isLoopbackDevice(api, deviceName, props);
+    const bluetoothFlag = isBluetooth(raw.name, raw.properties);
+    const loopbackFlag = isLoopbackDevice(api, raw.name, raw.properties);
 
     results.push({
       id: `${api}:${deviceId}`,
-      name: deviceName,
+      name: raw.name,
       api,
       deviceId,
       sampleRate,
@@ -326,8 +353,8 @@ export class DeviceEnumerator extends EventEmitter {
 
   /**
    * One-shot enumeration of audio input devices.
-   * Runs `gst-device-monitor-1.0 Audio/Source -f json`, parses, filters
-   * Bluetooth, and returns the result.
+   * Runs `gst-device-monitor-1.0 Audio/Source`, parses plain-text output,
+   * filters Bluetooth, and returns the result.
    */
   async enumerate(): Promise<EnumeratedDevice[]> {
     const allDevices = await runDeviceMonitor("Audio/Source");
@@ -440,7 +467,7 @@ export class DeviceEnumerator extends EventEmitter {
 
       this.currentDevices = freshMap;
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = toErrorMessage(err);
       logger.warn("Device polling error (will retry next interval)", { error: message });
       this.emit("error", err instanceof Error ? err : new Error(message));
       // Do NOT stop polling on transient errors

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { logger, stderrLog } from "./utils/logger";
+import { toErrorMessage } from "./utils/error-message";
 import { ConfigStore } from "./config/store";
 import { AudioSubsystem } from "./audio/audio-subsystem";
 import { createServer, startServer, ADMIN_LOOPBACK_PORT, type StopServerFunction } from "./server";
@@ -118,7 +119,7 @@ function setupRestartListener(
         `Server restarted — phones: https://${newConfig.server.host}:${newConfig.server.port} | admin: http://127.0.0.1:${ADMIN_LOOPBACK_PORT}`,
       );
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorMessage = toErrorMessage(err);
       logger.error("Failed to restart server on new config", {
         error: errorMessage,
       });

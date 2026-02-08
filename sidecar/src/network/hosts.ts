@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { logger } from "../utils/logger";
+import { toErrorMessage } from "../utils/error-message";
 
 const HOSTS_FILE_TAG = "# ChurchAudioStream";
 const HOSTS_PATH_WINDOWS = "C:\\Windows\\System32\\drivers\\etc\\hosts";
@@ -20,7 +21,7 @@ function readHostsFile(): string {
   try {
     return fs.readFileSync(getHostsFilePath(), "utf-8");
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = toErrorMessage(error);
     logger.warn("Unable to read hosts file", { path: getHostsFilePath(), error: errorMessage });
     return "";
   }
@@ -271,7 +272,7 @@ export function ensureHostsEntry(ipAddress: string, domain: string): void {
     }
     logger.info("Hosts file updated", { ip: ipAddress, domain });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = toErrorMessage(error);
     logger.warn("Failed to update hosts file", { error: errorMessage });
     throw error;
   }
@@ -299,7 +300,7 @@ export function removeHostsEntry(): void {
     }
     logger.info("Hosts file entry removed");
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = toErrorMessage(error);
     logger.warn("Failed to remove hosts file entry", { error: errorMessage });
     throw error;
   }

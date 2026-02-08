@@ -6,6 +6,7 @@ import type { AppConfig } from "../config/schema";
 import { listNetworkInterfaces } from "./interfaces";
 import { ensureCaReady } from "./trustedCa";
 import { logger } from "../utils/logger";
+import { toErrorMessage } from "../utils/error-message";
 
 export interface CertificateCredentials {
   key: string;
@@ -115,7 +116,7 @@ function serverCertIsValid(
 
     return true;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = toErrorMessage(error);
     logger.warn("Failed to validate existing server certificate, will regenerate", {
       error: errorMessage,
     });

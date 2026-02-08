@@ -4,6 +4,7 @@ import { SourceRegistry } from "../sources/source-registry.js";
 import type { AES67Source, LocalDeviceSource, AudioApi } from "../sources/source-types.js";
 import type { Aes67SdpInfo } from "./sdp-parser.js";
 import { logger } from "../../utils/logger.js";
+import { toErrorMessage } from "../../utils/error-message.js";
 import Bonjour from "bonjour-service";
 
 /** Human-readable display names for Windows audio APIs. */
@@ -286,7 +287,7 @@ export class DiscoveryManager {
 
       logger.info("mDNS browser started for RAVENNA devices");
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       logger.warn("Failed to start mDNS browser (non-fatal)", { error: message });
       // mDNS failure is non-fatal: SAP is the primary discovery mechanism
     }

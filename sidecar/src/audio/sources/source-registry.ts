@@ -4,6 +4,7 @@ import path from "node:path";
 import type { DiscoveredSource, SourceStatus } from "./source-types.js";
 import { logger } from "../../utils/logger.js";
 import { scheduleDebounced } from "../../utils/debounce.js";
+import { toErrorMessage } from "../../utils/error-message.js";
 
 /** Debounce delay for persisting sources to disk. */
 const PERSIST_DEBOUNCE_MS = 2_000;
@@ -168,7 +169,7 @@ export class SourceRegistry extends EventEmitter {
         path: this.cacheFilePath,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       logger.warn("Failed to load source cache, starting with empty registry", {
         error: message,
         path: this.cacheFilePath,
@@ -204,7 +205,7 @@ export class SourceRegistry extends EventEmitter {
         path: this.cacheFilePath,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       logger.error("Failed to persist audio sources to disk", {
         error: message,
         path: this.cacheFilePath,

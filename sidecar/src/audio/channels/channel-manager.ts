@@ -37,6 +37,7 @@ import { ProcessingDefaults, deriveSettingsFromMode } from "../processing/proces
 import { getPortsForChannel, generateSsrc } from "../processing/port-allocator.js";
 import { logger } from "../../utils/logger.js";
 import { scheduleDebounced, clearDebounceTimer } from "../../utils/debounce.js";
+import { toErrorMessage } from "../../utils/error-message.js";
 
 /** Debounce delay (ms) before restarting pipelines after processing config change. */
 const PROCESSING_DEBOUNCE_MS = 1500;
@@ -484,7 +485,7 @@ export class ChannelManager extends EventEmitter {
         await this.startPipelineForSource(channelId, i, assignment);
         startedCount++;
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorMessage = toErrorMessage(err);
         logger.error(
           `Failed to start pipeline for source "${source.name}" in channel "${channel.name}"`,
           { channelId, sourceIndex: i, error: errorMessage },
@@ -528,7 +529,7 @@ export class ChannelManager extends EventEmitter {
         } catch (err) {
           logger.warn(`Failed to stop pipeline ${pipelineId}`, {
             channelId,
-            error: err instanceof Error ? err.message : String(err),
+            error: toErrorMessage(err),
           });
         }
         this.resourceMonitor.untrackPipeline(pipelineId);
@@ -567,7 +568,7 @@ export class ChannelManager extends EventEmitter {
       } catch (err) {
         logger.error(`Failed to auto-start channel "${channel.name}"`, {
           channelId: channel.id,
-          error: err instanceof Error ? err.message : String(err),
+          error: toErrorMessage(err),
         });
       }
     }
@@ -1044,7 +1045,7 @@ export class ChannelManager extends EventEmitter {
       () => {
         this.restartChannelPipelines(channelId).catch((err) => {
           logger.error(`Failed to restart pipelines for channel ${channelId}`, {
-            error: err instanceof Error ? err.message : String(err),
+            error: toErrorMessage(err),
           });
         });
       },
@@ -1082,7 +1083,7 @@ export class ChannelManager extends EventEmitter {
           } catch (err) {
             logger.warn(`Failed to stop pipeline ${pipelineId} during restart`, {
               channelId,
-              error: err instanceof Error ? err.message : String(err),
+              error: toErrorMessage(err),
             });
           }
           this.resourceMonitor.untrackPipeline(pipelineId);
@@ -1111,7 +1112,7 @@ export class ChannelManager extends EventEmitter {
         logger.error(`Failed to restart pipeline for source "${source.name}"`, {
           channelId,
           sourceIndex: i,
-          error: err instanceof Error ? err.message : String(err),
+          error: toErrorMessage(err),
         });
       }
     }
