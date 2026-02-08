@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 4 of 10 (WebRTC Streaming Core)
-Plan: 4 of 6 in current phase (04-04 complete)
+Plan: 5 of 6 in current phase (04-05 complete)
 Status: In progress
-Last activity: 2026-02-08 -- Completed 04-04-PLAN.md (listener WebRTC signaling)
+Last activity: 2026-02-08 -- Completed 04-05-PLAN.md (streaming subsystem integration)
 
-Progress: [========================] 69% (24/35 plans)
+Progress: [=========================] 71% (25/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 24
+- Total plans completed: 25
 - Average duration: 7 minutes
-- Total execution time: 2.9 hours
+- Total execution time: 3.1 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [========================] 69% (24/35 plans)
 | 01 | 8/8 | 67 min | 8 min |
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
-| 04 | 4/6 | 25 min | 6 min |
+| 04 | 5/6 | 35 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-01 (9m), 04-02 (6m), 04-03 (5m), 04-04 (5m)
-- Trend: Consistent execution, streaming modules building on clean type foundation
+- Last 5 plans: 04-01 (9m), 04-02 (6m), 04-03 (5m), 04-04 (5m), 04-05 (10m)
+- Trend: Integration plan took longer due to multi-file wiring (3 files modified, event sync across subsystems)
 
 *Updated after each plan completion*
 
@@ -130,6 +130,11 @@ Recent decisions affecting current work:
 - [04-04]: Consumer always created paused; client sends resumeConsumer after MediaStreamTrack setup
 - [04-04]: Channel switch fallback chain: try target -> fall back to previous -> notify with active channels
 - [04-04]: Peer counter + timestamp for unique protoo peer IDs (avoids UUID overhead per listener)
+- [04-05]: Admin WS uses noServer mode with manual upgrade routing (coexists with protoo WebSocket-Node on same server)
+- [04-05]: StreamingSubsystem created before createServer so admin WS can wire streaming event broadcasts
+- [04-05]: Streaming started after server, before audio (audio events need streaming listeners registered first)
+- [04-05]: streaming:restart-workers deferred to Phase 8 (worker rotation adds coordination complexity)
+- [04-05]: MetadataResolver callback reused from RouterManager (avoids circular dependency with ChannelManager)
 
 ### Pending Todos
 
@@ -152,6 +157,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 04-04-PLAN.md (listener WebRTC signaling)
+Stopped at: Completed 04-05-PLAN.md (streaming subsystem integration)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
