@@ -5,6 +5,7 @@ import { EventEmitter } from "node:events";
 import WebSocket, { WebSocketServer } from "ws";
 import type { ConfigStore } from "../config/store";
 import type { AudioSubsystem } from "../audio/audio-subsystem";
+import type { StreamingSubsystem } from "../streaming/streaming-subsystem";
 import type { ProcessingConfigUpdate } from "../audio/processing/processing-types";
 import { listNetworkInterfaces } from "../network/interfaces";
 import type {
@@ -59,6 +60,7 @@ export function setupWebSocket(
   configStore: ConfigStore,
   serverEvents: EventEmitter,
   audioSubsystem?: AudioSubsystem,
+  streamingSubsystem?: StreamingSubsystem,
 ): WebSocketSetupResult {
   const wss = new WebSocketServer({ noServer: true });
   const clientMap = new Map<string, ExtendedWebSocket>();
@@ -81,6 +83,10 @@ export function setupWebSocket(
 
   if (audioSubsystem) {
     wireAudioBroadcasts(audioSubsystem, clientMap, wss);
+  }
+
+  if (streamingSubsystem) {
+    wireStreamingBroadcasts(streamingSubsystem, clientMap);
   }
 
   wss.on("connection", (rawSocket) => {
@@ -123,6 +129,7 @@ export function setupWebSocket(
         clientMap,
         identifyTimeout,
         audioSubsystem,
+        streamingSubsystem,
       );
     });
 
@@ -184,6 +191,7 @@ function handleIncomingMessage(
   clientMap: Map<string, ExtendedWebSocket>,
   identifyTimeout: NodeJS.Timeout,
   audioSubsystem?: AudioSubsystem,
+  streamingSubsystem?: StreamingSubsystem,
 ): void {
   let message: WsMessage;
   try {
@@ -202,6 +210,12 @@ function handleIncomingMessage(
       { message: "Missing or invalid message type" },
       message.requestId,
     );
+    return;
+  }
+
+  // Route streaming message types to the dedicated handler
+  if (isStreamingMessageType(message.type)) {
+    handleStreamingMessage(socket, message, streamingSubsystem);
     return;
   }
 
@@ -886,6 +900,182 @@ function wireAudioBroadcasts(
       stats: { [pipelineId]: stats },
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Streaming message handling (SRP: separate from audio and core WS router)
+// ---------------------------------------------------------------------------
+
+/** Streaming-related message type prefixes that route to the streaming handler. */
+const STREAMING_MESSAGE_PREFIXES = [
+  "streaming:",
+] as const;
+
+/** Check if a message type is a streaming-related message. */
+function isStreamingMessageType(type: string): boolean {
+  return STREAMING_MESSAGE_PREFIXES.some((prefix) => type.startsWith(prefix));
+}
+
+/**
+ * Handle all streaming-related WebSocket messages.
+ *
+ * All streaming operations require admin role. If streamingSubsystem is not
+ * available (e.g., during early startup), returns an error.
+ */
+function handleStreamingMessage(
+  socket: ExtendedWebSocket,
+  message: WsMessage,
+  streamingSubsystem?: StreamingSubsystem,
+): void {
+  if (socket.metadata.role !== "admin") {
+    sendMessage(
+      socket,
+      "error",
+      { message: "Unauthorized: admin role required", originalType: message.type },
+      message.requestId,
+    );
+    return;
+  }
+
+  if (!streamingSubsystem) {
+    sendMessage(
+      socket,
+      "error",
+      { message: "Streaming subsystem not available", originalType: message.type },
+      message.requestId,
+    );
+    return;
+  }
+
+  handleStreamingMessageAsync(socket, message, streamingSubsystem).catch(
+    (err) => {
+      const errorMessage = toErrorMessage(err);
+      logger.error("Streaming message handler error", {
+        type: message.type,
+        error: errorMessage,
+      });
+      sendMessage(
+        socket,
+        "error",
+        { message: errorMessage, originalType: message.type },
+        message.requestId,
+      );
+    },
+  );
+}
+
+/** Async handler for streaming messages -- dispatches to specific operations. */
+async function handleStreamingMessageAsync(
+  socket: ExtendedWebSocket,
+  message: WsMessage,
+  streamingSubsystem: StreamingSubsystem,
+): Promise<void> {
+  switch (message.type) {
+    case "streaming:status": {
+      const activeChannels = streamingSubsystem.getActiveStreamingChannels();
+      const workerInfo = await streamingSubsystem.getWorkerResourceInfo();
+
+      // Build per-channel listener counts
+      const listenerCounts: Record<string, number> = {};
+      for (const channel of activeChannels) {
+        listenerCounts[channel.id] =
+          streamingSubsystem.getListenerCount(channel.id);
+      }
+
+      sendMessage(
+        socket,
+        "streaming:status",
+        {
+          totalListeners: streamingSubsystem.getListenerCount(),
+          listenerCounts,
+          activeChannels,
+          workers: workerInfo,
+        },
+        message.requestId,
+      );
+      break;
+    }
+
+    case "streaming:workers": {
+      const workers = await streamingSubsystem.getWorkerResourceInfo();
+      sendMessage(socket, "streaming:workers", { workers }, message.requestId);
+      break;
+    }
+
+    case "streaming:listeners": {
+      const sessions = streamingSubsystem.getListenerSessions();
+      sendMessage(
+        socket,
+        "streaming:listeners",
+        { sessions },
+        message.requestId,
+      );
+      break;
+    }
+
+    case "streaming:restart-workers": {
+      // Note: The UI should show a confirmation dialog before sending this message.
+      // The actual restart is delegated to the streaming subsystem.
+      sendMessage(
+        socket,
+        "error",
+        {
+          message:
+            "Worker restart not yet implemented at subsystem level (available in Phase 8)",
+          originalType: message.type,
+        },
+        message.requestId,
+      );
+      break;
+    }
+
+    default:
+      sendMessage(
+        socket,
+        "error",
+        {
+          message: `Unknown streaming message type: ${message.type}`,
+          originalType: message.type,
+        },
+        message.requestId,
+      );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Streaming event broadcasting to admin clients
+// ---------------------------------------------------------------------------
+
+/**
+ * Wire StreamingSubsystem events to broadcast to admin WebSocket clients.
+ *
+ * Listener count changes and worker alerts are broadcast immediately
+ * (these are infrequent, high-value events for the admin dashboard).
+ */
+function wireStreamingBroadcasts(
+  streamingSubsystem: StreamingSubsystem,
+  clientMap: Map<string, ExtendedWebSocket>,
+): void {
+  streamingSubsystem.on(
+    "listener-count-changed",
+    (channelId: string | null, count: number) => {
+      broadcastToAdminClients(clientMap, "streaming:listener-count", {
+        channelId,
+        count,
+        totalListeners: streamingSubsystem.getListenerCount(),
+      });
+    },
+  );
+
+  streamingSubsystem.on(
+    "worker-alert",
+    (alertType: string, details: Record<string, unknown>) => {
+      broadcastToAdminClients(clientMap, "streaming:worker-alert", {
+        alertType,
+        ...details,
+      });
+    },
+  );
 }
 
 function sendMessage(

@@ -8,6 +8,7 @@ import { WebSocket } from "ws";
 import type { AppConfig } from "./config/schema";
 import type { ConfigStore } from "./config/store";
 import type { AudioSubsystem } from "./audio/audio-subsystem";
+import type { StreamingSubsystem } from "./streaming/streaming-subsystem";
 import { loadOrGenerateCert } from "./network/certificate";
 import { ensureHostsEntry } from "./network/hosts";
 import { publishService, unpublishService } from "./network/mdns";
@@ -46,6 +47,7 @@ export async function createServer(
   configStore: ConfigStore,
   serverEvents: EventEmitter,
   audioSubsystem?: AudioSubsystem,
+  streamingSubsystem?: StreamingSubsystem,
 ): Promise<ServerComponents> {
   const { key, cert } = await loadOrGenerateCert(basePath, config);
 
@@ -64,10 +66,10 @@ export async function createServer(
   });
 
   const httpsServer = https.createServer({ key, cert }, app);
-  const httpsWsSetup = setupWebSocket(httpsServer, configStore, serverEvents, audioSubsystem);
+  const httpsWsSetup = setupWebSocket(httpsServer, configStore, serverEvents, audioSubsystem, streamingSubsystem);
 
   const httpServer = http.createServer(app);
-  const httpWsSetup = setupWebSocket(httpServer, configStore, serverEvents, audioSubsystem);
+  const httpWsSetup = setupWebSocket(httpServer, configStore, serverEvents, audioSubsystem, streamingSubsystem);
 
   return { httpsServer, httpServer, app, httpsWsSetup, httpWsSetup, key, cert };
 }

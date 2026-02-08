@@ -117,6 +117,7 @@ function setupRestartListener(
         configStore,
         serverEvents,
         audioSubsystem,
+        streamingSubsystem,
       );
       const newStopServer = await startServer(components, newConfig);
       setStopServer(newStopServer);
@@ -144,6 +145,7 @@ function setupRestartListener(
           configStore,
           serverEvents,
           audioSubsystem,
+          streamingSubsystem,
         );
         const fallbackStopServer = await startServer(components, fallbackConfig);
         setStopServer(fallbackStopServer);
@@ -199,6 +201,7 @@ async function main(): Promise<void> {
     configStore,
     serverEvents,
     audioSubsystem,
+    streamingSubsystem,
   );
 
   let currentStopServer: StopServerFunction | null = await startServer(
