@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 4 of 10 (WebRTC Streaming Core)
-Plan: 1 of 6 in current phase (04-01 complete)
+Plan: 2 of 6 in current phase (04-02 complete)
 Status: In progress
-Last activity: 2026-02-08 -- Completed 04-01-PLAN.md (pre-Phase 04 audit DRY/SRP cleanup)
+Last activity: 2026-02-08 -- Completed 04-02-PLAN.md (dependencies, config schema, streaming types)
 
-Progress: [=====================] 60% (21/35 plans)
+Progress: [======================] 63% (22/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
+- Total plans completed: 22
 - Average duration: 7 minutes
-- Total execution time: 2.6 hours
+- Total execution time: 2.7 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [=====================] 60% (21/35 plans)
 | 01 | 8/8 | 67 min | 8 min |
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
-| 04 | 1/6 | 9 min | 9 min |
+| 04 | 2/6 | 15 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-01 (5m), 03-02 (4m), 03-03 (8m), 04-01 (9m)
-- Trend: Consistent execution, 04-01 slightly longer due to broad refactor scope (15 files)
+- Last 5 plans: 03-02 (4m), 03-03 (8m), 04-01 (9m), 04-02 (6m)
+- Trend: Consistent execution, 04-02 faster due to focused scope (types + config only)
 
 *Updated after each plan completion*
 
@@ -115,6 +115,10 @@ Recent decisions affecting current work:
 - [04-01]: source-registry single timer converted to Map<string, Timeout> for consistency with shared scheduleDebounced utility
 - [04-01]: toErrorMessage applied to all 11 files with the pattern (broader than plan's 5 targets, for complete DRY)
 - [04-01]: buildChannelSelectionString with optional totalSourceChannels handles both AES67 and local device cases
+- [04-02]: OPUS_PAYLOAD_TYPE=101 as shared const (matches rtpopuspay pt=101 in pipeline-builder)
+- [04-02]: protoo-server ambient declarations (.d.ts) since library ships no TypeScript types
+- [04-02]: Re-export protoo types from streaming-types.ts for single import point
+- [04-02]: buildOpusRtpParameters(ssrc) helper encapsulates Opus RTP parameter construction (DRY)
 
 ### Pending Todos
 
@@ -137,6 +141,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 04-01-PLAN.md (pre-Phase 04 audit DRY/SRP cleanup)
+Stopped at: Completed 04-02-PLAN.md (dependencies, config schema, streaming types)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
