@@ -23,6 +23,8 @@ import type {
   ProcessingUpdatePayload,
   ProcessingResetPayload,
   ProcessingGetPayload,
+  StreamingChannelLatencyPayload,
+  StreamingListenersPayload,
 } from "./types";
 import { logger } from "../utils/logger";
 import { toErrorMessage } from "../utils/error-message";
@@ -972,23 +974,15 @@ async function handleStreamingMessageAsync(
 ): Promise<void> {
   switch (message.type) {
     case "streaming:status": {
-      const activeChannels = streamingSubsystem.getActiveStreamingChannels();
+      const channelStatuses = streamingSubsystem.getStreamingStatus();
       const workerInfo = await streamingSubsystem.getWorkerResourceInfo();
-
-      // Build per-channel listener counts
-      const listenerCounts: Record<string, number> = {};
-      for (const channel of activeChannels) {
-        listenerCounts[channel.id] =
-          streamingSubsystem.getListenerCount(channel.id);
-      }
 
       sendMessage(
         socket,
         "streaming:status",
         {
           totalListeners: streamingSubsystem.getListenerCount(),
-          listenerCounts,
-          activeChannels,
+          channels: channelStatuses,
           workers: workerInfo,
         },
         message.requestId,
@@ -1003,11 +997,70 @@ async function handleStreamingMessageAsync(
     }
 
     case "streaming:listeners": {
+      const listenerPayload = message.payload as StreamingListenersPayload | undefined;
+      const displayMode = listenerPayload?.displayMode ?? "all";
+
+      if (displayMode === "off") {
+        // Admin has listener display disabled
+        sendMessage(
+          socket,
+          "streaming:listeners",
+          { sessions: [], stats: [], displayMode },
+          message.requestId,
+        );
+        break;
+      }
+
+      const channelFilter = listenerPayload?.channelId;
+      const listenerStats = await streamingSubsystem.getPerListenerStats(channelFilter);
+
+      // "flagged" mode: only show listeners with degraded stats (packet loss > 0)
+      const filteredStats =
+        displayMode === "flagged"
+          ? listenerStats.filter((s) => s.packetLoss > 0 || s.jitter > 50)
+          : listenerStats;
+
       const sessions = streamingSubsystem.getListenerSessions();
+      const filteredSessions =
+        displayMode === "flagged"
+          ? sessions.filter((s) =>
+              filteredStats.some((st) => st.sessionId === s.sessionId),
+            )
+          : channelFilter
+            ? sessions.filter((s) => s.currentChannelId === channelFilter)
+            : sessions;
+
       sendMessage(
         socket,
         "streaming:listeners",
-        { sessions },
+        { sessions: filteredSessions, stats: filteredStats, displayMode },
+        message.requestId,
+      );
+      break;
+    }
+
+    case "streaming:channel-latency": {
+      const latencyPayload = message.payload as StreamingChannelLatencyPayload | undefined;
+      if (!latencyPayload?.channelId) {
+        sendMessage(
+          socket,
+          "error",
+          {
+            message: "Missing required field: channelId",
+            originalType: message.type,
+          },
+          message.requestId,
+        );
+        break;
+      }
+
+      const latencyEstimate = streamingSubsystem.getChannelLatencyEstimate(
+        latencyPayload.channelId,
+      );
+      sendMessage(
+        socket,
+        "streaming:channel-latency",
+        { channelId: latencyPayload.channelId, estimate: latencyEstimate },
         message.requestId,
       );
       break;
@@ -1073,6 +1126,16 @@ function wireStreamingBroadcasts(
       broadcastToAdminClients(clientMap, "streaming:worker-alert", {
         alertType,
         ...details,
+      });
+    },
+  );
+
+  streamingSubsystem.on(
+    "latency-warning",
+    (warnings: Array<{ channelId: string; name: string; estimate: unknown }>) => {
+      broadcastToAdminClients(clientMap, "streaming:latency-warning", {
+        warnings,
+        timestamp: new Date().toISOString(),
       });
     },
   );

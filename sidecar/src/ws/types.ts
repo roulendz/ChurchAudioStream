@@ -74,7 +74,16 @@ export type ServerMessageType =
   // Audio: resource stats
   | "stats:update"
   // Audio: channel events
-  | "channel:events";
+  | "channel:events"
+  // Streaming: admin API
+  | "streaming:status"
+  | "streaming:workers"
+  | "streaming:listeners"
+  | "streaming:restart-workers"
+  | "streaming:channel-latency"
+  | "streaming:listener-count"
+  | "streaming:latency-warning"
+  | "streaming:worker-alert";
 
 // ---------------------------------------------------------------------------
 // Audio WebSocket payload types
@@ -185,4 +194,101 @@ export interface ProcessingResetPayload {
 /** Request payload for channel:processing:get. */
 export interface ProcessingGetPayload {
   channelId: string;
+}
+
+// ---------------------------------------------------------------------------
+// Streaming WebSocket payload types
+// ---------------------------------------------------------------------------
+
+/** Response payload for streaming:status. */
+export interface StreamingStatusPayload {
+  totalListeners: number;
+  channels: Array<{
+    channelId: string;
+    name: string;
+    isActive: boolean;
+    listenerCount: number;
+    latencyEstimate: {
+      gstreamerBufferMs: number;
+      opusEncodeMs: number;
+      mediasoupForwardMs: number;
+      webrtcJitterBufferMs: number;
+      networkMs: number;
+      totalMs: number;
+    };
+    latencyMode: "live" | "stable";
+    lossRecovery: "nack" | "plc";
+  }>;
+  workers: Array<{
+    index: number;
+    peakMemoryKb: number;
+    routerCount: number;
+    alive: boolean;
+  }>;
+}
+
+/** Response payload for streaming:workers. */
+export interface StreamingWorkersPayload {
+  workers: Array<{
+    index: number;
+    peakMemoryKb: number;
+    routerCount: number;
+    alive: boolean;
+  }>;
+}
+
+/** Request payload for streaming:listeners. */
+export interface StreamingListenersPayload {
+  /** Admin display mode: "all" shows all, "flagged" shows degraded only, "off" disables. */
+  displayMode?: "all" | "flagged" | "off";
+  /** Optional channel ID filter. */
+  channelId?: string;
+}
+
+/** Request payload for streaming:restart-workers. */
+export interface StreamingRestartWorkersPayload {
+  /** Confirmation flag (UI should prompt before sending). */
+  confirmed: boolean;
+}
+
+/** Request payload for streaming:channel-latency. */
+export interface StreamingChannelLatencyPayload {
+  channelId: string;
+}
+
+/** Broadcast payload for streaming:listener-count. */
+export interface StreamingListenerCountPayload {
+  channelId: string | null;
+  count: number;
+  totalListeners: number;
+}
+
+/** Broadcast payload for streaming:latency-warning. */
+export interface StreamingLatencyWarningPayload {
+  warnings: Array<{
+    channelId: string;
+    name: string;
+    estimate: {
+      gstreamerBufferMs: number;
+      opusEncodeMs: number;
+      mediasoupForwardMs: number;
+      webrtcJitterBufferMs: number;
+      networkMs: number;
+      totalMs: number;
+    };
+  }>;
+  timestamp: string;
+}
+
+/** Broadcast payload for streaming:worker-alert. */
+export interface StreamingWorkerAlertPayload {
+  alertType: "worker-died" | "worker-memory-warning";
+  workerIndex: number;
+  timestamp: string;
+  /** Present for worker-died alerts. */
+  error?: string;
+  /** Present for memory-warning alerts. */
+  memoryMb?: number;
+  /** Present for memory-warning alerts. */
+  thresholdMb?: number;
 }
