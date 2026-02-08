@@ -36,6 +36,8 @@ export type ChannelMetadataResolver = (channelId: string) =>
       name: string;
       outputFormat: "mono" | "stereo";
       defaultChannel: boolean;
+      latencyMode: "live" | "stable";
+      lossRecovery: "nack" | "plc";
     }
   | undefined;
 
@@ -231,6 +233,8 @@ export class RouterManager extends EventEmitter {
         outputFormat: metadata.outputFormat,
         defaultChannel: metadata.defaultChannel,
         hasActiveProducer: !entry.audioProducer.closed,
+        latencyMode: metadata.latencyMode,
+        lossRecovery: metadata.lossRecovery,
       });
     }
 

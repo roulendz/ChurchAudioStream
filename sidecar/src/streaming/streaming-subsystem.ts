@@ -99,6 +99,8 @@ export class StreamingSubsystem extends EventEmitter {
         name: channel.name,
         outputFormat: channel.outputFormat,
         defaultChannel: channelConfig?.defaultChannel ?? false,
+        latencyMode: channelConfig?.latencyMode ?? "live",
+        lossRecovery: channelConfig?.lossRecovery ?? "nack",
       };
     };
 
@@ -339,14 +341,11 @@ export class StreamingSubsystem extends EventEmitter {
     ) {
       if (!this.routerManager.hasChannel(channelId)) return;
 
-      // Notify listeners on this channel that their consumer is closing
-      await this.signalingHandler.notifyListenersOnChannel(
-        channelId,
-        "consumerClosed",
-        { reason: "channel-stopped" },
-      );
+      // Disconnect listeners on this channel: close consumers/transports,
+      // notify with remaining active channels per locked decision
+      await this.signalingHandler.disconnectListenersFromChannel(channelId);
 
-      // Push updated channel list (before removing router)
+      // Remove the channel's router (cascades to PlainTransport + Producer)
       await this.routerManager.removeChannelRouter(channelId);
 
       // Notify all listeners of updated channel list
@@ -358,11 +357,8 @@ export class StreamingSubsystem extends EventEmitter {
     if (!this.routerManager || !this.signalingHandler) return;
 
     if (this.routerManager.hasChannel(channelId)) {
-      await this.signalingHandler.notifyListenersOnChannel(
-        channelId,
-        "consumerClosed",
-        { reason: "channel-stopped" },
-      );
+      // Disconnect listeners on this channel with remaining channel list
+      await this.signalingHandler.disconnectListenersFromChannel(channelId);
 
       await this.routerManager.removeChannelRouter(channelId);
       await this.pushActiveChannelList();
@@ -398,6 +394,8 @@ export class StreamingSubsystem extends EventEmitter {
         name: channel.name,
         outputFormat: channel.outputFormat,
         defaultChannel: channelConfig?.defaultChannel ?? false,
+        latencyMode: channelConfig?.latencyMode ?? "live",
+        lossRecovery: channelConfig?.lossRecovery ?? "nack",
       };
     };
   }

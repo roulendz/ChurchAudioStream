@@ -134,6 +134,10 @@ export interface ListenerChannelInfo {
   readonly defaultChannel: boolean;
   /** Whether the channel has an active audio producer. */
   readonly hasActiveProducer: boolean;
+  /** Latency mode hint for client-side jitter buffer configuration. */
+  readonly latencyMode: LatencyMode;
+  /** Loss recovery strategy (NACK retransmission vs Opus PLC). */
+  readonly lossRecovery: LossRecoveryMode;
 }
 
 /** Worker resource snapshot for admin dashboard display. */

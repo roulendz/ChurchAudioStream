@@ -152,12 +152,19 @@ export class SignalingHandler extends EventEmitter {
     this.heartbeatTracker.recordActivity(peer.id);
 
     // Push active channels immediately on connect (no request-response round-trip)
+    // Include default channel ID so first-time listeners auto-connect
     const activeChannels = this.routerManager.getActiveChannelList(
       this.metadataResolver,
     );
-    peer.notify("activeChannels", { channels: activeChannels }).catch(() => {
-      // Peer may have disconnected immediately
-    });
+    const defaultChannelId = this.getDefaultChannelId();
+    peer
+      .notify("activeChannels", {
+        channels: activeChannels,
+        defaultChannelId,
+      })
+      .catch(() => {
+        // Peer may have disconnected immediately
+      });
 
     // Register request handler
     peer.on(
@@ -300,6 +307,59 @@ export class SignalingHandler extends EventEmitter {
     }
 
     await Promise.all(notifyPromises);
+  }
+
+  /**
+   * Disconnect all listeners currently on a specific channel.
+   * Used when admin stops/hides a channel -- listeners get notified
+   * with remaining active channels per locked decision.
+   */
+  async disconnectListenersFromChannel(channelId: string): Promise<void> {
+    const activeChannels = this.routerManager.getActiveChannelList(
+      this.metadataResolver,
+    );
+    const remainingChannels = activeChannels.filter((ch) => ch.id !== channelId);
+
+    for (const peer of this.peers.values()) {
+      if (peer.closed) continue;
+      const peerData = peer.data as unknown as ListenerPeerData;
+      if (peerData.isAdmin) continue;
+      if (peerData.currentChannelId !== channelId) continue;
+
+      // Close the consumer (hard cut)
+      if (peerData.currentConsumer) {
+        peerData.currentConsumer.close();
+        peerData.currentConsumer = null;
+      }
+
+      // Close the transport
+      this.transportManager.closeTransport(peer.id);
+      peerData.webRtcTransport = null;
+      peerData.currentChannelId = null;
+
+      // Notify with remaining active channels so listener can pick a new one
+      peer
+        .notify("channelStopped", {
+          channelId,
+          remainingChannels,
+        })
+        .catch(() => {});
+    }
+  }
+
+  /**
+   * Get the default channel ID from the active channel list.
+   * Returns the first channel marked as defaultChannel, or the first
+   * channel alphabetically if none is marked as default.
+   */
+  getDefaultChannelId(): string | null {
+    const activeChannels = this.routerManager.getActiveChannelList(
+      this.metadataResolver,
+    );
+    if (activeChannels.length === 0) return null;
+
+    const defaultChannel = activeChannels.find((ch) => ch.defaultChannel);
+    return defaultChannel?.id ?? activeChannels[0].id;
   }
 
   // -----------------------------------------------------------------------
