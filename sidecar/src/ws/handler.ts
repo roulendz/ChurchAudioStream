@@ -6,6 +6,7 @@ import WebSocket, { WebSocketServer } from "ws";
 import type { ConfigStore } from "../config/store";
 import type { AudioSubsystem } from "../audio/audio-subsystem";
 import type { StreamingSubsystem } from "../streaming/streaming-subsystem";
+import type { ListenerWebSocketHandler } from "../ws/listener-handler";
 import type { ProcessingConfigUpdate } from "../audio/processing/processing-types";
 import { listNetworkInterfaces } from "../network/interfaces";
 import type {
@@ -52,6 +53,8 @@ type ExtendedWebSocket = WebSocket & { metadata: ClientMetadata };
 export interface WebSocketSetupResult {
   wss: WebSocketServer;
   getClients: () => Map<string, ClientMetadata>;
+  /** Wire the listener WebSocket handler for upgrade forwarding on /ws/listener paths. */
+  setListenerHandler: (handler: ListenerWebSocketHandler) => void;
 }
 
 /** WebSocket path reserved for protoo listener connections (do not route to admin WS). */
@@ -67,12 +70,19 @@ export function setupWebSocket(
   const wss = new WebSocketServer({ noServer: true });
   const clientMap = new Map<string, ExtendedWebSocket>();
 
-  // Route HTTP upgrade requests to this admin WebSocket server.
-  // Requests to /ws/listener are skipped (handled by protoo via WebSocket-Node).
+  // Closure variable set after ListenerWebSocketHandler is created
+  // (resolves chicken-and-egg: server created before streaming subsystem)
+  let listenerHandler: ListenerWebSocketHandler | null = null;
+
+  // Single upgrade dispatcher: routes /ws/listener to protoo via forwardUpgrade,
+  // all other paths to the admin ws server. This is the ONLY upgrade listener
+  // on this server, preventing WebSocket-Node from competing with ws.
   server.on("upgrade", (request, socket, head) => {
     const pathname = request.url ?? "";
     if (pathname.startsWith(LISTENER_WS_PATH)) {
-      // Reserved for protoo listener WebSocket -- do not handle here
+      if (listenerHandler) {
+        listenerHandler.forwardUpgrade(request, socket, head);
+      }
       return;
     }
 
@@ -162,7 +172,11 @@ export function setupWebSocket(
     return snapshot;
   };
 
-  return { wss, getClients };
+  const setListenerHandler = (handler: ListenerWebSocketHandler): void => {
+    listenerHandler = handler;
+  };
+
+  return { wss, getClients, setListenerHandler };
 }
 
 function startHeartbeat(
