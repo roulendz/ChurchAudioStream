@@ -2,7 +2,7 @@
  * GStreamer child process wrapper.
  *
  * Wraps a single `gst-launch-1.0` child process with full lifecycle management:
- * spawning, state tracking, stderr metering, graceful shutdown, and error handling.
+ * spawning, state tracking, stdout metering, graceful shutdown, and error handling.
  *
  * Each audio source runs as a separate GStreamer process for fault isolation --
  * killing one process does not affect other running pipelines.
@@ -15,7 +15,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 import { buildPipelineString } from "./pipeline-builder.js";
-import { createStderrLineParser } from "./metering-parser.js";
+import { createBusMessageLineParser } from "./metering-parser.js";
 import type {
   PipelineConfig,
   PipelineState,
@@ -93,7 +93,7 @@ export class GStreamerProcess extends EventEmitter {
    * Spawn the gst-launch-1.0 child process.
    *
    * Builds the pipeline string from config, spawns with -m (bus messages) and -e (EOS on interrupt),
-   * and wires up stderr parsing for level metering and error detection.
+   * and wires up stdout parsing for level metering and stderr for error detection.
    *
    * @throws Error if the process is already running.
    */
@@ -126,8 +126,8 @@ export class GStreamerProcess extends EventEmitter {
     this.currentPid = child.pid ?? null;
     this.processStartedAt = Date.now();
 
-    this.attachStderrParser(child);
-    this.attachStdoutHandler(child);
+    this.attachStdoutLevelParser(child);
+    this.attachStderrErrorDetector(child);
     this.attachExitHandler(child);
     this.attachSpawnErrorHandler(child);
 
@@ -235,11 +235,11 @@ export class GStreamerProcess extends EventEmitter {
     this.emit("state-change", newState);
   }
 
-  /** Attach stderr line parser for level metering and error detection. */
-  private attachStderrParser(child: ChildProcess): void {
-    if (!child.stderr) return;
+  /** Attach stdout parser for level metering from gst-launch-1.0 -m bus messages. */
+  private attachStdoutLevelParser(child: ChildProcess): void {
+    if (!child.stdout) return;
 
-    const parseChunk = createStderrLineParser(
+    const parseChunk = createBusMessageLineParser(
       (levels: AudioLevels) => {
         this.emit("levels", levels);
         // First level data = pipeline is actively streaming
@@ -248,6 +248,7 @@ export class GStreamerProcess extends EventEmitter {
         }
       },
       (errorLine: string) => {
+        // Defense-in-depth: catch error patterns on stdout if GStreamer ever sends them here
         const pipelineError: PipelineError = {
           code: "GSTREAMER_ERROR",
           message: `GStreamer error in pipeline "${this.config.label}"`,
@@ -258,19 +259,38 @@ export class GStreamerProcess extends EventEmitter {
       },
     );
 
-    child.stderr.on("data", parseChunk);
+    child.stdout.on("data", parseChunk);
   }
 
-  /** Attach stdout handler to log debug output from gst-launch-1.0. */
-  private attachStdoutHandler(child: ChildProcess): void {
-    if (!child.stdout) return;
+  /** Attach stderr error detector for GStreamer errors and warnings. */
+  private attachStderrErrorDetector(child: ChildProcess): void {
+    if (!child.stderr) return;
 
-    child.stdout.on("data", (chunk: Buffer) => {
-      const text = chunk.toString("utf-8").trimEnd();
-      if (text.length > 0) {
-        logger.debug(`Pipeline "${this.config.label}" stdout: ${text}`, {
-          pipelineId: this.id,
-        });
+    const GSTREAMER_ERROR_PATTERN = /\b(?:ERROR|WARN|WARNING|CRITICAL)\b/i;
+    let partialLine = "";
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      const text = partialLine + chunk.toString("utf-8");
+      const lines = text.split("\n");
+      partialLine = lines.pop() ?? "";
+
+      for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+        if (line.length === 0) continue;
+
+        if (GSTREAMER_ERROR_PATTERN.test(line)) {
+          const pipelineError: PipelineError = {
+            code: "GSTREAMER_ERROR",
+            message: `GStreamer error in pipeline "${this.config.label}"`,
+            technicalDetails: line,
+            timestamp: Date.now(),
+          };
+          this.emit("error", pipelineError);
+        } else {
+          logger.debug(`Pipeline "${this.config.label}" stderr: ${line}`, {
+            pipelineId: this.id,
+          });
+        }
       }
     });
   }
