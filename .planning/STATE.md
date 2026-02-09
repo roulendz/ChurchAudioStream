@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 4 gap closure -- WebRTC Streaming Core
+**Current focus:** Phase 4 complete -- WebRTC Streaming Core (all gap closure done)
 
 ## Current Position
 
 Phase: 4 of 10 (WebRTC Streaming Core)
-Plan: 9 of 9 in current phase (04-09 complete, gap closure)
-Status: In progress (gap closure plans 04-08 + 04-09 executing in parallel)
-Last activity: 2026-02-10 -- Completed 04-09-PLAN.md (graceful shutdown fix)
+Plan: 9 of 9 in current phase (all plans + gap closure complete)
+Status: Phase complete (04-08 + 04-09 gap closure done)
+Last activity: 2026-02-10 -- Completed 04-08-PLAN.md (WSS admin upgrade fix)
 
-Progress: [============================] 80% (28/35 plans)
+Progress: [============================] 83% (29/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: 7 minutes
-- Total execution time: 3.5 hours
+- Total execution time: 3.6 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [============================] 80% (28/35 plans)
 | 01 | 8/8 | 67 min | 8 min |
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
-| 04 | 9/9 | 55 min | 6 min |
+| 04 | 9/9 | 61 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-05 (10m), 04-06 (12m), 04-07 (4m), 04-08 (parallel), 04-09 (4m)
-- Trend: Gap closure plans fast and focused. Phase 4 gap closure in progress.
+- Last 5 plans: 04-06 (12m), 04-07 (4m), 04-08 (6m), 04-09 (4m)
+- Trend: All gap closure plans complete. Phase 4 fully done.
 
 *Updated after each plan completion*
 
@@ -146,6 +146,10 @@ Recent decisions affecting current work:
 - [04-07]: Unified regex \([^)]+\) matches any GStreamer type annotation (double, GValueArray) instead of separate patterns
 - [04-07]: Level parser reads stdout (gst-launch-1.0 -m bus messages); stderr reads errors only
 - [04-07]: Defense-in-depth: error pattern checked on both stdout and stderr streams
+- [04-08]: Dummy http.Server (never listened) isolates protoo's WebSocket-Node upgrade handler from httpsServer
+- [04-08]: handler.ts is the sole upgrade listener; /ws/listener -> forwardUpgrade(), all else -> admin ws
+- [04-08]: setListenerHandler closure callback resolves chicken-and-egg timing (server created before streaming)
+- [04-08]: HTTP loopback server does NOT get listener handler (protoo only on HTTPS for phone browsers)
 - [04-09]: shutdown() is separate from stopAll() per SRP: prepare signal vs actual teardown
 - [04-09]: Three defense-in-depth guards on isShuttingDown (handleCrashedPipeline, scheduleRestart, setTimeout callback)
 - [04-09]: removeAudioSubsystemListeners called as step 0 of streaming stop() before notification/drain
@@ -172,6 +176,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 04-09-PLAN.md (graceful shutdown fix)
+Stopped at: Completed 04-08-PLAN.md (WSS admin upgrade interference fix)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
