@@ -49,6 +49,7 @@ export class PipelineManager extends EventEmitter {
   private readonly restartAttempts = new Map<string, number>();
   private readonly restartTimers = new Map<string, NodeJS.Timeout>();
   private readonly recoveryConfig: RecoveryConfig;
+  private isShuttingDown = false;
 
   constructor(recoveryConfig: RecoveryConfig) {
     super();
@@ -164,6 +165,20 @@ export class PipelineManager extends EventEmitter {
   }
 
   /**
+   * Signal shutdown intent: disable auto-restart scheduling and clear pending timers.
+   *
+   * Called BEFORE streaming teardown begins so that pipeline crashes during
+   * the 5-second drain window do not spawn orphaned GStreamer processes.
+   * Intentionally separate from stopAll() -- shutdown() is a "prepare" signal,
+   * stopAll() is the actual teardown that happens later in audioSubsystem.stop().
+   */
+  shutdown(): void {
+    this.isShuttingDown = true;
+    this.clearAllRestartTimers();
+    logger.info("PipelineManager shutdown initiated, restart scheduling disabled");
+  }
+
+  /**
    * Remove all pipelines: stop, remove listeners, and clear all tracking maps.
    */
   async destroyAll(): Promise<void> {
@@ -221,6 +236,7 @@ export class PipelineManager extends EventEmitter {
 
   /** Handle a crashed pipeline by scheduling a restart if recovery is enabled. */
   private handleCrashedPipeline(pipelineId: string): void {
+    if (this.isShuttingDown) return;
     if (!this.recoveryConfig.autoRestart) return;
     if (!this.pipelines.has(pipelineId)) return;
 
@@ -238,6 +254,7 @@ export class PipelineManager extends EventEmitter {
    * This prevents rapid restart loops when a device is unplugged or driver crashes.
    */
   private scheduleRestart(pipelineId: string): void {
+    if (this.isShuttingDown) return;
     const attempts = (this.restartAttempts.get(pipelineId) ?? 0) + 1;
     this.restartAttempts.set(pipelineId, attempts);
 
@@ -270,6 +287,7 @@ export class PipelineManager extends EventEmitter {
 
     const timer = setTimeout(() => {
       this.restartTimers.delete(pipelineId);
+      if (this.isShuttingDown) return;
       const currentPipeline = this.pipelines.get(pipelineId);
       if (!currentPipeline) return;
 

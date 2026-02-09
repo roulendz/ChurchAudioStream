@@ -81,6 +81,18 @@ export class AudioSubsystem extends EventEmitter {
   // Lifecycle
   // ---------------------------------------------------------------------------
 
+  /**
+   * Signal shutdown intent to PipelineManager: disable auto-restart scheduling.
+   *
+   * Called from index.ts BEFORE streamingSubsystem.stop(), closing the race
+   * window where pipelines crash during the 5s streaming drain and PipelineManager
+   * schedules orphaned restarts.
+   */
+  prepareShutdown(): void {
+    this.pipelineManager.shutdown();
+    logger.info("Audio subsystem prepared for shutdown");
+  }
+
   /** Start all audio subsystem components: discovery, monitoring, auto-start channels. */
   async start(): Promise<void> {
     await this.discoveryManager.start();
