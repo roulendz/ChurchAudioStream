@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 4 complete -- WebRTC Streaming Core
+**Current focus:** Phase 4 gap closure complete -- WebRTC Streaming Core
 
 ## Current Position
 
 Phase: 4 of 10 (WebRTC Streaming Core)
-Plan: 6 of 6 in current phase (04-06 complete)
-Status: Phase complete
-Last activity: 2026-02-08 -- Completed 04-06-PLAN.md (channel switching, latency estimation, admin metrics)
+Plan: 7 of 7 in current phase (04-07 complete, gap closure)
+Status: Phase complete (with gap closure)
+Last activity: 2026-02-09 -- Completed 04-07-PLAN.md (GStreamer level parser bug fix)
 
-Progress: [==========================] 74% (26/35 plans)
+Progress: [===========================] 77% (27/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 26
+- Total plans completed: 27
 - Average duration: 7 minutes
-- Total execution time: 3.3 hours
+- Total execution time: 3.4 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [==========================] 74% (26/35 plans)
 | 01 | 8/8 | 67 min | 8 min |
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
-| 04 | 6/6 | 47 min | 8 min |
+| 04 | 7/7 | 51 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-02 (6m), 04-03 (5m), 04-04 (5m), 04-05 (10m), 04-06 (12m)
-- Trend: Final phase plans larger (7 files, multi-concern wiring). Phase 4 complete.
+- Last 5 plans: 04-03 (5m), 04-04 (5m), 04-05 (10m), 04-06 (12m), 04-07 (4m)
+- Trend: Gap closure plan fast (2 files, focused bug fix). Phase 4 fully complete.
 
 *Updated after each plan completion*
 
@@ -143,6 +143,9 @@ Recent decisions affecting current work:
 - [04-06]: 30s latency monitoring loop with 200ms threshold emits latency-warning event
 - [04-06]: streaming:listeners displayMode (all/flagged/off) filters per admin preference
 - [04-06]: buildMetadataResolver() extracted for DRY -- used by 3 call sites in StreamingSubsystem
+- [04-07]: Unified regex \([^)]+\) matches any GStreamer type annotation (double, GValueArray) instead of separate patterns
+- [04-07]: Level parser reads stdout (gst-launch-1.0 -m bus messages); stderr reads errors only
+- [04-07]: Defense-in-depth: error pattern checked on both stdout and stderr streams
 
 ### Pending Todos
 
@@ -164,7 +167,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-08
-Stopped at: Completed 04-06-PLAN.md (channel switching, latency estimation, admin metrics) -- Phase 4 complete
+Last session: 2026-02-09
+Stopped at: Completed 04-07-PLAN.md (GStreamer level parser bug fix) -- Phase 4 gap closure complete
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
