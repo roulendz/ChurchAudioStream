@@ -87,6 +87,11 @@ export class StreamingSubsystem extends EventEmitter {
 
   private shutdownDrainMs: number = 5000;
 
+  // Bound handler references for AudioSubsystem event cleanup on stop()
+  private boundChannelStateHandler: ((channelId: string, status: string) => void) | null = null;
+  private boundChannelRemovedHandler: ((channelId: string) => void) | null = null;
+  private boundChannelCreatedHandler: ((channel: AppChannel) => void) | null = null;
+
   constructor(configStore: ConfigStore, audioSubsystem: AudioSubsystem) {
     super();
     this.configStore = configStore;
@@ -100,9 +105,14 @@ export class StreamingSubsystem extends EventEmitter {
   /**
    * Start all streaming components and wire AudioSubsystem event listeners.
    *
-   * @param httpsServer  The HTTPS server for listener WebSocket connections
+   * @param httpsServer           The HTTPS server (kept for potential future use)
+   * @param setListenerHandler    Callback to wire the listener handler into the
+   *                              upgrade dispatcher on httpsServer (from handler.ts)
    */
-  async start(httpsServer: HttpsServer): Promise<void> {
+  async start(
+    httpsServer: HttpsServer,
+    setListenerHandler?: (handler: ListenerWebSocketHandler) => void,
+  ): Promise<void> {
     const config = this.configStore.get();
 
     this.shutdownDrainMs = config.streaming.shutdownDrainMs;
@@ -156,9 +166,8 @@ export class StreamingSubsystem extends EventEmitter {
       config.streaming.heartbeatIntervalMs,
     );
 
-    // 7. Create ListenerWebSocketHandler
+    // 7. Create ListenerWebSocketHandler (uses dummy server internally, not httpsServer)
     this.listenerWsHandler = new ListenerWebSocketHandler(
-      httpsServer,
       this.signalingHandler,
       {
         rateLimitPerIp: config.streaming.rateLimitPerIp,
@@ -166,6 +175,9 @@ export class StreamingSubsystem extends EventEmitter {
         heartbeatIntervalMs: config.streaming.heartbeatIntervalMs,
       },
     );
+
+    // Wire the listener handler into the HTTPS server's upgrade dispatcher
+    setListenerHandler?.(this.listenerWsHandler);
 
     // 8. Wire AudioSubsystem events
     this.wireAudioSubsystemEvents();
@@ -195,6 +207,10 @@ export class StreamingSubsystem extends EventEmitter {
    * 6. Close workers
    */
   async stop(): Promise<void> {
+    // 0. Remove AudioSubsystem event listeners first to prevent
+    //    streaming from reacting to channel state changes during teardown
+    this.removeAudioSubsystemListeners();
+
     // 1. Notify all listeners of impending shutdown
     if (this.signalingHandler) {
       try {
@@ -466,40 +482,61 @@ export class StreamingSubsystem extends EventEmitter {
   /**
    * Subscribe to AudioSubsystem channel lifecycle events and sync
    * streaming state (routers, transports, notifications).
+   *
+   * Stores bound handler references so they can be removed in stop().
    */
   private wireAudioSubsystemEvents(): void {
     // Channel started streaming -> create router + PlainTransport
-    this.audioSubsystem.on(
-      "channel-state-changed",
-      (channelId: string, status: string) => {
-        this.handleChannelStateChange(channelId, status).catch((error) => {
-          logger.error("Failed to handle channel state change in streaming", {
-            channelId,
-            status,
-            error: toErrorMessage(error),
-          });
+    this.boundChannelStateHandler = (channelId: string, status: string) => {
+      this.handleChannelStateChange(channelId, status).catch((error) => {
+        logger.error("Failed to handle channel state change in streaming", {
+          channelId,
+          status,
+          error: toErrorMessage(error),
         });
-      },
-    );
+      });
+    };
+    this.audioSubsystem.on("channel-state-changed", this.boundChannelStateHandler);
 
     // Channel removed -> notify listeners, remove router
-    this.audioSubsystem.on("channel-removed", (channelId: string) => {
+    this.boundChannelRemovedHandler = (channelId: string) => {
       this.handleChannelRemoved(channelId).catch((error) => {
         logger.error("Failed to handle channel removal in streaming", {
           channelId,
           error: toErrorMessage(error),
         });
       });
-    });
+    };
+    this.audioSubsystem.on("channel-removed", this.boundChannelRemovedHandler);
 
     // Channel created -> notify listeners of new channel available
-    this.audioSubsystem.on("channel-created", (_channel: AppChannel) => {
+    this.boundChannelCreatedHandler = (_channel: AppChannel) => {
       this.handleChannelCreated().catch((error) => {
         logger.error("Failed to handle channel creation in streaming", {
           error: toErrorMessage(error),
         });
       });
-    });
+    };
+    this.audioSubsystem.on("channel-created", this.boundChannelCreatedHandler);
+  }
+
+  /**
+   * Remove all event listeners registered on AudioSubsystem during wireAudioSubsystemEvents().
+   * Prevents dangling handlers from firing during/after shutdown.
+   */
+  private removeAudioSubsystemListeners(): void {
+    if (this.boundChannelStateHandler) {
+      this.audioSubsystem.off("channel-state-changed", this.boundChannelStateHandler);
+      this.boundChannelStateHandler = null;
+    }
+    if (this.boundChannelRemovedHandler) {
+      this.audioSubsystem.off("channel-removed", this.boundChannelRemovedHandler);
+      this.boundChannelRemovedHandler = null;
+    }
+    if (this.boundChannelCreatedHandler) {
+      this.audioSubsystem.off("channel-created", this.boundChannelCreatedHandler);
+      this.boundChannelCreatedHandler = null;
+    }
   }
 
   private async handleChannelStateChange(

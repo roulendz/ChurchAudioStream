@@ -38,9 +38,12 @@ function setupGracefulShutdown(
   for (const signal of shutdownSignals) {
     process.on(signal, async () => {
       logger.info(`Received ${signal}, shutting down gracefully`);
-      // Shutdown order: streaming first (notify listeners, drain, close mediasoup)
-      // then audio (close GStreamer pipelines), then servers
+      // 1. Disable pipeline auto-restart BEFORE streaming teardown begins.
+      //    Prevents orphaned GStreamer processes during 5s drain window.
+      audioSubsystem.prepareShutdown();
+      // 2. Streaming shutdown: notify listeners, drain, close mediasoup
       await streamingSubsystem.stop();
+      // 3. Audio shutdown: stop GStreamer pipelines, discovery, monitors
       await audioSubsystem.stop();
       const stopServer = getStopServer();
       if (stopServer) {
@@ -122,8 +125,11 @@ function setupRestartListener(
       const newStopServer = await startServer(components, newConfig);
       setStopServer(newStopServer);
 
-      // Restart streaming on the new HTTPS server
-      await streamingSubsystem.start(components.httpsServer);
+      // Restart streaming on the new HTTPS server with upgrade dispatcher wiring
+      await streamingSubsystem.start(
+        components.httpsServer,
+        components.httpsWsSetup.setListenerHandler,
+      );
 
       logger.info(
         `Server restarted — phones: https://${newConfig.server.host}:${newConfig.server.port} | admin: http://127.0.0.1:${ADMIN_LOOPBACK_PORT}`,
@@ -150,8 +156,11 @@ function setupRestartListener(
         const fallbackStopServer = await startServer(components, fallbackConfig);
         setStopServer(fallbackStopServer);
 
-        // Restart streaming on fallback server
-        await streamingSubsystem.start(components.httpsServer);
+        // Restart streaming on fallback server with upgrade dispatcher wiring
+        await streamingSubsystem.start(
+          components.httpsServer,
+          components.httpsWsSetup.setListenerHandler,
+        );
         logger.info("Fallback restart succeeded");
       } catch (fallbackErr) {
         const fallbackMessage =
@@ -223,8 +232,11 @@ async function main(): Promise<void> {
     streamingSubsystem,
   );
 
-  // Start streaming subsystem (creates workers, attaches to httpsServer for listener WS)
-  await streamingSubsystem.start(components.httpsServer);
+  // Start streaming subsystem (creates workers, wires listener WS via upgrade dispatcher)
+  await streamingSubsystem.start(
+    components.httpsServer,
+    components.httpsWsSetup.setListenerHandler,
+  );
 
   // Start audio subsystem after server and streaming are ready
   // (discovery, monitoring, auto-start channels -- channels emit events that streaming subscribes to)
