@@ -1,16 +1,18 @@
 /**
- * GStreamer level metering stderr parser.
+ * GStreamer level metering bus message parser.
  *
  * Parses audio level data from GStreamer `level` element messages that appear
- * on stderr when `gst-launch-1.0` is run with the `-m` flag.
+ * on stdout when `gst-launch-1.0` is run with the `-m` flag (bus messages).
  *
  * Pure function module -- no side effects, no state, no I/O.
- * The process manager (Plan 03) uses `createStderrLineParser` to process
- * raw stderr output from GStreamer child processes.
+ * The process manager uses `createBusMessageLineParser` to process
+ * raw stdout output from GStreamer child processes.
  *
- * Handles both single-channel and multi-channel formats:
- *   Single: peak=(double)-12.5, rms=(double)-18.3, decay=(double)-13.0
- *   Multi:  peak=(double){ -12.5, -14.2 }, rms=(double){ -18.3, -20.1 }
+ * Handles multiple GStreamer output formats:
+ *   Double single:      peak=(double)-12.5
+ *   Double multi:       peak=(double){ -12.5, -14.2 }
+ *   GValueArray single: peak=(GValueArray)< -90.308 >
+ *   GValueArray multi:  peak=(GValueArray)< -12.5, -14.2 >
  *
  * Also handles -inf (silence) which parseFloat naturally converts to -Infinity.
  */
@@ -27,15 +29,18 @@ const CLIPPING_THRESHOLD_DB = -0.1;
 const LEVEL_LINE_PATTERN = /\blevel,/;
 
 /**
- * Extract double values from a GStreamer level field.
- * Handles both formats:
- *   peak=(double)-12.5                          (single channel, no braces)
- *   peak=(double){ -12.5, -14.2 }              (multi channel, with braces)
- *   peak=(double){ -12.5, -14.2, -inf }        (multi channel, with -inf)
+ * Build a regex to extract values from a GStreamer level field.
+ *
+ * Supports both type annotation formats:
+ *   (double)   -- GStreamer < 1.26:  peak=(double)-12.5  or  peak=(double){ -12.5, -14.2 }
+ *   (GValueArray) -- GStreamer 1.26: peak=(GValueArray)< -90.308 >  or  peak=(GValueArray)< -12.5, -14.2 >
+ *
+ * The regex uses `\([^)]+\)` to match any type annotation in parentheses,
+ * then optionally matches `{` or `<` delimiters around the value list.
  */
 function buildFieldPattern(fieldName: string): RegExp {
   return new RegExp(
-    `${fieldName}=\\(double\\)\\{?\\s*([^;{}]+?)\\s*\\}?(?:,\\s*(?:\\w+=|$)|;|$)`,
+    `${fieldName}=\\([^)]+\\)[{<]?\\s*([^;>}]+?)\\s*[>}]?(?:,\\s*(?:\\w+=|$)|;|$)`,
   );
 }
 
@@ -70,12 +75,12 @@ function detectClipping(peakValues: number[]): boolean {
 }
 
 /**
- * Parse a single line of GStreamer stderr output for level metering data.
+ * Parse a single line of GStreamer bus message output for level metering data.
  *
  * Returns an `AudioLevels` object if the line is a level message,
  * or `null` for non-level lines (debug output, state changes, errors, etc.).
  *
- * @param line - A single line from gst-launch-1.0 stderr output
+ * @param line - A single line from gst-launch-1.0 -m stdout output
  * @returns Parsed audio levels or null if line is not a level message
  */
 export function parseMeteringLine(line: string): AudioLevels | null {
@@ -127,25 +132,26 @@ export function dbToNormalized(db: number): number {
 
 /**
  * GStreamer error/warning patterns that should be forwarded to the error callback.
- * These appear intermixed with level messages on stderr.
+ * Checked as defense-in-depth on stdout bus messages (errors normally go to stderr).
  */
 const GSTREAMER_ERROR_PATTERN = /\b(?:ERROR|WARN|WARNING|CRITICAL)\b/i;
 
 /**
- * Create a streaming line-by-line stderr parser for a GStreamer child process.
+ * Create a streaming line-by-line parser for GStreamer bus message output.
  *
- * Returns a function that accepts raw Buffer chunks from the child process stderr.
+ * Returns a function that accepts raw Buffer chunks from the child process stdout
+ * (where `gst-launch-1.0 -m` outputs bus messages including level data).
  * Chunks are accumulated and split on newlines, handling partial lines across chunk
  * boundaries. Complete lines are parsed for level data or error messages.
  *
- * This design prevents stderr buffer overflow (Pitfall 5 from research):
+ * This design prevents buffer overflow (Pitfall 5 from research):
  * lines are processed immediately as they arrive, never accumulating unbounded data.
  *
  * @param onLevels - Called with parsed AudioLevels for each level message
- * @param onError - Called with the raw line for GStreamer error/warning messages
- * @returns A function to pass stderr Buffer chunks to
+ * @param onError - Called with the raw line for GStreamer error/warning messages (defense-in-depth)
+ * @returns A function to pass stdout Buffer chunks to
  */
-export function createStderrLineParser(
+export function createBusMessageLineParser(
   onLevels: (levels: AudioLevels) => void,
   onError: (line: string) => void,
 ): (chunk: Buffer) => void {
