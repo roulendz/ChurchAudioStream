@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 4 verified -- WebRTC Streaming Core complete
+**Current focus:** Phase 4 gap closure -- WebRTC Streaming Core
 
 ## Current Position
 
 Phase: 4 of 10 (WebRTC Streaming Core)
-Plan: 7 of 7 in current phase (04-07 complete, gap closure)
-Status: Phase verified (14/14 must-haves)
-Last activity: 2026-02-09 -- Phase 4 verified after gap closure (04-07)
+Plan: 9 of 9 in current phase (04-09 complete, gap closure)
+Status: In progress (gap closure plans 04-08 + 04-09 executing in parallel)
+Last activity: 2026-02-10 -- Completed 04-09-PLAN.md (graceful shutdown fix)
 
-Progress: [===========================] 77% (27/35 plans)
+Progress: [============================] 80% (28/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 27
+- Total plans completed: 28
 - Average duration: 7 minutes
-- Total execution time: 3.4 hours
+- Total execution time: 3.5 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [===========================] 77% (27/35 plans)
 | 01 | 8/8 | 67 min | 8 min |
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
-| 04 | 7/7 | 51 min | 7 min |
+| 04 | 9/9 | 55 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-03 (5m), 04-04 (5m), 04-05 (10m), 04-06 (12m), 04-07 (4m)
-- Trend: Gap closure plan fast (2 files, focused bug fix). Phase 4 fully complete.
+- Last 5 plans: 04-05 (10m), 04-06 (12m), 04-07 (4m), 04-08 (parallel), 04-09 (4m)
+- Trend: Gap closure plans fast and focused. Phase 4 gap closure in progress.
 
 *Updated after each plan completion*
 
@@ -146,6 +146,10 @@ Recent decisions affecting current work:
 - [04-07]: Unified regex \([^)]+\) matches any GStreamer type annotation (double, GValueArray) instead of separate patterns
 - [04-07]: Level parser reads stdout (gst-launch-1.0 -m bus messages); stderr reads errors only
 - [04-07]: Defense-in-depth: error pattern checked on both stdout and stderr streams
+- [04-09]: shutdown() is separate from stopAll() per SRP: prepare signal vs actual teardown
+- [04-09]: Three defense-in-depth guards on isShuttingDown (handleCrashedPipeline, scheduleRestart, setTimeout callback)
+- [04-09]: removeAudioSubsystemListeners called as step 0 of streaming stop() before notification/drain
+- [04-09]: prepareShutdown() is synchronous, called before async streaming teardown to close race window
 
 ### Pending Todos
 
@@ -167,7 +171,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-09
-Stopped at: Phase 4 verified (14/14 must-haves) after 04-07 gap closure
+Last session: 2026-02-10
+Stopped at: Completed 04-09-PLAN.md (graceful shutdown fix)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
