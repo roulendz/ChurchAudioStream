@@ -5,13 +5,16 @@
  * rate limiting, and delegates peer lifecycle to SignalingHandler. Heartbeat
  * zombie detection runs on a configurable interval.
  *
- * Path routing note: protoo-server hooks into the HTTP "upgrade" event.
- * Since the admin WebSocket also uses "upgrade", path-based routing is
- * handled in the connectionrequest handler by checking request.url. Full
- * server.ts integration (mounting alongside admin WS) is in Plan 04-05.
+ * Upgrade isolation: protoo's WebSocket-Node attaches to a dummy HTTP server
+ * (never listened on a port) instead of the real httpsServer. The single
+ * upgrade dispatcher in handler.ts calls forwardUpgrade() to route
+ * /ws/listener upgrades to protoo, preventing WebSocket-Node from competing
+ * with the admin ws handler on the same server.
  */
 
-import type { Server as HttpsServer } from "node:https";
+import http from "node:http";
+import type { IncomingMessage } from "node:http";
+import type { Duplex } from "node:stream";
 import * as protooServer from "protoo-server";
 import type { SignalingHandler } from "../streaming/signaling-handler.js";
 import { logger } from "../utils/logger.js";
@@ -120,12 +123,18 @@ export class ListenerWebSocketHandler {
   private peerCounter = 0;
 
   /**
-   * @param httpsServer       The HTTPS server to attach the protoo WebSocket server to
+   * Dummy HTTP server that is never listened on any port. It exists solely
+   * as an EventEmitter target for protoo's WebSocket-Node upgrade handler,
+   * isolating it from the real httpsServer so it cannot interfere with the
+   * admin ws upgrade handler.
+   */
+  private dummyUpgradeServer: http.Server | null;
+
+  /**
    * @param signalingHandler  Handles peer request/notification lifecycle
    * @param config            Rate limit and heartbeat configuration from streaming config
    */
   constructor(
-    httpsServer: HttpsServer,
     signalingHandler: SignalingHandler,
     config: ListenerHandlerConfig,
   ) {
@@ -139,8 +148,11 @@ export class ListenerWebSocketHandler {
     // Create protoo Room for managing peers
     this.protooRoom = new protooServer.Room();
 
-    // Create protoo WebSocketServer (wraps ws internally)
-    this.protooWsServer = new protooServer.WebSocketServer(httpsServer);
+    // Create a dummy HTTP server (never listened) to isolate protoo's upgrade handler
+    this.dummyUpgradeServer = http.createServer();
+
+    // Create protoo WebSocketServer on the dummy server (not the real httpsServer)
+    this.protooWsServer = new protooServer.WebSocketServer(this.dummyUpgradeServer);
 
     // Handle incoming connection requests
     this.protooWsServer.on(
@@ -163,6 +175,25 @@ export class ListenerWebSocketHandler {
       rateLimitWindowMs: config.rateLimitWindowMs,
       heartbeatIntervalMs: config.heartbeatIntervalMs,
     });
+  }
+
+  // -----------------------------------------------------------------------
+  // Upgrade forwarding
+  // -----------------------------------------------------------------------
+
+  /**
+   * Forward an HTTP upgrade request to the protoo WebSocket-Node server
+   * via the dummy HTTP server. Called by the single upgrade dispatcher in
+   * handler.ts when the request path matches /ws/listener.
+   */
+  forwardUpgrade(
+    request: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+  ): void {
+    if (this.dummyUpgradeServer) {
+      this.dummyUpgradeServer.emit("upgrade", request, socket, head);
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -258,6 +289,9 @@ export class ListenerWebSocketHandler {
 
     // Stop protoo WebSocket server
     this.protooWsServer.stop();
+
+    // Release dummy upgrade server for GC (it was never listening)
+    this.dummyUpgradeServer = null;
 
     logger.info("Listener WebSocket handler closed");
   }
