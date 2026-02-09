@@ -94,7 +94,7 @@ Plans:
   2. A second channel can stream independently to its own set of listeners at the same time
   3. End-to-end latency from audio input to listener playback is under 100ms on a local WiFi network (measured, not estimated)
   4. Opening a browser, connecting via WebSocket, and receiving audio completes within 3 seconds on a typical phone
-**Plans**: 7 plans
+**Plans**: 9 plans
 
 Plans:
 - [ ] 04-01-PLAN.md -- DRY/SRP audit fixes: extract debounce, error-message utilities; consolidate channel selection builder
@@ -104,6 +104,8 @@ Plans:
 - [ ] 04-05-PLAN.md -- StreamingSubsystem facade, server integration, graceful shutdown
 - [ ] 04-06-PLAN.md -- Channel switching, latency estimation, Live/Stable mode, admin streaming API
 - [ ] 04-07-PLAN.md -- [GAP FIX] Fix GStreamer level parser: stdout wiring + GValueArray regex (UAT Tests 6-9, 12, 14)
+- [ ] 04-08-PLAN.md -- [GAP FIX v2] Fix WSS admin upgrade interference: single upgrade dispatcher with protoo isolation (UAT-v2 Test 1)
+- [ ] 04-09-PLAN.md -- [GAP FIX v2] Fix graceful shutdown: PipelineManager shutdown guard + streaming listener cleanup (UAT-v2 Test 6)
 
 ### Phase 5: Listener Web UI
 **Goal**: Congregation members can open a URL on their phone, see available channels, pick one, and hear audio -- the core user-facing experience
@@ -221,7 +223,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 1. Project Foundation & Configuration | 8/8 | Verified (UAT v3: 12/12) | 2026-02-07 |
 | 2. Audio Capture Pipeline | 9/9 | Verified (5/5 must-haves) | 2026-02-07 |
 | 3. Audio Processing | 3/3 | Verified (12/12 must-haves) | 2026-02-07 |
-| 4. WebRTC Streaming Core | 7/7 | Verified (14/14 must-haves) | 2026-02-09 |
+| 4. WebRTC Streaming Core | 7/9 | UAT v2: 2 gaps (08, 09 planned) | 2026-02-09 |
 | 5. Listener Web UI | 0/4 | Not started | - |
 | 6. Admin Dashboard | 0/4 | Not started | - |
 | 7. Listener Advanced Features | 0/4 | Not started | - |
