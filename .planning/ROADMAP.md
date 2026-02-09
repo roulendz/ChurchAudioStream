@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1: Project Foundation & Configuration** - Tauri 2.x app shell with Node.js sidecar, Express web server, and JSON config persistence
 - [x] **Phase 2: Audio Capture Pipeline** - GStreamer-based capture from AES67 multicast and local audio devices with stream discovery
 - [x] **Phase 3: Audio Processing** - Per-channel normalization, Speech/Music mode, and Opus encoding via GStreamer
-- [x] **Phase 4: WebRTC Streaming Core** - mediasoup SFU distributing Opus audio to browser listeners with sub-100ms latency
+- [ ] **Phase 4: WebRTC Streaming Core** - mediasoup SFU distributing Opus audio to browser listeners with sub-100ms latency
 - [ ] **Phase 5: Listener Web UI** - Mobile-first PWA with channel selection, volume control, and QR code access
 - [ ] **Phase 6: Admin Dashboard** - Channel configuration, real-time VU meters, listener counts, and server status monitoring
 - [ ] **Phase 7: Listener Advanced Features** - Mix balance slider, processing toggles, localization, and light/dark theme
@@ -94,7 +94,7 @@ Plans:
   2. A second channel can stream independently to its own set of listeners at the same time
   3. End-to-end latency from audio input to listener playback is under 100ms on a local WiFi network (measured, not estimated)
   4. Opening a browser, connecting via WebSocket, and receiving audio completes within 3 seconds on a typical phone
-**Plans**: 6 plans
+**Plans**: 7 plans
 
 Plans:
 - [ ] 04-01-PLAN.md -- DRY/SRP audit fixes: extract debounce, error-message utilities; consolidate channel selection builder
@@ -103,6 +103,7 @@ Plans:
 - [ ] 04-04-PLAN.md -- TransportManager, SignalingHandler, protoo listener WebSocket (/ws/listener)
 - [ ] 04-05-PLAN.md -- StreamingSubsystem facade, server integration, graceful shutdown
 - [ ] 04-06-PLAN.md -- Channel switching, latency estimation, Live/Stable mode, admin streaming API
+- [ ] 04-07-PLAN.md -- [GAP FIX] Fix GStreamer level parser: stdout wiring + GValueArray regex (UAT Tests 6-9, 12, 14)
 
 ### Phase 5: Listener Web UI
 **Goal**: Congregation members can open a URL on their phone, see available channels, pick one, and hear audio -- the core user-facing experience
@@ -220,7 +221,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 1. Project Foundation & Configuration | 8/8 | Verified (UAT v3: 12/12) | 2026-02-07 |
 | 2. Audio Capture Pipeline | 9/9 | Verified (5/5 must-haves) | 2026-02-07 |
 | 3. Audio Processing | 3/3 | Verified (12/12 must-haves) | 2026-02-07 |
-| 4. WebRTC Streaming Core | 6/6 | Verified (10/10 must-haves) | 2026-02-08 |
+| 4. WebRTC Streaming Core | 6/7 | UAT: 7/14 passed, gap fix planned | 2026-02-08 |
 | 5. Listener Web UI | 0/4 | Not started | - |
 | 6. Admin Dashboard | 0/4 | Not started | - |
 | 7. Listener Advanced Features | 0/4 | Not started | - |
