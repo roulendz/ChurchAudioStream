@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 5 complete -- Listener Web UI verified (5/5 must-haves)
+**Current focus:** Phase 5 gap closure complete -- UAT Tests 8 and 10 addressed
 
 ## Current Position
 
 Phase: 5 of 10 (Listener Web UI)
-Plan: 4 of 4 in current phase
-Status: Phase verified (5/5 must-haves)
-Last activity: 2026-02-10 -- Phase 5 verified: all 4 plans + post-merge integration complete
+Plan: 5 of 5 in current phase
+Status: Phase gap closure complete (ready for re-verification)
+Last activity: 2026-02-10 -- Completed 05-05-PLAN.md (gap closure for UAT Tests 8, 10)
 
-Progress: [=================================] 94% (33/35 plans)
+Progress: [==================================] 97% (34/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 33
+- Total plans completed: 34
 - Average duration: 7 minutes
-- Total execution time: 4.13 hours
+- Total execution time: 4.21 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [=================================] 94% (33/35 plans)
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
 | 04 | 9/9 | 61 min | 7 min |
-| 05 | 4/4 | 29 min | 7 min |
+| 05 | 5/5 | 34 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-01 (9m), 05-02 (10m), 05-03 (6m), 05-04 (4m)
-- Trend: Phase 5 complete. 05-03 and 05-04 ran in parallel.
+- Last 5 plans: 05-02 (10m), 05-03 (6m), 05-04 (4m), 05-merge, 05-05 (5m)
+- Trend: Phase 5 gap closure complete. Ready for UAT re-verification.
 
 *Updated after each plan completion*
 
@@ -184,6 +184,12 @@ Recent decisions affecting current work:
 - [05-merge]: useMediaSession wired into PlayerView with useMemo config (null when not playing/reconnecting)
 - [05-merge]: App.tsx passes all audio hooks (setVolume, mute, unmute, isMuted, getConsumer) to PlayerView
 - [05-merge]: useMediasoup exposes getConsumer() getter for connection quality polling
+- [05-05]: buildFullChannelList() in StreamingSubsystem merges all configured channels with active router status
+- [05-05]: channelListProvider callback decouples SignalingHandler from RouterManager-only list (optional, defaults to active-only)
+- [05-05]: 30s RECONNECT_TIMEOUT_MS stops protoo infinite retry loop and transitions to disconnected
+- [05-05]: OfflineScreen accepts connectionState prop; shows on server unreachable, not just WiFi down
+- [05-05]: Try Again reloads page (fresh protoo peer needed after timeout closes old one)
+- [05-05]: Safety-net error handler + setImmediate in removePipeline prevents ERR_UNHANDLED_ERROR during shutdown
 
 ### Pending Todos
 
@@ -206,6 +212,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Phase 5 verified -- all plans complete, post-merge integration done
+Stopped at: Completed 05-05-PLAN.md (gap closure for UAT Tests 8, 10)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
