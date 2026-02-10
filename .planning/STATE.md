@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 5 in progress -- Listener Web UI
+**Current focus:** Phase 5 complete -- Listener Web UI verified (5/5 must-haves)
 
 ## Current Position
 
 Phase: 5 of 10 (Listener Web UI)
 Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-02-10 -- Completed 05-03-PLAN.md (player view polish: volume, pulsing ring, connection quality, elapsed time)
+Status: Phase verified (5/5 must-haves)
+Last activity: 2026-02-10 -- Phase 5 verified: all 4 plans + post-merge integration complete
 
 Progress: [=================================] 94% (33/35 plans)
 
@@ -181,6 +181,9 @@ Recent decisions affecting current work:
 - [05-03]: Connection quality thresholds: Good (RTT<50ms, loss<1%), Fair (RTT<150ms, loss<5%), Poor (anything worse)
 - [05-03]: PlayerView volume/mute/getConsumer props optional for backward compatibility with current App.tsx
 - [05-03]: Player accent color changed from #6c63ff to #4a90d9 via --accent-color CSS custom property
+- [05-merge]: useMediaSession wired into PlayerView with useMemo config (null when not playing/reconnecting)
+- [05-merge]: App.tsx passes all audio hooks (setVolume, mute, unmute, isMuted, getConsumer) to PlayerView
+- [05-merge]: useMediasoup exposes getConsumer() getter for connection quality polling
 
 ### Pending Todos
 
@@ -203,7 +206,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 05-03-PLAN.md (player view polish) -- Phase 5 complete
+Stopped at: Phase 5 verified -- all plans complete, post-merge integration done
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
-Integration note: useMediaSession hook needs wiring into PlayerView after 05-03 + 05-04 merge. PlayerView optional props (setVolume, mute, unmute, isMuted, getConsumer) need wiring in App.tsx.

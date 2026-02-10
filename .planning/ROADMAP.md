@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Audio Capture Pipeline** - GStreamer-based capture from AES67 multicast and local audio devices with stream discovery
 - [x] **Phase 3: Audio Processing** - Per-channel normalization, Speech/Music mode, and Opus encoding via GStreamer
 - [x] **Phase 4: WebRTC Streaming Core** - mediasoup SFU distributing Opus audio to browser listeners with sub-100ms latency
-- [ ] **Phase 5: Listener Web UI** - Mobile-first PWA with channel selection, volume control, and QR code access
+- [x] **Phase 5: Listener Web UI** - Mobile-first PWA with channel selection, volume control, and QR code access
 - [ ] **Phase 6: Admin Dashboard** - Channel configuration, real-time VU meters, listener counts, and server status monitoring
 - [ ] **Phase 7: Listener Advanced Features** - Mix balance slider, processing toggles, localization, and light/dark theme
 - [ ] **Phase 8: Reliability & Self-Healing** - Auto-reconnection, pipeline crash recovery, worker rotation, and network diagnostics
@@ -224,7 +224,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Audio Capture Pipeline | 9/9 | Verified (5/5 must-haves) | 2026-02-07 |
 | 3. Audio Processing | 3/3 | Verified (12/12 must-haves) | 2026-02-07 |
 | 4. WebRTC Streaming Core | 9/9 | Verified (UAT v3: 6/6) | 2026-02-10 |
-| 5. Listener Web UI | 0/4 | Planned | - |
+| 5. Listener Web UI | 4/4 | Verified (5/5 must-haves) | 2026-02-10 |
 | 6. Admin Dashboard | 0/4 | Not started | - |
 | 7. Listener Advanced Features | 0/4 | Not started | - |
 | 8. Reliability & Self-Healing | 0/5 | Not started | - |
