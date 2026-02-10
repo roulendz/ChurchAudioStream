@@ -13,10 +13,6 @@
  *
  * Scroll position is saved when leaving the channel list and restored
  * when returning.
- *
- * NOTE: useMediaSession is not integrated into PlayerView here because
- * 05-03 owns PlayerView in this wave. The hook is ready for integration
- * after both plans merge.
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -45,8 +41,10 @@ function App() {
   const { peer, connectionState, isReconnect, clearReconnect } =
     useSignaling();
   const { channels } = useChannelList(peer);
-  const { connectToChannel, disconnect, handleReconnect } = useMediasoup();
-  const { startPlayback, stopPlayback } = useAudioPlayback();
+  const { connectToChannel, disconnect, handleReconnect, getConsumer } =
+    useMediasoup();
+  const { startPlayback, stopPlayback, setVolume, mute, unmute, isMuted } =
+    useAudioPlayback();
   const { preferences, setLastChannel, isReturningListener } = usePreferences();
   const { canInstall, promptInstall } = usePwaInstall(isReturningListener);
 
@@ -150,6 +148,11 @@ function App() {
             connectToChannel={connectToChannel}
             startPlayback={startPlayback}
             disconnectMediasoup={disconnect}
+            setVolume={setVolume}
+            mute={mute}
+            unmute={unmute}
+            isMuted={isMuted}
+            getConsumer={getConsumer}
           />
         </div>
       )}

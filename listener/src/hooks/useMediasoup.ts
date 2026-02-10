@@ -46,6 +46,8 @@ export interface UseMediasoupResult {
   disconnect: () => void;
   /** Reset device on reconnection (WiFi drop recovery). */
   handleReconnect: () => void;
+  /** Get the active consumer for stats polling. */
+  getConsumer: () => mediasoupTypes.Consumer | null;
 }
 
 export function useMediasoup(): UseMediasoupResult {
@@ -129,5 +131,10 @@ export function useMediasoup(): UseMediasoupResult {
     [disconnect],
   );
 
-  return { connectToChannel, disconnect, handleReconnect };
+  const getConsumer = useCallback(
+    (): mediasoupTypes.Consumer | null => consumerRef.current,
+    [],
+  );
+
+  return { connectToChannel, disconnect, handleReconnect, getConsumer };
 }

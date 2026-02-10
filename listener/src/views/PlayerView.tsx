@@ -20,11 +20,13 @@
  * Volume always starts at 70% (0.7) -- does NOT persist across sessions.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import type { Peer } from "../lib/signaling-client";
 import type { ListenerChannelInfo } from "../lib/types";
 import type { QualityLevel } from "../lib/connection-quality";
 import { assessConnectionQuality } from "../lib/connection-quality";
+import { useMediaSession } from "../hooks/useMediaSession";
+import type { MediaSessionConfig } from "../hooks/useMediaSession";
 import { PulsingRing } from "../components/PulsingRing";
 import { VolumeSlider } from "../components/VolumeSlider";
 import { ConnectionQuality } from "../components/ConnectionQuality";
@@ -114,6 +116,49 @@ export function PlayerView({
 
   // Use external muted state if provided, otherwise local
   const isMuted = isMutedExternal ?? localMuted;
+
+  // ---- Media Session API (lock screen controls) ----
+  const mediaSessionConfig = useMemo<MediaSessionConfig | null>(() => {
+    if (playerState !== "playing" && playerState !== "reconnecting")
+      return null;
+    return {
+      channelName: channel.name,
+      description: channel.description || "Church Audio Stream",
+      onPlay: () => {
+        if (unmuteExternal) {
+          unmuteExternal();
+        } else {
+          setLocalMuted(false);
+        }
+      },
+      onPause: () => {
+        if (muteExternal) {
+          muteExternal();
+        } else {
+          setLocalMuted(true);
+        }
+      },
+    };
+  }, [
+    playerState,
+    channel.name,
+    channel.description,
+    muteExternal,
+    unmuteExternal,
+  ]);
+
+  const { updatePlaybackState } = useMediaSession(mediaSessionConfig);
+
+  // Sync playback state with Media Session API
+  useEffect(() => {
+    if (playerState === "playing") {
+      updatePlaybackState(isMuted ? "paused" : "playing");
+    } else if (playerState === "reconnecting") {
+      updatePlaybackState("paused");
+    } else {
+      updatePlaybackState("none");
+    }
+  }, [playerState, isMuted, updatePlaybackState]);
 
   // ---- WebRTC Handshake on mount ----
   useEffect(() => {

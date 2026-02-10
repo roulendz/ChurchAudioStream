@@ -6,10 +6,6 @@
  * paused.
  *
  * Guard: if (!("mediaSession" in navigator)) all operations are no-ops.
- *
- * NOTE: This hook is ready for use but not yet integrated into
- * PlayerView. Integration should happen after 05-03 and 05-04 merge
- * (PlayerView is owned by 05-03 in this wave).
  */
 
 import { useEffect, useCallback, useRef } from "react";
