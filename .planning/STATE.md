@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 4 verified -- WebRTC Streaming Core (UAT v3: 6/6 passed)
+**Current focus:** Phase 5 in progress -- Listener Web UI
 
 ## Current Position
 
-Phase: 4 of 10 (WebRTC Streaming Core)
-Plan: 9 of 9 in current phase (all plans + gap closure complete)
-Status: Phase verified (UAT v3: 6/6 passed)
-Last activity: 2026-02-10 -- Phase 4 UAT v3 complete, all gap fixes verified
+Phase: 5 of 10 (Listener Web UI)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-10 -- Completed 05-01-PLAN.md (server metadata + PWA scaffold)
 
-Progress: [============================] 83% (29/35 plans)
+Progress: [=============================] 86% (30/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 29
+- Total plans completed: 30
 - Average duration: 7 minutes
-- Total execution time: 3.6 hours
+- Total execution time: 3.8 hours
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [============================] 83% (29/35 plans)
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
 | 04 | 9/9 | 61 min | 7 min |
+| 05 | 1/4 | 9 min | 9 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-06 (12m), 04-07 (4m), 04-08 (6m), 04-09 (4m)
-- Trend: All gap closure plans complete. Phase 4 fully done.
+- Last 5 plans: 04-07 (4m), 04-08 (6m), 04-09 (4m), 05-01 (9m)
+- Trend: Phase 5 started. First plan slightly longer due to new project scaffold + npm installs.
 
 *Updated after each plan completion*
 
@@ -154,6 +155,12 @@ Recent decisions affecting current work:
 - [04-09]: Three defense-in-depth guards on isShuttingDown (handleCrashedPipeline, scheduleRestart, setTimeout callback)
 - [04-09]: removeAudioSubsystemListeners called as step 0 of streaming stop() before notification/drain
 - [04-09]: prepareShutdown() is synchronous, called before async streaming teardown to close race window
+- [05-01]: buildEnrichedChannelList() only computes listenerCount when displayToggles.showListenerCount is true (server optimization)
+- [05-01]: Listener count broadcast reuses heartbeat interval (30s) wired in ListenerWebSocketHandler
+- [05-01]: resolveFullChannelConfig() extracted per SRP (Phase 5 display fields vs Phase 4 streaming fields)
+- [05-01]: sidecar/public/ is build output from listener/ project (added to .gitignore)
+- [05-01]: vite-plugin-pwa generateSW with autoUpdate (silent SW updates per locked decision)
+- [05-01]: NetworkOnly for /api/ and /ws/ in service worker runtimeCaching
 
 ### Pending Todos
 
@@ -176,6 +183,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 04-08-PLAN.md (WSS admin upgrade interference fix)
+Stopped at: Completed 05-01-PLAN.md (server metadata extension + listener PWA scaffold)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
