@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 5 verified -- all gaps closed, ready for Phase 6
+**Current focus:** Phase 6 in progress -- dashboard shell and API gaps complete, channel config next
 
 ## Current Position
 
-Phase: 5 of 10 (Listener Web UI)
-Plan: 5 of 5 in current phase
-Status: Phase verified (7/7 must-haves, gaps closed)
-Last activity: 2026-02-10 -- Phase 5 verified: all 5 plans + gap closure complete
+Phase: 6 of 10 (Admin Dashboard)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-10 -- Completed 06-01-PLAN.md (dashboard shell + server API gaps)
 
-Progress: [===================================] 100% (35/35 plans)
+Progress: [████████████████████████████████████░░░░] 90% (36/40 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 35
+- Total plans completed: 36
 - Average duration: 7 minutes
-- Total execution time: 4.30 hours
+- Total execution time: 4.42 hours
 
 **By Phase:**
 
@@ -32,10 +32,11 @@ Progress: [===================================] 100% (35/35 plans)
 | 03 | 3/3 | 17 min | 6 min |
 | 04 | 9/9 | 61 min | 7 min |
 | 05 | 5/5 | 34 min | 7 min |
+| 06 | 1/4 | 7 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-02 (10m), 05-03 (6m), 05-04 (4m), 05-merge, 05-05 (5m)
-- Trend: Phase 5 gap closure complete. Ready for UAT re-verification.
+- Last 5 plans: 05-03 (6m), 05-04 (4m), 05-merge, 05-05 (5m), 06-01 (7m)
+- Trend: Phase 6 started. Dashboard shell and API gaps complete.
 
 *Updated after each plan completion*
 
@@ -190,6 +191,11 @@ Recent decisions affecting current work:
 - [05-05]: OfflineScreen accepts connectionState prop; shows on server unreachable, not just WiFi down
 - [05-05]: Try Again reloads page (fresh protoo peer needed after timeout closes old one)
 - [05-05]: Safety-net error handler + setImmediate in removePipeline prevents ERR_UNHANDLED_ERROR during shutdown
+- [06-01]: State-driven navigation via useState<DashboardSection> (no react-router needed for 4-section admin dashboard)
+- [06-01]: CSS grid dashboard layout: 220px sidebar + 1fr content, sticky header spanning full width
+- [06-01]: Responsive mobile layout converts sidebar to horizontal scrollable tab bar at <640px
+- [06-01]: sortOrder defaults to channels.size on creation; reorderChannels() sets new indices from provided array
+- [06-01]: getPipelineToChannelMap() built on each level flush (100ms interval, low overhead)
 
 ### Pending Todos
 
@@ -212,6 +218,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Phase 5 verified -- all 5 plans + gap closure complete, ready for Phase 6
+Stopped at: Completed 06-01-PLAN.md (dashboard shell + server API gaps)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
