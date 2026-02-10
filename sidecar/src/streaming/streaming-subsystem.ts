@@ -139,18 +139,7 @@ export class StreamingSubsystem extends EventEmitter {
     this.transportManager = new TransportManager(config.server.host);
 
     // 5. Create channel metadata resolver (bridges AudioSubsystem -> RouterManager)
-    const metadataResolver: ChannelMetadataResolver = (channelId: string) => {
-      const channel = this.audioSubsystem.getChannel(channelId);
-      if (!channel) return undefined;
-      const channelConfig = this.resolveChannelConfig(channelId);
-      return {
-        name: channel.name,
-        outputFormat: channel.outputFormat,
-        defaultChannel: channelConfig?.defaultChannel ?? false,
-        latencyMode: channelConfig?.latencyMode ?? "live",
-        lossRecovery: channelConfig?.lossRecovery ?? "nack",
-      };
-    };
+    const metadataResolver: ChannelMetadataResolver = this.buildMetadataResolver();
 
     // 6. Create channel streaming config resolver (latencyMode, lossRecovery, defaultChannel)
     const channelConfigResolver: ChannelStreamingConfigResolver = (
@@ -475,6 +464,43 @@ export class StreamingSubsystem extends EventEmitter {
     };
   }
 
+  /**
+   * Resolve Phase 5 channel display metadata (description, language, displayToggles)
+   * from the config store. Returns undefined if channel not found.
+   */
+  private resolveFullChannelConfig(channelId: string):
+    | {
+        description: string;
+        language: { code: string; label: string; flag: string };
+        displayToggles: { showDescription: boolean; showListenerCount: boolean; showLiveBadge: boolean };
+      }
+    | undefined {
+    const config = this.configStore.get();
+    const channelConfigs = (config.audio as Record<string, unknown>).channels as Array<{
+      id: string;
+      description?: string;
+      language?: { code?: string; label?: string; flag?: string };
+      displayToggles?: { showDescription?: boolean; showListenerCount?: boolean; showLiveBadge?: boolean };
+    }>;
+
+    const found = channelConfigs?.find((ch) => ch.id === channelId);
+    if (!found) return undefined;
+
+    return {
+      description: found.description ?? "",
+      language: {
+        code: found.language?.code ?? "",
+        label: found.language?.label ?? "",
+        flag: found.language?.flag ?? "",
+      },
+      displayToggles: {
+        showDescription: found.displayToggles?.showDescription ?? false,
+        showListenerCount: found.displayToggles?.showListenerCount ?? false,
+        showLiveBadge: found.displayToggles?.showLiveBadge ?? false,
+      },
+    };
+  }
+
   // -------------------------------------------------------------------------
   // Private: AudioSubsystem event wiring
   // -------------------------------------------------------------------------
@@ -628,12 +654,16 @@ export class StreamingSubsystem extends EventEmitter {
       const channel = this.audioSubsystem.getChannel(channelId);
       if (!channel) return undefined;
       const channelConfig = this.resolveChannelConfig(channelId);
+      const fullConfig = this.resolveFullChannelConfig(channelId);
       return {
         name: channel.name,
         outputFormat: channel.outputFormat,
         defaultChannel: channelConfig?.defaultChannel ?? false,
         latencyMode: channelConfig?.latencyMode ?? "live",
         lossRecovery: channelConfig?.lossRecovery ?? "nack",
+        description: fullConfig?.description ?? "",
+        language: fullConfig?.language ?? { code: "", label: "", flag: "" },
+        displayToggles: fullConfig?.displayToggles ?? { showDescription: false, showListenerCount: false, showLiveBadge: false },
       };
     };
   }

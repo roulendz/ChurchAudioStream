@@ -101,6 +101,20 @@ export const ProcessingSchema = z.object({
   rtpOutput: RtpOutputSchema.default(() => RtpOutputSchema.parse({})),
 });
 
+/** Language metadata for a channel (flag emoji, display label, ISO code). */
+export const ChannelLanguageSchema = z.object({
+  code: z.string().default(""),
+  label: z.string().default(""),
+  flag: z.string().default(""),
+});
+
+/** Admin toggles controlling what listeners see on channel cards. */
+export const ChannelDisplayTogglesSchema = z.object({
+  showDescription: z.boolean().default(false),
+  showListenerCount: z.boolean().default(false),
+  showLiveBadge: z.boolean().default(false),
+});
+
 /** An app-level audio channel (mix bus) persisted in config. */
 export const ChannelSchema = z.object({
   id: z.string().uuid(),
@@ -112,6 +126,9 @@ export const ChannelSchema = z.object({
   latencyMode: z.enum(["live", "stable"]).default("live"),
   lossRecovery: z.enum(["nack", "plc"]).default("nack"),
   defaultChannel: z.boolean().default(false),
+  description: z.string().max(200).default(""),
+  language: ChannelLanguageSchema.default(() => ChannelLanguageSchema.parse({})),
+  displayToggles: ChannelDisplayTogglesSchema.default(() => ChannelDisplayTogglesSchema.parse({})),
 });
 
 /** Pipeline crash recovery settings. */

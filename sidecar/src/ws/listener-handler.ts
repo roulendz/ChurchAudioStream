@@ -120,6 +120,7 @@ export class ListenerWebSocketHandler {
   private readonly protooRoom: protooServer.Room;
   private readonly rateLimiter: SlidingWindowRateLimiter;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private listenerCountBroadcastInterval: ReturnType<typeof setInterval> | null = null;
   private peerCounter = 0;
 
   /**
@@ -168,6 +169,9 @@ export class ListenerWebSocketHandler {
 
     // Start heartbeat zombie detection
     this.startHeartbeat(config.heartbeatIntervalMs);
+
+    // Start periodic listener count broadcast (same 30s interval as heartbeat)
+    this.startListenerCountBroadcast(config.heartbeatIntervalMs);
 
     logger.info("Listener WebSocket handler initialized", {
       path: LISTENER_WS_PATH,
@@ -267,6 +271,22 @@ export class ListenerWebSocketHandler {
     logger.info("Listener heartbeat started", { intervalMs });
   }
 
+  /**
+   * Broadcast listener counts to all non-admin listeners on a periodic interval.
+   * Uses the same interval as the heartbeat (30s default) per context decision.
+   */
+  private startListenerCountBroadcast(intervalMs: number): void {
+    this.listenerCountBroadcastInterval = setInterval(() => {
+      this.signalingHandler.broadcastListenerCounts().catch((error) => {
+        logger.error("Failed to broadcast listener counts", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }, intervalMs);
+
+    logger.info("Listener count broadcast started", { intervalMs });
+  }
+
   // -----------------------------------------------------------------------
   // Cleanup
   // -----------------------------------------------------------------------
@@ -279,6 +299,12 @@ export class ListenerWebSocketHandler {
     if (this.heartbeatInterval !== null) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
+    }
+
+    // Stop listener count broadcast
+    if (this.listenerCountBroadcastInterval !== null) {
+      clearInterval(this.listenerCountBroadcastInterval);
+      this.listenerCountBroadcastInterval = null;
     }
 
     // Stop rate limiter cleanup

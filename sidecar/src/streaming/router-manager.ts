@@ -38,6 +38,9 @@ export type ChannelMetadataResolver = (channelId: string) =>
       defaultChannel: boolean;
       latencyMode: "live" | "stable";
       lossRecovery: "nack" | "plc";
+      description: string;
+      language: { code: string; label: string; flag: string };
+      displayToggles: { showDescription: boolean; showListenerCount: boolean; showLiveBadge: boolean };
     }
   | undefined;
 
@@ -235,6 +238,10 @@ export class RouterManager extends EventEmitter {
         hasActiveProducer: !entry.audioProducer.closed,
         latencyMode: metadata.latencyMode,
         lossRecovery: metadata.lossRecovery,
+        description: metadata.description,
+        language: metadata.language,
+        listenerCount: 0, // Populated by SignalingHandler.buildEnrichedChannelList()
+        displayToggles: metadata.displayToggles,
       });
     }
 

@@ -126,6 +126,41 @@ export class SignalingHandler extends EventEmitter {
   }
 
   // -----------------------------------------------------------------------
+  // Enriched channel list (injects listener counts per admin toggles)
+  // -----------------------------------------------------------------------
+
+  /**
+   * Build the channel list enriched with listener counts.
+   * Only computes listener counts when the admin has toggled showListenerCount on
+   * (server optimization per locked decision -- don't waste CPU if hidden).
+   */
+  private buildEnrichedChannelList(): ListenerChannelInfo[] {
+    const baseList = this.routerManager.getActiveChannelList(
+      this.metadataResolver,
+    );
+
+    return baseList.map((channel) => ({
+      ...channel,
+      listenerCount: channel.displayToggles.showListenerCount
+        ? this.getListenerCount(channel.id)
+        : 0,
+    }));
+  }
+
+  // -----------------------------------------------------------------------
+  // Listener count broadcast (called on 30s interval by ListenerWebSocketHandler)
+  // -----------------------------------------------------------------------
+
+  /**
+   * Broadcast current listener counts to all non-admin listeners.
+   * Sends the full enriched channel list so clients stay in sync.
+   */
+  async broadcastListenerCounts(): Promise<void> {
+    const channels = this.buildEnrichedChannelList();
+    await this.notifyAllListeners("listenerCounts", { channels });
+  }
+
+  // -----------------------------------------------------------------------
   // Peer lifecycle
   // -----------------------------------------------------------------------
 
@@ -151,11 +186,8 @@ export class SignalingHandler extends EventEmitter {
     this.peers.set(peer.id, peer);
     this.heartbeatTracker.recordActivity(peer.id);
 
-    // Push active channels immediately on connect (no request-response round-trip)
-    // Include default channel ID so first-time listeners auto-connect
-    const activeChannels = this.routerManager.getActiveChannelList(
-      this.metadataResolver,
-    );
+    // Push enriched channels immediately on connect (includes listener counts)
+    const activeChannels = this.buildEnrichedChannelList();
     const defaultChannelId = this.getDefaultChannelId();
     peer
       .notify("activeChannels", {
@@ -315,10 +347,8 @@ export class SignalingHandler extends EventEmitter {
    * with remaining active channels per locked decision.
    */
   async disconnectListenersFromChannel(channelId: string): Promise<void> {
-    const activeChannels = this.routerManager.getActiveChannelList(
-      this.metadataResolver,
-    );
-    const remainingChannels = activeChannels.filter((ch) => ch.id !== channelId);
+    const enrichedChannels = this.buildEnrichedChannelList();
+    const remainingChannels = enrichedChannels.filter((ch) => ch.id !== channelId);
 
     for (const peer of this.peers.values()) {
       if (peer.closed) continue;
@@ -787,9 +817,7 @@ export class SignalingHandler extends EventEmitter {
       }
 
       // Both switch and fallback failed -- notify with remaining active channels
-      const activeChannels = this.routerManager.getActiveChannelList(
-        this.metadataResolver,
-      );
+      const activeChannels = this.buildEnrichedChannelList();
 
       peer
         .notify("activeChannels", { channels: activeChannels })

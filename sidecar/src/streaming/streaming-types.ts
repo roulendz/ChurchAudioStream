@@ -138,6 +138,22 @@ export interface ListenerChannelInfo {
   readonly latencyMode: LatencyMode;
   /** Loss recovery strategy (NACK retransmission vs Opus PLC). */
   readonly lossRecovery: LossRecoveryMode;
+  /** Admin-set channel description. */
+  readonly description: string;
+  /** Language metadata (ISO code, display label, flag emoji). */
+  readonly language: {
+    readonly code: string;
+    readonly label: string;
+    readonly flag: string;
+  };
+  /** Current listener count for this channel. */
+  readonly listenerCount: number;
+  /** Admin toggles controlling what listeners see on channel cards. */
+  readonly displayToggles: {
+    readonly showDescription: boolean;
+    readonly showListenerCount: boolean;
+    readonly showLiveBadge: boolean;
+  };
 }
 
 /** Worker resource snapshot for admin dashboard display. */
