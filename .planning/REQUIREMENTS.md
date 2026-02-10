@@ -40,16 +40,16 @@
 
 ### Admin Desktop GUI
 
-- [ ] **AGUI-01**: Dashboard layout with sidebar navigation
-- [ ] **AGUI-02**: Channel configuration: display name, input source (Dante or device), visibility, ordering
-- [ ] **AGUI-03**: Per-channel audio processing controls (normalization level, Speech/Music mode)
-- [ ] **AGUI-04**: Real-time VU meters showing audio levels per channel
-- [ ] **AGUI-05**: Listener count per channel and total
-- [ ] **AGUI-06**: Server status display (CPU, memory, active connections)
+- [x] **AGUI-01**: Dashboard layout with sidebar navigation
+- [x] **AGUI-02**: Channel configuration: display name, input source (Dante or device), visibility, ordering
+- [x] **AGUI-03**: Per-channel audio processing controls (normalization level, Speech/Music mode)
+- [x] **AGUI-04**: Real-time VU meters showing audio levels per channel
+- [x] **AGUI-05**: Listener count per channel and total
+- [x] **AGUI-06**: Server status display (CPU, memory, active connections)
 - [ ] **AGUI-07**: Stream health monitoring (latency, packet loss, buffer status per channel)
 - [ ] **AGUI-08**: Statistics and graphs for engagement (listener trends, peak usage)
-- [ ] **AGUI-09**: Web server port configuration
-- [ ] **AGUI-10**: QR code display/generation for listener access
+- [x] **AGUI-09**: Web server port configuration
+- [x] **AGUI-10**: QR code display/generation for listener access
 - [ ] **AGUI-11**: Light/dark theme with system-adaptive auto-detection and manual override
 
 ### Configuration & Persistence
