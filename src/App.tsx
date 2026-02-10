@@ -1,10 +1,14 @@
+import { useState } from "react";
 import "./App.css";
 import { useServerStatus } from "./hooks/useServerStatus";
-import { ConnectionStatus } from "./components/ConnectionStatus";
+import { DashboardShell } from "./components/layout/DashboardShell";
+import type { DashboardSection } from "./components/layout/Sidebar";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { LogViewer } from "./components/LogViewer";
 
 function App() {
+  const [currentSection, setCurrentSection] = useState<DashboardSection>("overview");
+
   const {
     config,
     connectionStatus,
@@ -15,27 +19,46 @@ function App() {
   } = useServerStatus();
 
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <h1 className="app-title">Church Audio Stream - Admin</h1>
-        <ConnectionStatus
-          status={connectionStatus}
-          reconnectAttempts={reconnectAttempts}
-        />
-      </header>
+    <DashboardShell
+      currentSection={currentSection}
+      onNavigate={setCurrentSection}
+      connectionStatus={connectionStatus}
+      reconnectAttempts={reconnectAttempts}
+    >
+      {currentSection === "overview" && (
+        <div className="section-placeholder">
+          <h2>Overview</h2>
+          <p>Overview coming soon</p>
+        </div>
+      )}
 
-      <main className="app-content">
-        <SettingsPanel
-          config={config}
-          interfaces={interfaces}
-          onSave={updateConfig}
-        />
-      </main>
+      {currentSection === "channels" && (
+        <div className="section-placeholder">
+          <h2>Channels</h2>
+          <p>Channel configuration coming soon</p>
+        </div>
+      )}
 
-      <footer className="app-footer">
-        <LogViewer subscribe={subscribe} />
-      </footer>
-    </div>
+      {currentSection === "monitoring" && (
+        <div className="section-placeholder">
+          <h2>Monitoring</h2>
+          <p>Monitoring coming soon</p>
+        </div>
+      )}
+
+      {currentSection === "settings" && (
+        <>
+          <SettingsPanel
+            config={config}
+            interfaces={interfaces}
+            onSave={updateConfig}
+          />
+          <div className="settings-log-viewer">
+            <LogViewer subscribe={subscribe} />
+          </div>
+        </>
+      )}
+    </DashboardShell>
   );
 }
 

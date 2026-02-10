@@ -1,5 +1,5 @@
 /* ============================
-   App Shell Layout
+   Design Tokens
    ============================ */
 
 :root {
@@ -20,6 +20,7 @@
   --border-focus: #5a9cf5;
   --radius: 6px;
   --font-mono: "Cascadia Code", "Fira Code", "JetBrains Mono", monospace;
+  --sidebar-width: 220px;
 }
 
 * {
@@ -35,28 +36,31 @@ body {
   line-height: 1.5;
 }
 
-.app-shell {
-  display: flex;
-  flex-direction: column;
+/* ============================
+   Dashboard Shell Grid Layout
+   ============================ */
+
+.dashboard-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-rows: auto 1fr;
   min-height: 100vh;
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 0 1rem;
 }
 
 /* ============================
-   Header with Connection Status
+   Dashboard Header
    ============================ */
 
-.app-header {
+.dashboard-header {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 0;
+  padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--border);
+  background-color: var(--bg-primary);
   position: sticky;
   top: 0;
-  background-color: var(--bg-primary);
   z-index: 100;
 }
 
@@ -64,6 +68,76 @@ body {
   font-size: 1.25rem;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+/* ============================
+   Dashboard Sidebar
+   ============================ */
+
+.dashboard-sidebar {
+  grid-row: 2;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  padding: 1rem 0;
+  overflow-y: auto;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.6rem 1.25rem;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+
+.sidebar-nav-item--active {
+  border-left-color: var(--accent);
+  color: var(--accent);
+  background: rgba(90, 156, 245, 0.08);
+}
+
+/* ============================
+   Dashboard Content Area
+   ============================ */
+
+.dashboard-content {
+  grid-row: 2;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+/* ============================
+   Section Placeholders
+   ============================ */
+
+.section-placeholder {
+  color: var(--text-secondary);
+}
+
+.section-placeholder h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+/* Settings section spacing for log viewer below settings panel */
+.settings-log-viewer {
+  margin-top: 1.5rem;
 }
 
 /* ============================
@@ -119,15 +193,6 @@ body {
   50% {
     opacity: 0.4;
   }
-}
-
-/* ============================
-   Main Content Area
-   ============================ */
-
-.app-content {
-  flex: 1;
-  padding: 1.5rem 0;
 }
 
 /* ============================
@@ -282,10 +347,6 @@ body {
 /* ============================
    Log Viewer
    ============================ */
-
-.app-footer {
-  padding: 1rem 0 1.5rem;
-}
 
 .log-viewer {
   background-color: var(--bg-secondary);
@@ -446,7 +507,32 @@ body {
    ============================ */
 
 @media (max-width: 640px) {
-  .app-header {
+  .dashboard-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-sidebar {
+    grid-row: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 0.5rem 0;
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .sidebar-nav-item {
+    border-left: none;
+    border-bottom: 3px solid transparent;
+    padding: 0.5rem 1rem;
+    white-space: nowrap;
+  }
+
+  .sidebar-nav-item--active {
+    border-left-color: transparent;
+    border-bottom-color: var(--accent);
+  }
+
+  .dashboard-header {
     flex-direction: column;
     gap: 0.5rem;
     align-items: flex-start;
