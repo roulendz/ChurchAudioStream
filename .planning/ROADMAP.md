@@ -117,13 +117,14 @@ Plans:
   3. Listener can switch to a different channel without navigating back to the home screen
   4. After adding the PWA to their home screen, the app loads from cache and remembers their last-used channel and volume
   5. Admin can display a QR code that, when scanned by a phone, opens the listener Web UI directly
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
 - [ ] 05-01-PLAN.md -- Server-side channel metadata extension + Listener Vite+React+PWA project scaffold
 - [ ] 05-02-PLAN.md -- Signaling client, mediasoup WebRTC playback, channel list view, and basic player
 - [ ] 05-03-PLAN.md -- Player UI: volume slider, mute, pulsing ring, connection quality, elapsed time
 - [ ] 05-04-PLAN.md -- Preferences persistence, PWA install prompt, Media Session, share/QR, offline screen
+- [ ] 05-05-PLAN.md -- [GAP FIX] Stopped channels visible + offline screen on server disconnect + shutdown crash fix (UAT Tests 8, 10)
 
 ### Phase 6: Admin Dashboard
 **Goal**: Sound technicians can configure channels, see real-time audio levels, monitor listener counts, and check server health from the desktop GUI
@@ -224,7 +225,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Audio Capture Pipeline | 9/9 | Verified (5/5 must-haves) | 2026-02-07 |
 | 3. Audio Processing | 3/3 | Verified (12/12 must-haves) | 2026-02-07 |
 | 4. WebRTC Streaming Core | 9/9 | Verified (UAT v3: 6/6) | 2026-02-10 |
-| 5. Listener Web UI | 4/4 | Verified (5/5 must-haves) | 2026-02-10 |
+| 5. Listener Web UI | 4/5 | UAT: 10/12 (2 gaps, plan 05 created) | 2026-02-10 |
 | 6. Admin Dashboard | 0/4 | Not started | - |
 | 7. Listener Advanced Features | 0/4 | Not started | - |
 | 8. Reliability & Self-Healing | 0/5 | Not started | - |
