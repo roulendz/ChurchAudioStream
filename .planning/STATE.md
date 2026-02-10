@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 6 in progress -- dashboard shell and API gaps complete, channel config next
+**Current focus:** Phase 6 in progress -- listener counts, server status, QR code complete
 
 ## Current Position
 
 Phase: 6 of 10 (Admin Dashboard)
-Plan: 1 of 4 in current phase
+Plan: 3 of 4 in current phase (06-01, 06-02, 06-04 complete; 06-03 parallel)
 Status: In progress
-Last activity: 2026-02-10 -- Completed 06-01-PLAN.md (dashboard shell + server API gaps)
+Last activity: 2026-02-10 -- Completed 06-02-PLAN.md (channel configuration UI)
 
-Progress: [████████████████████████████████████░░░░] 90% (36/40 plans)
+Progress: [██████████████████████████████████████░░] 95% (38/40 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 36
+- Total plans completed: 37
 - Average duration: 7 minutes
-- Total execution time: 4.42 hours
+- Total execution time: 4.50 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [███████████████████████
 | 03 | 3/3 | 17 min | 6 min |
 | 04 | 9/9 | 61 min | 7 min |
 | 05 | 5/5 | 34 min | 7 min |
-| 06 | 1/4 | 7 min | 7 min |
+| 06 | 2/4 | 12 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-03 (6m), 05-04 (4m), 05-merge, 05-05 (5m), 06-01 (7m)
-- Trend: Phase 6 started. Dashboard shell and API gaps complete.
+- Last 5 plans: 05-04 (4m), 05-merge, 05-05 (5m), 06-01 (7m), 06-04 (5m)
+- Trend: Phase 6 wave 2 in progress. Listener counts + server status + QR code complete.
 
 *Updated after each plan completion*
 
@@ -196,6 +196,11 @@ Recent decisions affecting current work:
 - [06-01]: Responsive mobile layout converts sidebar to horizontal scrollable tab bar at <640px
 - [06-01]: sortOrder defaults to channels.size on creation; reorderChannels() sets new indices from provided array
 - [06-01]: getPipelineToChannelMap() built on each level flush (100ms interval, low overhead)
+- [06-04]: Listener counts pushed via streaming:listener-count (no polling needed)
+- [06-04]: Server status polled every 10s (request-response, not push)
+- [06-04]: QR code URL uses config.network.domain || config.server.host (never loopback)
+- [06-04]: cpuPercent/memoryMb null until Phase 9 adds server-level resource tracking
+- [06-04]: Worker memory from streaming:status workers array (peakMemoryKb)
 
 ### Pending Todos
 
@@ -218,6 +223,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 06-01-PLAN.md (dashboard shell + server API gaps)
+Stopped at: Completed 06-04-PLAN.md (listener counts, server status, QR code)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
