@@ -44,7 +44,7 @@ const PROCESSING_DEBOUNCE_MS = 1500;
 
 /** Subset of AppChannel fields that can be updated after creation. */
 export type ChannelUpdatableFields = Partial<
-  Pick<AppChannel, "name" | "outputFormat" | "autoStart">
+  Pick<AppChannel, "name" | "outputFormat" | "autoStart" | "visible">
 >;
 
 /** Subset of SourceAssignment fields that can be updated after assignment. */
@@ -129,6 +129,8 @@ export class ChannelManager extends EventEmitter {
       sources: [],
       outputFormat,
       autoStart: true,
+      visible: true,
+      sortOrder: this.channels.size,
       status: "stopped",
       processing: {
         ...ProcessingDefaults,
@@ -190,6 +192,9 @@ export class ChannelManager extends EventEmitter {
     }
     if (updates.autoStart !== undefined) {
       channel.autoStart = updates.autoStart;
+    }
+    if (updates.visible !== undefined) {
+      channel.visible = updates.visible;
     }
 
     this.persistChannels();
@@ -596,9 +601,60 @@ export class ChannelManager extends EventEmitter {
     return this.channels.get(channelId);
   }
 
-  /** Get all channels as an array. */
+  /** Get all channels as an array, sorted by sortOrder ascending. */
   getAllChannels(): AppChannel[] {
-    return Array.from(this.channels.values());
+    return Array.from(this.channels.values()).sort(
+      (a, b) => a.sortOrder - b.sortOrder,
+    );
+  }
+
+  /**
+   * Reorder channels by setting sortOrder based on the provided ID array.
+   *
+   * Validates all IDs exist and the array length matches the channel count.
+   * Persists the new order and emits channel-updated for each changed channel.
+   */
+  reorderChannels(orderedIds: string[]): AppChannel[] {
+    if (orderedIds.length !== this.channels.size) {
+      throw new Error(
+        `Reorder array length (${orderedIds.length}) does not match channel count (${this.channels.size})`,
+      );
+    }
+
+    for (const id of orderedIds) {
+      if (!this.channels.has(id)) {
+        throw new Error(`Channel not found: ${id}`);
+      }
+    }
+
+    for (let i = 0; i < orderedIds.length; i++) {
+      const channel = this.channels.get(orderedIds[i])!;
+      if (channel.sortOrder !== i) {
+        channel.sortOrder = i;
+        this.emit("channel-updated", channel);
+      }
+    }
+
+    this.persistChannels();
+
+    logger.info(`Channels reordered`, { order: orderedIds });
+    return this.getAllChannels();
+  }
+
+  /**
+   * Build a reverse map from pipelineId to channelId.
+   *
+   * Used by the level broadcast to enrich level data with channelId
+   * so the admin UI can map VU meters to channels without a separate lookup.
+   */
+  getPipelineToChannelMap(): Map<string, string> {
+    const reverseMap = new Map<string, string>();
+    for (const [channelId, pipelineMap] of this.channelPipelines) {
+      for (const pipelineId of pipelineMap.values()) {
+        reverseMap.set(pipelineId, channelId);
+      }
+    }
+    return reverseMap;
   }
 
   /** Get all pipeline IDs associated with a channel. */
@@ -932,6 +988,8 @@ export class ChannelManager extends EventEmitter {
         sources: saved.sources.map(normalizeSourceAssignment),
         outputFormat: saved.outputFormat,
         autoStart: saved.autoStart,
+        visible: saved.visible ?? true,
+        sortOrder: saved.sortOrder ?? i,
         status: "stopped",
         processing: {
           mode: saved.processing.mode as ProcessingConfig["mode"],
@@ -977,6 +1035,8 @@ export class ChannelManager extends EventEmitter {
       sources: ch.sources.map(normalizeSourceAssignment),
       outputFormat: ch.outputFormat,
       autoStart: ch.autoStart,
+      visible: ch.visible,
+      sortOrder: ch.sortOrder,
       processing: {
         mode: ch.processing.mode,
         agc: normalizeAgcConfig(ch.processing.agc),

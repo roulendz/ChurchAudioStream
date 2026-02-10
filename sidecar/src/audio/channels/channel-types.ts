@@ -40,6 +40,10 @@ export interface AppChannel {
   sources: SourceAssignment[];
   outputFormat: ChannelOutputFormat;
   autoStart: boolean;
+  /** Whether this channel is visible to listeners (admin can hide channels). */
+  visible: boolean;
+  /** Display sort order (0-based, lower = higher in list). */
+  sortOrder: number;
   status: ChannelStatus;
   /** Per-channel audio processing configuration (AGC, Opus, RTP output, mode). */
   processing: ProcessingConfig;

@@ -116,6 +116,12 @@ export interface ChannelUpdatePayload {
   name?: string;
   outputFormat?: "mono" | "stereo";
   autoStart?: boolean;
+  visible?: boolean;
+}
+
+/** Request payload for channel:reorder. */
+export interface ChannelReorderPayload {
+  channelIds: string[];
 }
 
 /** Request payload for channel:source:add. */

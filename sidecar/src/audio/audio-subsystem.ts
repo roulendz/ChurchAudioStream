@@ -179,6 +179,14 @@ export class AudioSubsystem extends EventEmitter {
     return this.channelManager.updateSource(channelId, sourceIndex, updates);
   }
 
+  reorderChannels(orderedIds: string[]): AppChannel[] {
+    return this.channelManager.reorderChannels(orderedIds);
+  }
+
+  getPipelineToChannelMap(): Map<string, string> {
+    return this.channelManager.getPipelineToChannelMap();
+  }
+
   async startChannel(id: string): Promise<void> {
     return this.channelManager.startChannel(id);
   }

@@ -17,6 +17,7 @@ import type {
   ConfigUpdateResponsePayload,
   ChannelCreatePayload,
   ChannelUpdatePayload,
+  ChannelReorderPayload,
   ChannelSourceAddPayload,
   ChannelSourceRemovePayload,
   ChannelSourceUpdatePayload,
@@ -609,6 +610,7 @@ async function handleAudioMessageAsync(
         name: payload.name,
         outputFormat: payload.outputFormat,
         autoStart: payload.autoStart,
+        visible: payload.visible,
       });
       sendMessage(socket, "channel:updated", updated, message.requestId);
       break;
@@ -627,6 +629,22 @@ async function handleAudioMessageAsync(
       }
       await audioSubsystem.removeChannel(payload.channelId);
       sendMessage(socket, "channel:removed", { channelId: payload.channelId }, message.requestId);
+      break;
+    }
+
+    case "channel:reorder": {
+      const payload = message.payload as ChannelReorderPayload | undefined;
+      if (!payload?.channelIds || !Array.isArray(payload.channelIds) || payload.channelIds.length === 0) {
+        sendMessage(
+          socket,
+          "error",
+          { message: "Missing or invalid field: channelIds (non-empty string array required)", originalType: message.type },
+          message.requestId,
+        );
+        return;
+      }
+      const reorderedChannels = audioSubsystem.reorderChannels(payload.channelIds);
+      sendMessage(socket, "channels:list", { channels: reorderedChannels }, message.requestId);
       break;
     }
 
@@ -877,6 +895,13 @@ function wireAudioBroadcasts(
 
   const levelFlushInterval = setInterval(() => {
     if (!hasBufferedLevels) return;
+
+    // Enrich each level entry with channelId so admin UI can map VU meters to channels
+    const pipelineToChannel = audioSubsystem.getPipelineToChannelMap();
+    for (const [pipelineId, levelData] of Object.entries(levelBuffer)) {
+      (levelData as Record<string, unknown>).channelId =
+        pipelineToChannel.get(pipelineId) ?? null;
+    }
 
     const payload = { levels: levelBuffer };
     broadcastToAdminClients(clientMap, "levels:update", payload);

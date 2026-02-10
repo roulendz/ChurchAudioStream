@@ -122,6 +122,8 @@ export const ChannelSchema = z.object({
   sources: z.array(SourceAssignmentSchema).default([]),
   outputFormat: z.enum(["mono", "stereo"]).default("mono"),
   autoStart: z.boolean().default(true),
+  visible: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).default(0),
   processing: ProcessingSchema.default(() => ProcessingSchema.parse({})),
   latencyMode: z.enum(["live", "stable"]).default("live"),
   lossRecovery: z.enum(["nack", "plc"]).default("nack"),
