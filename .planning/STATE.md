@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 5 of 10 (Listener Web UI)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-10 -- Completed 05-01-PLAN.md (server metadata + PWA scaffold)
+Last activity: 2026-02-10 -- Completed 05-02-PLAN.md (channel list + player + WebRTC playback)
 
-Progress: [=============================] 86% (30/35 plans)
+Progress: [==============================] 89% (31/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 30
+- Total plans completed: 31
 - Average duration: 7 minutes
-- Total execution time: 3.8 hours
+- Total execution time: 3.97 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [=============================] 86% (30/35 plans)
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
 | 04 | 9/9 | 61 min | 7 min |
-| 05 | 1/4 | 9 min | 9 min |
+| 05 | 2/4 | 19 min | 10 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-07 (4m), 04-08 (6m), 04-09 (4m), 05-01 (9m)
-- Trend: Phase 5 started. First plan slightly longer due to new project scaffold + npm installs.
+- Last 5 plans: 04-08 (6m), 04-09 (4m), 05-01 (9m), 05-02 (10m)
+- Trend: Phase 5 plans take ~10m avg due to large React component + hook authoring with full TypeScript compilation.
 
 *Updated after each plan completion*
 
@@ -161,6 +161,14 @@ Recent decisions affecting current work:
 - [05-01]: sidecar/public/ is build output from listener/ project (added to .gitignore)
 - [05-01]: vite-plugin-pwa generateSW with autoUpdate (silent SW updates per locked decision)
 - [05-01]: NetworkOnly for /api/ and /ws/ in service worker runtimeCaching
+- [05-02]: protoo-client ambient declarations (.d.ts) for browser build (same pattern as server-side protoo-server)
+- [05-02]: mediasoup Device cached as module-level singleton; resetDevice() clears on WiFi reconnection
+- [05-02]: Audio engine visibilitychange listener resumes suspended AudioContext on mobile
+- [05-02]: useSignaling isReconnect flag distinguishes initial connect from WiFi recovery reconnect
+- [05-02]: useChannelList replaces full channel list on notifications (not merge, avoids stale state after idle)
+- [05-02]: PlayerView consumerClosed notification handling shows Channel offline state
+- [05-02]: Internal React state for navigation (not pushState -- only two views)
+- [05-02]: ListenerChannelInfo local type in listener/src/lib/types.ts mirrors server-side interface
 
 ### Pending Todos
 
@@ -183,6 +191,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 05-01-PLAN.md (server metadata extension + listener PWA scaffold)
+Stopped at: Completed 05-02-PLAN.md (channel list + player + WebRTC playback)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
