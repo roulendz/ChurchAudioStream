@@ -146,13 +146,14 @@ export class StreamingSubsystem extends EventEmitter {
       channelId: string,
     ) => this.resolveChannelConfig(channelId);
 
-    // 7. Create SignalingHandler
+    // 7. Create SignalingHandler (with full channel list provider for offline card support)
     this.signalingHandler = new SignalingHandler(
       this.routerManager,
       this.transportManager,
       metadataResolver,
       channelConfigResolver,
       config.streaming.heartbeatIntervalMs,
+      () => this.buildFullChannelList(),
     );
 
     // 7. Create ListenerWebSocketHandler (uses dummy server internally, not httpsServer)
@@ -636,16 +637,58 @@ export class StreamingSubsystem extends EventEmitter {
     await this.pushActiveChannelList();
   }
 
-  /** Push the current active channel list to all connected listeners. */
+  /** Push the full channel list (including stopped channels) to all connected listeners. */
   private async pushActiveChannelList(): Promise<void> {
     if (!this.signalingHandler || !this.routerManager) return;
 
-    const channels = this.routerManager.getActiveChannelList(
-      this.buildMetadataResolver(),
-    );
+    const channels = this.buildFullChannelList();
     await this.signalingHandler.notifyAllListeners("activeChannels", {
       channels,
     });
+  }
+
+  /**
+   * Build the full channel list merging ALL configured channels from AudioSubsystem
+   * with active-router status from RouterManager.
+   *
+   * Unlike RouterManager.getActiveChannelList() which only returns channels with
+   * active mediasoup routers, this includes stopped channels (hasActiveProducer: false)
+   * so they appear as dimmed offline cards in the listener UI.
+   */
+  private buildFullChannelList(): ListenerChannelInfo[] {
+    const allChannels = this.audioSubsystem.getChannels();
+    const metadataResolver = this.buildMetadataResolver();
+    const channelList: ListenerChannelInfo[] = [];
+
+    for (const channel of allChannels) {
+      const metadata = metadataResolver(channel.id);
+      if (!metadata) continue;
+
+      const hasRouter = this.routerManager!.hasChannel(channel.id);
+      // If channel has an active router, check producer status; otherwise offline
+      let hasActiveProducer = false;
+      if (hasRouter) {
+        const producer = this.routerManager!.getProducerForChannel(channel.id);
+        hasActiveProducer = producer != null && !producer.closed;
+      }
+
+      channelList.push({
+        id: channel.id,
+        name: metadata.name,
+        outputFormat: metadata.outputFormat,
+        defaultChannel: metadata.defaultChannel,
+        hasActiveProducer,
+        latencyMode: metadata.latencyMode,
+        lossRecovery: metadata.lossRecovery,
+        description: metadata.description,
+        language: metadata.language,
+        listenerCount: 0, // Populated by SignalingHandler.buildEnrichedChannelList()
+        displayToggles: metadata.displayToggles,
+      });
+    }
+
+    channelList.sort((a, b) => a.name.localeCompare(b.name));
+    return channelList;
   }
 
   /** Build a ChannelMetadataResolver using AudioSubsystem and config store. */

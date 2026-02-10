@@ -107,6 +107,7 @@ export class SignalingHandler extends EventEmitter {
   private readonly transportManager: TransportManager;
   private readonly metadataResolver: ChannelMetadataResolver;
   private readonly channelConfigResolver: ChannelStreamingConfigResolver;
+  private readonly channelListProvider: () => ListenerChannelInfo[];
   private readonly heartbeatTracker: PeerHeartbeatTracker;
   private readonly peers: Map<string, ProtooPeer> = new Map();
 
@@ -116,12 +117,15 @@ export class SignalingHandler extends EventEmitter {
     metadataResolver: ChannelMetadataResolver,
     channelConfigResolver: ChannelStreamingConfigResolver,
     heartbeatIntervalMs: number,
+    channelListProvider?: () => ListenerChannelInfo[],
   ) {
     super();
     this.routerManager = routerManager;
     this.transportManager = transportManager;
     this.metadataResolver = metadataResolver;
     this.channelConfigResolver = channelConfigResolver;
+    this.channelListProvider = channelListProvider
+      ?? (() => this.routerManager.getActiveChannelList(this.metadataResolver));
     this.heartbeatTracker = new PeerHeartbeatTracker(heartbeatIntervalMs);
   }
 
@@ -135,9 +139,7 @@ export class SignalingHandler extends EventEmitter {
    * (server optimization per locked decision -- don't waste CPU if hidden).
    */
   private buildEnrichedChannelList(): ListenerChannelInfo[] {
-    const baseList = this.routerManager.getActiveChannelList(
-      this.metadataResolver,
-    );
+    const baseList = this.channelListProvider();
 
     return baseList.map((channel) => ({
       ...channel,
@@ -348,7 +350,9 @@ export class SignalingHandler extends EventEmitter {
    */
   async disconnectListenersFromChannel(channelId: string): Promise<void> {
     const enrichedChannels = this.buildEnrichedChannelList();
-    const remainingChannels = enrichedChannels.filter((ch) => ch.id !== channelId);
+    // Send ALL channels including the stopped one (with hasActiveProducer: false)
+    // so the listener UI shows it as a dimmed offline card
+    const remainingChannels = enrichedChannels;
 
     for (const peer of this.peers.values()) {
       if (peer.closed) continue;

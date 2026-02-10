@@ -98,13 +98,26 @@ export class PipelineManager extends EventEmitter {
 
   /**
    * Remove a pipeline entirely: stop it, remove all listeners, and delete from registry.
+   *
+   * A safety-net error handler is attached before stop() to prevent ERR_UNHANDLED_ERROR
+   * when buffered stdio data arrives after the exit event but before listeners are removed.
+   * A single event-loop tick (setImmediate) allows stdio streams to drain before cleanup.
    */
   async removePipeline(pipelineId: string): Promise<void> {
     const pipeline = this.pipelines.get(pipelineId);
     if (!pipeline) return;
 
     this.clearRestartTimer(pipelineId);
+
+    // Safety net: catch errors emitted during shutdown teardown to prevent
+    // ERR_UNHANDLED_ERROR when stdio buffers flush after stop resolves
+    const safetyErrorHandler = (): void => {};
+    pipeline.on("error", safetyErrorHandler);
+
     await pipeline.stop();
+
+    // Allow one event-loop tick for stdio to drain before removing listeners
+    await new Promise<void>((resolve) => setImmediate(resolve));
     pipeline.removeAllListeners();
 
     this.pipelines.delete(pipelineId);
