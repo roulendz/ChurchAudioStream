@@ -99,6 +99,7 @@ function App() {
               onAddSource={addSource}
               onRemoveSource={removeSource}
               onBack={() => setSelectedChannelId(null)}
+              sendMessage={sendMessage}
             />
           ) : showCreateDialog ? (
             <ChannelCreateDialog

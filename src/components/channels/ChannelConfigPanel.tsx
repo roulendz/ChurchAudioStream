@@ -5,6 +5,7 @@ import type {
 } from "../../hooks/useChannels";
 import type { DiscoveredSource } from "../../hooks/useSources";
 import { SourceSelector } from "./SourceSelector";
+import { ProcessingControls } from "./ProcessingControls";
 
 interface ChannelConfigPanelProps {
   channel: AdminChannel;
@@ -25,6 +26,7 @@ interface ChannelConfigPanelProps {
   ) => void;
   onRemoveSource: (channelId: string, sourceIndex: number) => void;
   onBack: () => void;
+  sendMessage?: (type: string, payload?: unknown) => void;
 }
 
 export function ChannelConfigPanel({
@@ -34,6 +36,7 @@ export function ChannelConfigPanel({
   onAddSource,
   onRemoveSource,
   onBack,
+  sendMessage,
 }: ChannelConfigPanelProps) {
   const [editName, setEditName] = useState(channel.name);
   const [editFormat, setEditFormat] = useState<ChannelOutputFormat>(
@@ -156,6 +159,23 @@ export function ChannelConfigPanel({
             }
           />
         </div>
+
+        {/* Audio processing controls */}
+        {sendMessage && (
+          <div className="channel-config-section">
+            <ProcessingControls
+              channelId={channel.id}
+              processing={{
+                mode: (channel.processing as Record<string, unknown>).mode as string ?? "speech",
+                agc: {
+                  enabled: ((channel.processing as Record<string, unknown>).agc as Record<string, unknown>)?.enabled as boolean ?? true,
+                  targetLufs: ((channel.processing as Record<string, unknown>).agc as Record<string, unknown>)?.targetLufs as number ?? -16,
+                },
+              }}
+              sendMessage={sendMessage}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
