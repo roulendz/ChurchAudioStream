@@ -11,17 +11,17 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 Phase: 5 of 10 (Listener Web UI)
 Plan: 4 of 4 in current phase
-Status: In progress (05-03 executing in parallel)
-Last activity: 2026-02-10 -- Completed 05-04-PLAN.md (PWA experience: preferences, sharing, offline, install prompt)
+Status: Phase complete
+Last activity: 2026-02-10 -- Completed 05-03-PLAN.md (player view polish: volume, pulsing ring, connection quality, elapsed time)
 
-Progress: [================================] 91% (32/35 plans)
+Progress: [=================================] 94% (33/35 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 32
+- Total plans completed: 33
 - Average duration: 7 minutes
-- Total execution time: 4.03 hours
+- Total execution time: 4.13 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [================================] 91% (32/35 plans)
 | 02 | 9/9 | 56 min | 6 min |
 | 03 | 3/3 | 17 min | 6 min |
 | 04 | 9/9 | 61 min | 7 min |
-| 05 | 3/4 | 23 min | 8 min |
+| 05 | 4/4 | 29 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-09 (4m), 05-01 (9m), 05-02 (10m), 05-04 (4m)
-- Trend: 05-04 faster due to hooks-only + component authoring without complex signaling handshakes.
+- Last 5 plans: 05-01 (9m), 05-02 (10m), 05-03 (6m), 05-04 (4m)
+- Trend: Phase 5 complete. 05-03 and 05-04 ran in parallel.
 
 *Updated after each plan completion*
 
@@ -176,6 +176,11 @@ Recent decisions affecting current work:
 - [05-04]: OfflineScreen uses z-index 500 to overlay all other content including reconnecting banner
 - [05-04]: Scroll position saved in useRef (not localStorage) since it is transient within a session
 - [05-04]: ChannelListView no longer manages its own localStorage read for lastChannelId (moved to App-level usePreferences)
+- [05-03]: VolumeSlider uses native <input type=range> with CSS custom property --volume-fill for accent-colored fill
+- [05-03]: PulsingRing is CSS-only with two concentric rings using transform: scale() for GPU acceleration
+- [05-03]: Connection quality thresholds: Good (RTT<50ms, loss<1%), Fair (RTT<150ms, loss<5%), Poor (anything worse)
+- [05-03]: PlayerView volume/mute/getConsumer props optional for backward compatibility with current App.tsx
+- [05-03]: Player accent color changed from #6c63ff to #4a90d9 via --accent-color CSS custom property
 
 ### Pending Todos
 
@@ -198,7 +203,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 05-04-PLAN.md (PWA experience: preferences, sharing, offline, install prompt)
+Stopped at: Completed 05-03-PLAN.md (player view polish) -- Phase 5 complete
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
-Integration note: useMediaSession hook needs wiring into PlayerView after 05-03 + 05-04 merge.
+Integration note: useMediaSession hook needs wiring into PlayerView after 05-03 + 05-04 merge. PlayerView optional props (setVolume, mute, unmute, isMuted, getConsumer) need wiring in App.tsx.
