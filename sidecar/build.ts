@@ -123,7 +123,28 @@ function build(): void {
   // Step 7: Clean up temporary pkg output
   fs.unlinkSync(actualPkgOutput);
 
-  // Step 8: Report
+  // Step 8: Copy mediasoup-worker binary next to sidecar
+  // pkg can't bundle native executables, so we ship it alongside
+  const workerSrcName = isWindows ? "mediasoup-worker.exe" : "mediasoup-worker";
+  const workerSrc = path.resolve(
+    SIDECAR_ROOT,
+    "node_modules",
+    "mediasoup",
+    "worker",
+    "out",
+    "Release",
+    workerSrcName,
+  );
+  const workerDest = path.resolve(TAURI_BINARIES_DIR, workerSrcName);
+  if (fs.existsSync(workerSrc)) {
+    fs.copyFileSync(workerSrc, workerDest);
+    console.log(`[build] Copied mediasoup-worker to: ${workerDest}`);
+  } else {
+    console.warn(`[build] WARNING: mediasoup-worker not found at ${workerSrc}`);
+    console.warn(`[build]   Streaming will not work in the packaged binary.`);
+  }
+
+  // Step 9: Report
   const binarySize = fs.statSync(finalBinaryPath).size;
   const binarySizeMB = (binarySize / (1024 * 1024)).toFixed(1);
   console.log(`\n=== Build Complete ===`);

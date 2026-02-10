@@ -13,6 +13,7 @@
     "active": true,
     "targets": "all",
     "externalBin": ["binaries/server"],
+    "resources": ["binaries/mediasoup-worker*"],
     "icon": []
   },
   "app": {

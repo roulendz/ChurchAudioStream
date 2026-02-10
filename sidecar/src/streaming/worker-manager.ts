@@ -13,6 +13,8 @@
  */
 
 import { EventEmitter } from "node:events";
+import * as path from "node:path";
+import * as fs from "node:fs";
 import * as mediasoup from "mediasoup";
 import type { types as mediasoupTypes } from "mediasoup";
 import type { WorkerState, WorkerResourceInfo } from "./streaming-types.js";
@@ -25,6 +27,84 @@ import { toErrorMessage } from "../utils/error-message.js";
 
 const WORKER_MEMORY_WARNING_THRESHOLD_KB = 512_000; // 500 MB
 const WORKER_MEMORY_CHECK_INTERVAL_MS = 60_000; // 60 seconds
+
+// ---------------------------------------------------------------------------
+// pkg-safe mediasoup worker binary resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the list of directories where mediasoup-worker might live.
+ *
+ * When the sidecar runs as a pkg binary inside Tauri, the default
+ * mediasoup resolution points into the virtual `C:\snapshot\...`
+ * filesystem which cannot contain native executables. We search:
+ *
+ *  1. Next to the compiled executable  (process.execPath dir)
+ *  2. `binaries/` subdirectory         (Tauri resources preserve relative paths)
+ *  3. Current working directory         (fallback)
+ *  4. `binaries/` under cwd            (fallback for Tauri resource layout)
+ */
+function buildWorkerBinCandidateDirs(): string[] {
+  const exeDir = path.dirname(process.execPath);
+  const cwd = process.cwd();
+  const dirs = [
+    exeDir,
+    path.join(exeDir, "binaries"),
+    cwd,
+    path.join(cwd, "binaries"),
+  ];
+
+  // Deduplicate (exeDir and cwd may be the same)
+  return [...new Set(dirs.map((d) => path.resolve(d)))];
+}
+
+/**
+ * Resolve the mediasoup-worker binary path.
+ *
+ * Inside a pkg snapshot (`process.execPath` points to the compiled binary),
+ * mediasoup's default resolution returns a `C:\snapshot\...` path that
+ * doesn't exist on disk. In that case, search several candidate directories
+ * where Tauri may have placed the worker binary as a bundled resource.
+ */
+function resolveWorkerBin(): string | undefined {
+  // If env explicitly set, honour it
+  if (process.env["MEDIASOUP_WORKER_BIN"]) {
+    return process.env["MEDIASOUP_WORKER_BIN"];
+  }
+
+  const defaultBin = mediasoup.workerBin;
+
+  // If the default path exists on disk, mediasoup can find it (dev mode)
+  if (fs.existsSync(defaultBin) || fs.existsSync(defaultBin + ".exe")) {
+    return undefined; // let mediasoup use its default
+  }
+
+  // pkg mode: search candidate directories for the worker binary
+  const workerName =
+    process.platform === "win32" ? "mediasoup-worker.exe" : "mediasoup-worker";
+
+  const candidateDirs = buildWorkerBinCandidateDirs();
+
+  for (const dir of candidateDirs) {
+    const candidate = path.join(dir, workerName);
+    if (fs.existsSync(candidate)) {
+      logger.info(`Using mediasoup worker found at: ${candidate}`);
+      return candidate;
+    }
+  }
+
+  // Not found — log all searched paths to aid debugging, then let mediasoup
+  // throw its normal ENOENT error with the default path.
+  const searchedPaths = candidateDirs
+    .map((dir) => path.join(dir, workerName))
+    .join(", ");
+  logger.warn(
+    `mediasoup-worker not found at default path (${defaultBin}) or any candidate: ${searchedPaths}`,
+  );
+  return undefined;
+}
+
+const resolvedWorkerBin = resolveWorkerBin();
 
 // ---------------------------------------------------------------------------
 // WorkerMemoryMonitor (private helper -- SRP)
@@ -264,6 +344,7 @@ export class WorkerManager extends EventEmitter {
       logLevel: this.config.logLevel,
       rtcMinPort: this.config.rtcMinPort,
       rtcMaxPort: this.config.rtcMaxPort,
+      ...(resolvedWorkerBin ? { workerBin: resolvedWorkerBin } : {}),
     });
 
     const monitor = new WorkerMemoryMonitor(
