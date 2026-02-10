@@ -97,7 +97,7 @@ function App() {
   if (connectionState === "connecting") {
     return (
       <div className="app-container app-container--centered">
-        <OfflineScreen />
+        <OfflineScreen connectionState={connectionState} />
         <div className="app-spinner" />
         <p className="app-status">Connecting...</p>
       </div>
@@ -107,7 +107,7 @@ function App() {
   if (connectionState === "disconnected") {
     return (
       <div className="app-container app-container--centered">
-        <OfflineScreen />
+        <OfflineScreen connectionState={connectionState} />
         <p className="app-status">
           Can't reach the audio server. Make sure you're on the church WiFi.
         </p>
@@ -117,7 +117,7 @@ function App() {
 
   return (
     <div className="app-container">
-      <OfflineScreen />
+      <OfflineScreen connectionState={connectionState} />
 
       {connectionState === "reconnecting" && (
         <div className="app-reconnecting-banner" role="alert">

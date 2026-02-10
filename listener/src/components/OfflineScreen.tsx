@@ -1,19 +1,28 @@
 /**
  * Full-screen offline overlay.
  *
- * Detects online/offline via navigator.onLine + window events.
- * Shows a friendly church WiFi message when the device is offline.
- * Returns null when online (renders nothing).
+ * Shows when EITHER the device has no network (navigator.onLine === false)
+ * OR the signaling server is unreachable (connectionState === "disconnected").
+ *
+ * When the issue is server unreachability (WiFi is up but sidecar is down),
+ * Try Again reloads the page to create a fresh protoo peer since the old
+ * one has already given up and closed.
  */
 
 import { useState, useEffect, useCallback } from "react";
+import type { ConnectionState } from "../hooks/useSignaling";
 
-export function OfflineScreen() {
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+interface OfflineScreenProps {
+  /** Signaling connection state. When "disconnected", server is unreachable. */
+  connectionState?: ConnectionState;
+}
+
+export function OfflineScreen({ connectionState }: OfflineScreenProps) {
+  const [isNetworkOffline, setIsNetworkOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
-    const handleOnline = (): void => setIsOffline(false);
-    const handleOffline = (): void => setIsOffline(true);
+    const handleOnline = (): void => setIsNetworkOffline(false);
+    const handleOffline = (): void => setIsNetworkOffline(true);
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
@@ -24,9 +33,14 @@ export function OfflineScreen() {
     };
   }, []);
 
+  // Show offline screen when EITHER network is down OR server is unreachable
+  const isOffline = isNetworkOffline || connectionState === "disconnected";
+
   const handleTryAgain = useCallback(() => {
+    // Reload page to fully re-establish the signaling connection.
+    // Once protoo gives up, only a fresh page load can create a new peer.
     if (navigator.onLine) {
-      setIsOffline(false);
+      window.location.reload();
     }
   }, []);
 

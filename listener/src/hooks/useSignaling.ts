@@ -19,6 +19,9 @@ export type ConnectionState =
   | "disconnected"
   | "reconnecting";
 
+/** Max time (ms) to stay in "reconnecting" before giving up and showing offline screen. */
+const RECONNECT_TIMEOUT_MS = 30_000;
+
 export interface UseSignalingResult {
   /** The protoo Peer instance (null until created). */
   peer: Peer | null;
@@ -40,9 +43,36 @@ export function useSignaling(): UseSignalingResult {
   const peerRef = useRef<Peer | null>(null);
   const hasConnectedOnce = useRef(false);
   const abortedRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearReconnect = useCallback(() => {
     setIsReconnect(false);
+  }, []);
+
+  /**
+   * Start the reconnection wall-clock timeout if not already running.
+   * After RECONNECT_TIMEOUT_MS, gives up and transitions to "disconnected"
+   * (which triggers the OfflineScreen). Also closes the protoo peer to stop
+   * its infinite _runWebSocket() retry loop.
+   */
+  const startReconnectTimeout = useCallback(() => {
+    if (reconnectTimerRef.current) return; // Already running
+    reconnectTimerRef.current = setTimeout(() => {
+      reconnectTimerRef.current = null;
+      if (abortedRef.current) return;
+      setConnectionState("disconnected");
+      // Close the peer to stop protoo's infinite retry loop
+      if (peerRef.current && !peerRef.current.closed) {
+        peerRef.current.close();
+      }
+    }, RECONNECT_TIMEOUT_MS);
+  }, []);
+
+  const clearReconnectTimeout = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -54,6 +84,8 @@ export function useSignaling(): UseSignalingResult {
 
     peer.on("open", () => {
       if (abortedRef.current) return;
+
+      clearReconnectTimeout();
 
       if (hasConnectedOnce.current) {
         // Reconnected after a disconnection
@@ -68,6 +100,7 @@ export function useSignaling(): UseSignalingResult {
     peer.on("disconnected", () => {
       if (abortedRef.current) return;
       setConnectionState("reconnecting");
+      startReconnectTimeout();
     });
 
     peer.on("close", () => {
@@ -79,16 +112,18 @@ export function useSignaling(): UseSignalingResult {
       if (abortedRef.current) return;
       // Still retrying -- keep showing reconnecting
       setConnectionState("reconnecting");
+      startReconnectTimeout();
     });
 
     return () => {
       abortedRef.current = true;
+      clearReconnectTimeout();
       if (!peer.closed) {
         peer.close();
       }
       peerRef.current = null;
     };
-  }, []);
+  }, [startReconnectTimeout, clearReconnectTimeout]);
 
   return {
     peer: peerRef.current,
