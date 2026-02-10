@@ -1,21 +1,452 @@
+/* ========================================================================
+ * App container & layout
+ * ======================================================================== */
+
 .app-container {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   min-height: 100vh;
-  padding: 24px;
-  text-align: center;
+  width: 100%;
+  position: relative;
 }
 
-.app-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #ffffff;
-  margin-bottom: 12px;
+.app-container--centered {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
 }
 
 .app-status {
   font-size: 1rem;
   color: #a0a0b0;
+  max-width: 280px;
+  line-height: 1.6;
+}
+
+/* ========================================================================
+ * View transitions (opacity fade, 200ms)
+ * ======================================================================== */
+
+.app-view {
+  transition: opacity 200ms ease-in-out;
+}
+
+.app-view--visible {
+  opacity: 1;
+}
+
+.app-view--hidden {
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+
+/* ========================================================================
+ * Reconnecting banner
+ * ======================================================================== */
+
+.app-reconnecting-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 8px 16px;
+  background-color: #e67e22;
+  color: #ffffff;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* ========================================================================
+ * Spinner (used in connecting state and player view)
+ * ======================================================================== */
+
+.app-spinner,
+.player-view__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #6c63ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ========================================================================
+ * Channel List View
+ * ======================================================================== */
+
+.channel-list-view {
+  padding: 24px 16px;
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.channel-list-view__header {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.channel-list-view__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.channel-list-view__listener-count {
+  font-size: 0.875rem;
+  color: #8a8a9a;
+}
+
+/* Empty state */
+.channel-list-view__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 32px;
+}
+
+.channel-list-view__empty-text {
+  font-size: 1rem;
+  color: #8a8a9a;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* Card list */
+.channel-list-view__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ========================================================================
+ * Channel Card
+ * ======================================================================== */
+
+.channel-card {
+  position: relative;
+  background-color: #25253e;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition:
+    opacity 300ms ease,
+    transform 100ms ease;
+  min-height: 48px;
+  overflow: hidden;
+}
+
+.channel-card--live:active {
+  transform: scale(0.98);
+}
+
+.channel-card--offline {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+
+.channel-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.channel-card__language {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.channel-card__flag {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.channel-card__lang-label {
+  font-size: 0.8125rem;
+  color: #a0a0b0;
+  font-weight: 500;
+}
+
+.channel-card__badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.channel-card__badge--live {
+  background-color: rgba(46, 204, 113, 0.2);
+  color: #2ecc71;
+}
+
+.channel-card__badge--offline {
+  background-color: rgba(149, 165, 166, 0.2);
+  color: #95a5a6;
+}
+
+.channel-card__name {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.channel-card__description {
+  font-size: 0.8125rem;
+  color: #8a8a9a;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.channel-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.channel-card__listeners {
+  font-size: 0.75rem;
+  color: #6c63ff;
+}
+
+.channel-card__last-listened {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #e67e22;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.channel-card__offline-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ========================================================================
+ * Toast
+ * ======================================================================== */
+
+.toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #3a3a5e;
+  color: #e0e0e0;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  z-index: 200;
+  animation: toast-in 200ms ease-out;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-width: calc(100vw - 32px);
+  text-align: center;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* ========================================================================
+ * Player View
+ * ======================================================================== */
+
+.player-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.player-view__header {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.player-view__back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background-color 150ms ease;
+}
+
+.player-view__back-btn:active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.player-view__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  gap: 48px;
+}
+
+.player-view__channel-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.player-view__flag {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.player-view__channel-name {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.player-view__language {
+  font-size: 0.9375rem;
+  color: #a0a0b0;
+}
+
+.player-view__status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 120px;
+  justify-content: center;
+}
+
+.player-view__connecting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.player-view__status-text {
+  font-size: 1rem;
+  color: #a0a0b0;
+}
+
+/* Start Listening button */
+.player-view__start-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 48px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #6c63ff;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 100ms ease;
+  min-height: 56px;
+}
+
+.player-view__start-btn:active {
+  background-color: #5a52e0;
+  transform: scale(0.97);
+}
+
+/* Playing indicator (placeholder for pulsing ring in Plan 03) */
+.player-view__playing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.player-view__playing-indicator {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-color: rgba(108, 99, 255, 0.2);
+  border: 3px solid #6c63ff;
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+/* Error state */
+.player-view__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 280px;
+}
+
+.player-view__error-text {
+  font-size: 1rem;
+  color: #a0a0b0;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.player-view__retry-btn {
+  padding: 10px 32px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #6c63ff;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 100ms ease;
+}
+
+.player-view__retry-btn:active {
+  background-color: #5a52e0;
+  transform: scale(0.97);
 }

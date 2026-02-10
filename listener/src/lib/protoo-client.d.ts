@@ -62,7 +62,8 @@ declare module "protoo-client" {
       listener: (notification: ProtooNotification) => void,
     ): this;
 
-    off(event: string, listener: (...args: unknown[]) => void): this;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    off(event: string, listener: (...args: any[]) => void): this;
   }
 
   const version: string;
