@@ -1,0 +1,449 @@
+/* ========================================================================
+ * Player View - Full-screen mobile audio player layout
+ *
+ * Custom property: --accent-color used throughout player components.
+ * Layout: flex column, centered content, full viewport height.
+ * ======================================================================== */
+
+:root {
+  --accent-color: #4a90d9;
+}
+
+/* ========================================================================
+ * Player Layout (overrides skeleton from App.css)
+ * ======================================================================== */
+
+.player-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  width: 100%;
+}
+
+.player-view__header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.player-view__header-left {
+  display: flex;
+  align-items: center;
+}
+
+.player-view__header-center {
+  flex: 1;
+  text-align: center;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 12px;
+}
+
+.player-view__header-right {
+  display: flex;
+  align-items: center;
+  min-width: 40px;
+  justify-content: flex-end;
+}
+
+.player-view__back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background-color 150ms ease;
+}
+
+.player-view__back-btn:active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ========================================================================
+ * Player Content (center area)
+ * ======================================================================== */
+
+.player-view__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 24px 0;
+  gap: 32px;
+}
+
+/* Channel info above the ring */
+.player-view__channel-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.player-view__flag {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.player-view__channel-name {
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.player-view__language {
+  font-size: 0.875rem;
+  color: #a0a0b0;
+}
+
+.player-view__channel-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8125rem;
+  color: #8a8a9a;
+  margin-top: 4px;
+}
+
+.player-view__listener-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ========================================================================
+ * Elapsed time (below ring)
+ * ======================================================================== */
+
+.player-view__elapsed {
+  font-size: 0.875rem;
+  color: #8a8a9a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========================================================================
+ * Status states (connecting, ready, playing, reconnecting, offline, error)
+ * ======================================================================== */
+
+.player-view__status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 200px;
+  justify-content: center;
+  gap: 16px;
+}
+
+.player-view__connecting,
+.player-view__reconnecting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.player-view__status-text {
+  font-size: 1rem;
+  color: #a0a0b0;
+}
+
+/* Start Listening button */
+.player-view__start-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 48px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--accent-color);
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 100ms ease;
+  min-height: 56px;
+}
+
+.player-view__start-btn:active {
+  background-color: #3a7bc8;
+  transform: scale(0.97);
+}
+
+/* Playing state */
+.player-view__playing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Error state */
+.player-view__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 280px;
+}
+
+.player-view__error-text {
+  font-size: 1rem;
+  color: #a0a0b0;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.player-view__retry-btn {
+  padding: 10px 32px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--accent-color);
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 100ms ease;
+  min-height: 44px;
+}
+
+.player-view__retry-btn:active {
+  background-color: #3a7bc8;
+  transform: scale(0.97);
+}
+
+/* Channel offline state */
+.player-view__offline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.player-view__offline-text {
+  font-size: 1rem;
+  color: #a0a0b0;
+  text-align: center;
+}
+
+/* Reconnecting state */
+.player-view__reconnecting-text {
+  font-size: 1rem;
+  color: #e67e22;
+}
+
+/* ========================================================================
+ * Volume area (lower third)
+ * ======================================================================== */
+
+.player-view__volume-area {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 360px;
+  padding: 24px 16px 48px;
+  margin: 0 auto;
+}
+
+/* ========================================================================
+ * Pulsing Ring
+ * ======================================================================== */
+
+.pulsing-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pulsing-ring__outer {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid var(--accent-color);
+}
+
+.pulsing-ring__outer--active {
+  animation: pulseRingOuter 2s ease-in-out infinite;
+}
+
+.pulsing-ring__outer--paused {
+  opacity: 0.3;
+}
+
+.pulsing-ring__inner {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  opacity: 0.15;
+}
+
+.pulsing-ring__inner--active {
+  animation: pulseRingInner 2s ease-in-out infinite;
+}
+
+.pulsing-ring__inner--paused {
+  opacity: 0.08;
+}
+
+@keyframes pulseRingOuter {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes pulseRingInner {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.15;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.25;
+  }
+}
+
+/* ========================================================================
+ * Volume Slider
+ * ======================================================================== */
+
+.volume-slider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.volume-slider--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.volume-slider__mute-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background-color 150ms ease;
+}
+
+.volume-slider__mute-btn:active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Range input custom styling */
+.volume-slider__range {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    var(--accent-color) 0%,
+    var(--accent-color) var(--volume-fill, 70%),
+    rgba(255, 255, 255, 0.15) var(--volume-fill, 70%),
+    rgba(255, 255, 255, 0.15) 100%
+  );
+}
+
+/* Webkit thumb */
+.volume-slider__range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+.volume-slider__range::-webkit-slider-thumb:active {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Firefox thumb */
+.volume-slider__range::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+.volume-slider__range::-moz-range-thumb:active {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Firefox track */
+.volume-slider__range::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: transparent;
+}
+
+/* ========================================================================
+ * Connection Quality Icon
+ * ======================================================================== */
+
+.connection-quality {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+}
+
+.connection-quality__icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* ========================================================================
+ * Spinner override for player (accent color)
+ * ======================================================================== */
+
+.player-view .player-view__spinner {
+  border-top-color: var(--accent-color);
+}
