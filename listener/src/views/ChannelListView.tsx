@@ -5,28 +5,42 @@
  * has showListenerCount enabled), and a list of channel cards. Live
  * channels sort to top, offline channels are dimmed and non-tappable.
  *
- * Empty state: friendly message when no channels are available.
+ * Features:
+ * - Last-listened channel highlighted with "Continue listening" badge
+ * - ShareButton in header (top-right)
+ * - PWA install banner (dismissable) on second visit when available
+ * - Empty state: friendly message when no channels are available
  */
 
 import { useState, useCallback } from "react";
 import type { ListenerChannelInfo } from "../lib/types";
 import { ChannelCard } from "../components/ChannelCard";
+import { ShareButton } from "../components/ShareButton";
 import { Toast } from "../components/Toast";
-
-/** localStorage key for the last-listened channel ID. */
-const LAST_CHANNEL_KEY = "cas_last_channel";
 
 interface ChannelListViewProps {
   channels: ListenerChannelInfo[];
   onSelectChannel: (channelId: string) => void;
+  /** Last-listened channel ID from preferences. */
+  lastChannelId: string | null;
+  /** Listener URL for the share button. */
+  listenerUrl: string;
+  /** Whether the browser PWA install prompt is available. */
+  canInstall: boolean;
+  /** Trigger the browser's native PWA install prompt. */
+  promptInstall: () => Promise<void>;
 }
 
 export function ChannelListView({
   channels,
   onSelectChannel,
+  lastChannelId,
+  listenerUrl,
+  canInstall,
+  promptInstall,
 }: ChannelListViewProps) {
   const [toastVisible, setToastVisible] = useState(false);
-  const lastChannelId = localStorage.getItem(LAST_CHANNEL_KEY);
+  const [installBannerDismissed, setInstallBannerDismissed] = useState(false);
 
   // Compute total listener count (only from channels with showListenerCount on)
   const hasAnyListenerCountVisible = channels.some(
@@ -46,8 +60,6 @@ export function ChannelListView({
         return;
       }
 
-      // Save as last-listened channel
-      localStorage.setItem(LAST_CHANNEL_KEY, channelId);
       onSelectChannel(channelId);
     },
     [channels, onSelectChannel],
@@ -57,10 +69,24 @@ export function ChannelListView({
     setToastVisible(false);
   }, []);
 
+  const dismissInstallBanner = useCallback(() => {
+    setInstallBannerDismissed(true);
+  }, []);
+
+  const handleInstall = useCallback(async () => {
+    await promptInstall();
+    setInstallBannerDismissed(true);
+  }, [promptInstall]);
+
+  const showInstallBanner = canInstall && !installBannerDismissed;
+
   return (
     <div className="channel-list-view">
       <header className="channel-list-view__header">
-        <h1 className="channel-list-view__title">Select a channel to listen</h1>
+        <div className="channel-list-view__header-row">
+          <h1 className="channel-list-view__title">Select a channel to listen</h1>
+          <ShareButton listenerUrl={listenerUrl} />
+        </div>
         {hasAnyListenerCountVisible && totalListeners > 0 && (
           <p className="channel-list-view__listener-count">
             {totalListeners} {totalListeners === 1 ? "person" : "people"}{" "}
@@ -68,6 +94,29 @@ export function ChannelListView({
           </p>
         )}
       </header>
+
+      {showInstallBanner && (
+        <div className="install-banner">
+          <p className="install-banner__text">
+            Add to Home Screen for quick access
+          </p>
+          <div className="install-banner__actions">
+            <button
+              className="install-banner__install-btn"
+              onClick={handleInstall}
+            >
+              Install
+            </button>
+            <button
+              className="install-banner__dismiss-btn"
+              onClick={dismissInstallBanner}
+              aria-label="Dismiss install banner"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
 
       {channels.length === 0 ? (
         <div className="channel-list-view__empty">

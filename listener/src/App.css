@@ -98,6 +98,14 @@
   text-align: center;
 }
 
+.channel-list-view__header-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+}
+
 .channel-list-view__title {
   font-size: 1.25rem;
   font-weight: 600;
@@ -449,4 +457,209 @@
 .player-view__retry-btn:active {
   background-color: #5a52e0;
   transform: scale(0.97);
+}
+
+/* ========================================================================
+ * Offline Screen
+ * ======================================================================== */
+
+.offline-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #1a1a2e;
+  padding: 24px;
+}
+
+.offline-screen__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  max-width: 300px;
+}
+
+.offline-screen__icon {
+  color: #6c63ff;
+  margin-bottom: 8px;
+}
+
+.offline-screen__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.offline-screen__message {
+  font-size: 1rem;
+  color: #a0a0b0;
+  line-height: 1.6;
+}
+
+.offline-screen__retry-btn {
+  margin-top: 8px;
+  padding: 10px 32px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #6c63ff;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 100ms ease;
+}
+
+.offline-screen__retry-btn:active {
+  background-color: #5a52e0;
+  transform: scale(0.97);
+}
+
+/* ========================================================================
+ * Share Button
+ * ======================================================================== */
+
+.share-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  color: #a0a0b0;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background-color 150ms ease;
+  flex-shrink: 0;
+}
+
+.share-button:active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ========================================================================
+ * Share QR Code Modal
+ * ======================================================================== */
+
+.share-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 24px;
+}
+
+.share-modal__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  background-color: #25253e;
+  border-radius: 16px;
+  padding: 32px 24px;
+  max-width: 300px;
+  width: 100%;
+}
+
+.share-modal__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.share-modal__qr {
+  border-radius: 8px;
+}
+
+.share-modal__url {
+  font-size: 0.8125rem;
+  color: #8a8a9a;
+  word-break: break-all;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.share-modal__close-btn {
+  padding: 10px 32px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #3a3a5e;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 100ms ease;
+}
+
+.share-modal__close-btn:active {
+  background-color: #4a4a6e;
+  transform: scale(0.97);
+}
+
+/* ========================================================================
+ * PWA Install Banner
+ * ======================================================================== */
+
+.install-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background-color: #25253e;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.install-banner__text {
+  font-size: 0.8125rem;
+  color: #e0e0e0;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.install-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.install-banner__install-btn {
+  padding: 6px 16px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #6c63ff;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 100ms ease;
+}
+
+.install-banner__install-btn:active {
+  background-color: #5a52e0;
+  transform: scale(0.97);
+}
+
+.install-banner__dismiss-btn {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  color: #8a8a9a;
+  background: none;
+  border: none;
+  cursor: pointer;
 }
