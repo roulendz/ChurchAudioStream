@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 05-listener-web-ui
 source: [05-01-SUMMARY.md, 05-02-SUMMARY.md, 05-03-SUMMARY.md, 05-04-SUMMARY.md]
 started: 2026-02-10T07:30:00Z
@@ -81,20 +81,42 @@ skipped: 0
   reason: "User reported: Stopped channels disappear from channel list entirely instead of showing as dimmed offline cards. Empty state shows 'Please be patient while we connect translators' instead."
   severity: major
   test: 8
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "RouterManager.getActiveChannelList() only includes channels with active routers; stopped channels are removed from router Map before pushActiveChannelList() runs"
+  artifacts:
+    - path: "sidecar/src/streaming/router-manager.ts"
+      issue: "getActiveChannelList() iterates only router entries, excludes stopped channels"
+    - path: "sidecar/src/streaming/streaming-subsystem.ts"
+      issue: "handleChannelStateChange() removes router before pushing list; pushActiveChannelList() excludes non-streaming channels"
+    - path: "sidecar/src/streaming/signaling-handler.ts"
+      issue: "disconnectListenersFromChannel() filters out the stopped channel from remainingChannels"
+    - path: "listener/src/hooks/useChannelList.ts"
+      issue: "activeChannels handler replaces full state, overriding prior channelStopped marking"
+  missing:
+    - "Add buildFullChannelList() to StreamingSubsystem that merges all AudioSubsystem channels with RouterManager active status"
+    - "Use full channel list in pushActiveChannelList() and SignalingHandler"
+    - "Include stopped channel (hasActiveProducer: false) in disconnectListenersFromChannel remainingChannels"
+  debug_session: ".planning/debug/stopped-channels-disappear.md"
 
 - truth: "Server disconnect shows full-screen WiFi overlay with Try Again button"
   status: failed
   reason: "User reported: When sidecar is stopped, listener shows 'Reconnecting...' banner + empty channel list instead of the full-screen WiFi overlay. Also uncaught exception on shutdown from unhandled EOS error."
   severity: major
   test: 10
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Two gaps: (1) OfflineScreen only checks navigator.onLine (WiFi status), not server reachability; (2) protoo-client retries forever for previously-connected peers, never emits 'close' event, so connectionState never reaches 'disconnected'"
+  artifacts:
+    - path: "listener/src/components/OfflineScreen.tsx"
+      issue: "Only checks navigator.onLine, not server reachability"
+    - path: "listener/src/hooks/useSignaling.ts"
+      issue: "'failed' event maps to 'reconnecting', no timeout/max-retry to transition to 'disconnected'"
+    - path: "sidecar/src/audio/pipeline/pipeline-manager.ts"
+      issue: "removeAllListeners() called after stop() before stdio fully drains (shutdown crash)"
+    - path: "sidecar/src/audio/pipeline/gstreamer-process.ts"
+      issue: "emit('error') in stdout/stderr parsers fires after listeners removed"
+  missing:
+    - "Add reconnection failure threshold in useSignaling.ts (after N failed cycles or wall-clock timeout, set state to 'disconnected')"
+    - "OfflineScreen should also respond to connectionState='disconnected', not just navigator.onLine"
+    - "Fix shutdown crash: resolve stop() on child 'close' event instead of 'exit', or add no-op error listener safety net"
+  debug_session: ".planning/debug/listener-offline-screen.md"
 
 ## Additional Observations (not Phase 5 bugs)
 
