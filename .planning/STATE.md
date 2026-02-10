@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 6 in progress -- listener counts, server status, QR code complete
+**Current focus:** Phase 6 complete -- all 4 plans done (dashboard shell, channels, VU meters, overview)
 
 ## Current Position
 
 Phase: 6 of 10 (Admin Dashboard)
-Plan: 3 of 4 in current phase (06-01, 06-02, 06-04 complete; 06-03 parallel)
-Status: In progress
-Last activity: 2026-02-10 -- Completed 06-02-PLAN.md (channel configuration UI)
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-02-10 -- Completed 06-03-PLAN.md (VU meters + processing controls)
 
-Progress: [██████████████████████████████████████░░] 95% (38/40 plans)
+Progress: [██████████████████████████████████████░░] 97% (38/39 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 37
+- Total plans completed: 38
 - Average duration: 7 minutes
-- Total execution time: 4.50 hours
+- Total execution time: 4.63 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [███████████████████████
 | 03 | 3/3 | 17 min | 6 min |
 | 04 | 9/9 | 61 min | 7 min |
 | 05 | 5/5 | 34 min | 7 min |
-| 06 | 2/4 | 12 min | 6 min |
+| 06 | 4/4 | 20 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-04 (4m), 05-merge, 05-05 (5m), 06-01 (7m), 06-04 (5m)
-- Trend: Phase 6 wave 2 in progress. Listener counts + server status + QR code complete.
+- Last 5 plans: 05-05 (5m), 06-01 (7m), 06-02 (5m), 06-03 (8m), 06-04 (5m)
+- Trend: Phase 6 complete. All 4 plans finished (3 ran in parallel).
 
 *Updated after each plan completion*
 
@@ -206,6 +206,11 @@ Recent decisions affecting current work:
 - [06-02]: Channel status from action field (started->starting, stopped->stopped)
 - [06-02]: Source selector groups by type with channel number toggle buttons
 - [06-02]: Move up/down reorder buttons (no drag-and-drop, simpler + accessible)
+- [06-03]: useAudioLevels stores level data in useRef<Map> -- zero re-renders from 100ms broadcasts
+- [06-03]: VuMeter Canvas with requestAnimationFrame loop, HiDPI devicePixelRatio scaling
+- [06-03]: Pipeline levels merged per-channel (component-wise max peak/rms, OR clipping)
+- [06-03]: ProcessingControls 300ms debounced slider, immediate send on mouseup/touchend
+- [06-03]: sendMessage optional prop on ChannelConfigPanel for backward compatibility
 
 ### Pending Todos
 
@@ -228,6 +233,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 06-02-PLAN.md (channel configuration UI)
+Stopped at: Completed 06-03-PLAN.md (VU meters + processing controls)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
