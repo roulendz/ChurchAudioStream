@@ -137,13 +137,13 @@ Plans:
   4. VU meters display real-time audio levels for each active channel, updating smoothly (no visible stutter)
   5. Admin can see how many listeners are connected to each channel and the total listener count
   6. Admin can see server resource usage (CPU, memory) and the status of active connections
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 06-01: Dashboard layout with sidebar navigation
-- [ ] 06-02: Channel configuration UI (CRUD, source selection, ordering)
-- [ ] 06-03: Real-time VU meters and audio processing controls
-- [ ] 06-04: Listener counts, server status, and QR code display
+- [ ] 06-01-PLAN.md -- Server-side API gaps (reorder, visibility, level channelId) + dashboard shell with sidebar navigation
+- [ ] 06-02-PLAN.md -- Channel configuration UI (CRUD, source selection, reorder, visibility)
+- [ ] 06-03-PLAN.md -- Real-time Canvas VU meters and per-channel audio processing controls
+- [ ] 06-04-PLAN.md -- Listener counts, server status monitoring, and QR code display
 
 ### Phase 7: Listener Advanced Features
 **Goal**: Listeners can blend two channels, toggle audio processing, use the UI in their own language, and choose light or dark theme
