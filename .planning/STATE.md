@@ -201,6 +201,11 @@ Recent decisions affecting current work:
 - [06-04]: QR code URL uses config.network.domain || config.server.host (never loopback)
 - [06-04]: cpuPercent/memoryMb null until Phase 9 adds server-level resource tracking
 - [06-04]: Worker memory from streaming:status workers array (peakMemoryKb)
+- [06-02]: Local AdminChannel/DiscoveredSource types mirror server interfaces (no cross-project import)
+- [06-02]: No optimistic updates: UI state driven by server broadcasts for consistency
+- [06-02]: Channel status from action field (started->starting, stopped->stopped)
+- [06-02]: Source selector groups by type with channel number toggle buttons
+- [06-02]: Move up/down reorder buttons (no drag-and-drop, simpler + accessible)
 
 ### Pending Todos
 
@@ -223,6 +228,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 06-04-PLAN.md (listener counts, server status, QR code)
+Stopped at: Completed 06-02-PLAN.md (channel configuration UI)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.
