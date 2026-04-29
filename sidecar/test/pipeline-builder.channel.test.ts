@@ -228,6 +228,22 @@ describe("buildChannelPipelineString", () => {
     expect((out.match(/panorama=1\.0/g) ?? []).length).toBeGreaterThanOrEqual(1);
   });
 
+  it("throws when any source segment has delayMs > 0 (fail-loud, not silently ignored)", () => {
+    const seg = fileSegment("C:/a.mp3", [0], "mix.sink_0");
+    const segWithDelay: SourceSegment = {
+      ...seg,
+      assignment: { ...seg.assignment, delayMs: 50 },
+    };
+    const cfg: ChannelPipelineConfig = {
+      label: "ch-delayms",
+      levelIntervalMs: 50,
+      processing: PROCESSING,
+      sources: [segWithDelay],
+      shouldLoopOnEos: true,
+    };
+    expect(() => buildChannelPipelineString(cfg)).toThrow(/delayMs not supported yet/);
+  });
+
   it("mixer caps pinned: four independent regex matches survive attribute-order refactors", () => {
     const cfg: ChannelPipelineConfig = {
       label: "ch-caps",

@@ -528,8 +528,19 @@ function buildLiveCaptureSegmentForSegment(seg: SourceSegment): string {
  *
  * No `audiopanorama` here -- channel-selection inside `<head>` already places
  * panorama for stereo single-channel selection. A second one would double-pan.
+ *
+ * @throws Error if `assignment.delayMs > 0`. Per-source time-alignment is not
+ *   yet wired to a GStreamer element (no `audiodelay` in the standard 1.26
+ *   plugin set). Fail-loud rather than silently ignore the value.
  */
 function buildSourceSegment(seg: SourceSegment): string {
+  if (seg.assignment.delayMs > 0) {
+    throw new Error(
+      `buildSourceSegment: per-source delayMs not supported yet ` +
+      `(sourceId="${seg.assignment.sourceId}", delayMs=${seg.assignment.delayMs}). ` +
+      `Set delayMs to 0 or implement audiodelay in the segment builder.`,
+    );
+  }
   const head = buildSourceHeadForSegment(seg);
   const liveQueue = buildLiveCaptureSegmentForSegment(seg);
   const effectiveGain = computeEffectiveGain(seg.assignment);
