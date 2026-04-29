@@ -1,10 +1,10 @@
 /**
  * Deterministic RTP/RTCP port pair and SSRC allocation for audio channels.
  *
- * Port pairs are sequential starting at RTP_BASE_PORT (77702):
- *   Channel 0: 77702/77703
- *   Channel 1: 77704/77705
- *   Channel 2: 77706/77707
+ * Port pairs are sequential starting at RTP_BASE_PORT (50702):
+ *   Channel 0: 50702/50703
+ *   Channel 1: 50704/50705
+ *   Channel 2: 50706/50707
  *
  * SSRCs are deterministically derived from channel UUIDs to guarantee
  * uniqueness without random collisions.
@@ -14,8 +14,8 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Base port for RTP output. Chosen for distinctiveness in network tools. */
-export const RTP_BASE_PORT = 77702;
+/** Base port for RTP output. Must be below 65535 (UDP max). */
+export const RTP_BASE_PORT = 50702;
 
 // ---------------------------------------------------------------------------
 // Port allocation
