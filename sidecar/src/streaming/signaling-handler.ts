@@ -55,17 +55,38 @@ export type ChannelStreamingConfigResolver = (channelId: string) =>
 /**
  * Tracks last activity timestamp per peer and detects zombie connections
  * that have gone silent beyond a configurable threshold.
+ *
+ * After consume + resumeConsumer the listener client becomes passive — it
+ * receives RTP via WebRTC and emits no further protoo requests for the rest
+ * of the session. The previous 2x heartbeat threshold (60s default) was
+ * therefore reached during normal listening and killed live listeners.
+ *
+ * Two changes harden this:
+ *   1. Threshold raised to 10x heartbeat interval (5 minutes default) so a
+ *      truly silent peer eventually gets cleaned up, but normal passive
+ *      listening never trips it.
+ *   2. Peers with `peer.closed === true` are skipped — those are already
+ *      torn down at the WS layer and reported through peer.on("close").
+ *
+ * The protoo-server WebSocket layer runs its own ping/pong keepalive, so
+ * connection-level liveness is already detected; this tracker is now a
+ * defensive sweeper for sessions where the OS-level TCP keepalive hasn't
+ * fired yet (phone WiFi suspend, etc).
  */
 class PeerHeartbeatTracker {
   private readonly lastActivityMap: Map<string, number> = new Map();
   private readonly zombieThresholdMs: number;
+  private readonly peerLookup: (peerId: string) => ProtooPeer | undefined;
 
-  constructor(heartbeatIntervalMs: number) {
-    // A peer is considered a zombie if no activity for 2x the heartbeat interval
-    this.zombieThresholdMs = heartbeatIntervalMs * 2;
+  constructor(
+    heartbeatIntervalMs: number,
+    peerLookup: (peerId: string) => ProtooPeer | undefined,
+  ) {
+    this.zombieThresholdMs = heartbeatIntervalMs * 10;
+    this.peerLookup = peerLookup;
   }
 
-  /** Record activity for a peer (called on any request). */
+  /** Record activity for a peer (called on any request or notification). */
   recordActivity(peerId: string): void {
     this.lastActivityMap.set(peerId, Date.now());
   }
@@ -77,16 +98,19 @@ class PeerHeartbeatTracker {
 
   /**
    * Check all tracked peers and return IDs of those that have been
-   * inactive beyond the zombie threshold.
+   * inactive beyond the zombie threshold AND whose underlying protoo peer
+   * is still open. Closed peers are filtered out so the cleanup path
+   * doesn't double-report disconnects already handled by peer.on("close").
    */
   detectZombies(): string[] {
     const now = Date.now();
     const zombiePeerIds: string[] = [];
 
     for (const [peerId, lastActivity] of this.lastActivityMap) {
-      if (now - lastActivity > this.zombieThresholdMs) {
-        zombiePeerIds.push(peerId);
-      }
+      if (now - lastActivity <= this.zombieThresholdMs) continue;
+      const peer = this.peerLookup(peerId);
+      if (!peer || peer.closed) continue;
+      zombiePeerIds.push(peerId);
     }
 
     return zombiePeerIds;
@@ -126,7 +150,10 @@ export class SignalingHandler extends EventEmitter {
     this.channelConfigResolver = channelConfigResolver;
     this.channelListProvider = channelListProvider
       ?? (() => this.routerManager.getActiveChannelList(this.metadataResolver));
-    this.heartbeatTracker = new PeerHeartbeatTracker(heartbeatIntervalMs);
+    this.heartbeatTracker = new PeerHeartbeatTracker(
+      heartbeatIntervalMs,
+      (peerId: string) => this.peers.get(peerId),
+    );
   }
 
   // -----------------------------------------------------------------------
