@@ -11,13 +11,13 @@
  * (Research Pitfall 3). The process is one-shot: start -> (run) -> stop/crash.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import { buildPipelineString } from "./pipeline-builder.js";
+import { buildPipelineString, buildChannelPipelineString } from "./pipeline-builder.js";
 import { createBusMessageLineParser } from "./metering-parser.js";
 import type {
-  PipelineConfig,
+  AnyPipelineConfig,
   PipelineState,
   AudioLevels,
   PipelineError,
@@ -26,6 +26,15 @@ import { logger } from "../../utils/logger.js";
 
 /** Default drain timeout in milliseconds before SIGKILL on stop. */
 const DEFAULT_DRAIN_TIMEOUT_MS = 500;
+
+/**
+ * Settle window after the cmd.exe wrapper exits on Windows, before stop()
+ * resolves. The gst-launch.exe grandchild releases its UDP sockets (notably
+ * the rtp udpsink bind-port) a few hundred ms after the parent shell dies;
+ * resolving stop() too early lets the next pipeline race to bind the same
+ * port and lose, falling back to an ephemeral port that mediasoup ignores.
+ */
+const WINDOWS_SOCKET_RELEASE_DELAY_MS = 400;
 
 /** Whether the current platform is Windows. */
 const IS_WINDOWS = process.platform === "win32";
@@ -60,7 +69,7 @@ export interface GStreamerProcessEvents {
  */
 export class GStreamerProcess extends EventEmitter {
   readonly id: string;
-  readonly config: PipelineConfig;
+  readonly config: AnyPipelineConfig;
 
   private currentState: PipelineState = "stopped";
   private childProcess: ChildProcess | null = null;
@@ -68,7 +77,7 @@ export class GStreamerProcess extends EventEmitter {
   private processStartedAt: number | null = null;
   private stopRequested = false;
 
-  constructor(config: PipelineConfig) {
+  constructor(config: AnyPipelineConfig) {
     super();
     this.id = randomUUID();
     this.config = config;
@@ -82,6 +91,16 @@ export class GStreamerProcess extends EventEmitter {
   /** PID of the child process when running, null otherwise. */
   get pid(): number | null {
     return this.currentPid;
+  }
+
+  /**
+   * Whether the most recent exit was triggered by a `stop()` call (user/system
+   * request) versus the process exiting on its own (EOS or crash). Used by
+   * supervising code to distinguish "user stopped this" from "stream ended
+   * naturally" (e.g. file source EOS for loop-restart).
+   */
+  get wasStopRequested(): boolean {
+    return this.stopRequested;
   }
 
   /** Timestamp (ms since epoch) when the process was last started, null if never started. */
@@ -107,15 +126,49 @@ export class GStreamerProcess extends EventEmitter {
     this.stopRequested = false;
     this.transitionState("initializing");
 
-    const pipelineString = buildPipelineString(this.config);
+    // Self-explanatory: presence of `sources` field uniquely identifies
+    // ChannelPipelineConfig (multi-source). Otherwise legacy PipelineConfig
+    // (per-source). Task 7 collapses this once channel-manager only emits
+    // ChannelPipelineConfig.
+    const pipelineString = "sources" in this.config
+      ? buildChannelPipelineString(this.config)
+      : buildPipelineString(this.config);
+
+    // Pre-spawn cleanup: nuke any leftover gst-launch.exe still bound to this
+    // pipeline's sender port. Race scenarios that produce orphans:
+    //   1. Manual stop fires while pipeline-manager's restart timer was already
+    //      delivering its callback; the timer-spawned child slips past the stop.
+    //   2. start() is called concurrently from updateSource and a loop-restart;
+    //      both spawn before either records the pid.
+    // Once an orphan exists, channel-manager only tracks the latest pipelineId,
+    // so the X button kills the tracked child and the orphan keeps streaming.
+    // Killing by port is the one invariant we control end-to-end -- bind-port
+    // is deterministic per channel (rtpPort + 1000).
+    if (IS_WINDOWS) {
+      this.killOrphansBoundToSenderPort(pipelineString);
+    }
 
     logger.info(`Spawning GStreamer pipeline "${this.config.label}"`, {
       pipelineId: this.id,
       pipelineString,
     });
 
-    // Use shell: true on Windows -- the pipeline string contains characters
-    // (!, =, quotes) that need shell interpretation by gst-launch-1.0.
+    // shell: true is REQUIRED on Windows. With shell: false, Node's argv quoting
+    // escapes the inner `"..."` quotes around device IDs (e.g. wasapi2src
+    // device="{...}"), and gst-launch's argv parser doesn't unescape them
+    // correctly -- result is "erroneous pipeline: syntax error" for ALL pipelines.
+    // shell: true means cmd.exe parses the command line, which preserves the
+    // pipeline string as gst-launch's pipeline parser expects to receive it.
+    //
+    // CONSEQUENCE: On Windows the direct child is cmd.exe, and gst-launch-1.0.exe
+    // is the GRANDCHILD. `child.kill()` calls TerminateProcess on cmd.exe ONLY,
+    // which orphans gst-launch.exe (re-parented to System, keeps running, holds
+    // file/device + RTP socket forever). MUST tree-kill via `taskkill /F /T /PID`
+    // -- see `terminateWindowsProcessTree`.
+    //
+    // Side effect: file paths with spaces won't survive cmd.exe's quote handling.
+    // Mitigated upstream by `SourceRegistry.registerTestSources` which copies
+    // file sources to a sanitized no-spaces path before they reach the pipeline.
     const child = spawn("gst-launch-1.0", ["-m", "-e", pipelineString], {
       shell: true,
       stdio: ["pipe", "pipe", "pipe"],
@@ -140,10 +193,10 @@ export class GStreamerProcess extends EventEmitter {
    * Platform-specific shutdown strategy:
    * - **Unix**: Sends SIGINT which triggers EOS processing when gst-launch-1.0
    *   runs with the `-e` flag. Falls back to SIGKILL after drain timeout.
-   * - **Windows**: Closes stdin (best-effort cleanup signal), then falls back
-   *   to process termination after drain timeout. Windows does not support
-   *   POSIX signals — `child.kill()` calls `TerminateProcess()` regardless
-   *   of the signal argument, so force-kill is the only guaranteed mechanism.
+   * - **Windows**: Closes stdin (best-effort cleanup hint), waits for the drain
+   *   window, then tree-kills via `taskkill /F /T /PID <cmdPid>` so the
+   *   gst-launch.exe GRANDCHILD is also terminated. `child.kill()` alone only
+   *   kills the cmd.exe shell wrapper, leaving gst-launch.exe orphaned.
    *
    * @returns Promise that resolves when the process has exited.
    */
@@ -163,23 +216,41 @@ export class GStreamerProcess extends EventEmitter {
       }
 
       const drainTimeout = DEFAULT_DRAIN_TIMEOUT_MS;
+      const cmdPid = child.pid ?? null;
 
-      // Resolve once the process exits (from signal or force-kill)
+      // Resolve once the process exits. On Windows, child.exit fires when
+      // the cmd.exe shell wrapper exits, but the gst-launch.exe grandchild's
+      // UDP sockets (notably the rtp udpsink bind-port) take ~50-200ms more
+      // to release back to the kernel. If the next pipeline tries to bind
+      // the same port immediately, bind fails and udpsink falls back to an
+      // ephemeral source port -- mediasoup's PlainTransport (locked to the
+      // original tuple by comedia) then silently drops every packet. The
+      // settling delay below gives the kernel time to reclaim the socket
+      // before the caller respawns.
       const onExit = (): void => {
         clearTimeout(killTimer);
+        if (IS_WINDOWS) {
+          setTimeout(resolve, WINDOWS_SOCKET_RELEASE_DELAY_MS);
+          return;
+        }
         resolve();
       };
       child.once("exit", onExit);
 
       this.sendShutdownSignal(child);
 
-      // Force-kill fallback if process does not exit within drain timeout
+      // Force-kill fallback if process does not exit within drain timeout.
+      // On Windows, MUST tree-kill: `child.kill()` only kills the cmd.exe shell,
+      // leaving gst-launch.exe orphaned (re-parented, keeps holding device).
       const killTimer = setTimeout(() => {
-        if (this.childProcess) {
-          logger.warn(
-            `Pipeline "${this.config.label}" did not exit within ${drainTimeout}ms, force-killing`,
-            { pipelineId: this.id },
-          );
+        if (!this.childProcess) return;
+        logger.warn(
+          `Pipeline "${this.config.label}" did not exit within ${drainTimeout}ms, force-killing`,
+          { pipelineId: this.id },
+        );
+        if (IS_WINDOWS && cmdPid !== null) {
+          this.terminateWindowsProcessTree(cmdPid);
+        } else {
           child.kill("SIGKILL");
         }
       }, drainTimeout);
@@ -191,8 +262,9 @@ export class GStreamerProcess extends EventEmitter {
    *
    * - Unix: SIGINT triggers EOS drain when `-e` flag is active.
    * - Windows: Close stdin as a best-effort cleanup hint. Node.js on Windows
-   *   maps all kill signals to `TerminateProcess()` (instant kill, no EOS),
-   *   so we rely on the force-kill timer as the guaranteed termination path.
+   *   maps all kill signals to `TerminateProcess()` (instant kill, no EOS) and
+   *   only on the cmd.exe direct child -- so the force-kill timer relies on
+   *   `taskkill /F /T` to actually reach the gst-launch grandchild.
    */
   private sendShutdownSignal(child: ChildProcess): void {
     if (IS_WINDOWS) {
@@ -209,6 +281,86 @@ export class GStreamerProcess extends EventEmitter {
     } else {
       // SIGINT triggers EOS processing in gst-launch-1.0 with -e flag
       child.kill("SIGINT");
+    }
+  }
+
+  /**
+   * Kill any gst-launch-1.0.exe whose UDP socket is bound to the
+   * `bind-port=` value embedded in our about-to-spawn pipeline string.
+   * Belt-and-suspenders cleanup for orphans the lifecycle layer missed.
+   */
+  private killOrphansBoundToSenderPort(pipelineString: string): void {
+    const match = pipelineString.match(/bind-port=(\d+)/);
+    if (!match) return;
+    const senderPort = match[1];
+    try {
+      const find = spawnSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          `Get-NetUDPEndpoint -LocalPort ${senderPort} -ErrorAction SilentlyContinue | ForEach-Object { $_.OwningProcess }`,
+        ],
+        { windowsHide: true, encoding: "utf8" },
+      );
+      const pids = (find.stdout ?? "")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => /^\d+$/.test(line));
+      for (const pidStr of pids) {
+        spawnSync("taskkill", ["/F", "/T", "/PID", pidStr], {
+          windowsHide: true,
+          stdio: "ignore",
+        });
+        logger.warn(`Killed orphan process ${pidStr} bound to sender port ${senderPort}`, {
+          pipelineId: this.id,
+        });
+      }
+    } catch (err) {
+      logger.warn(`Orphan-by-port sweep failed for port ${senderPort}: ${
+        err instanceof Error ? err.message : String(err)
+      }`, { pipelineId: this.id });
+    }
+  }
+
+  /**
+   * Tree-kill a Windows process subtree rooted at `pid`.
+   *
+   * Why: when `spawn(..., { shell: true })` is used on Windows, Node spawns
+   * cmd.exe as the direct child and gst-launch-1.0.exe as a GRANDCHILD.
+   * `ChildProcess.kill()` invokes TerminateProcess on the cmd.exe handle only,
+   * orphaning the grandchild (re-parented, keeps holding device handles, RTP
+   * sockets, file descriptors). `taskkill /F /T /PID <cmdPid>` walks the
+   * descendant tree and force-terminates every process in it.
+   *
+   * Synchronous spawn: terminating an audio pipeline must complete before the
+   * stop() Promise resolves so the caller can immediately reuse device/port.
+   */
+  private terminateWindowsProcessTree(pid: number): void {
+    try {
+      const result = spawnSync("taskkill", ["/F", "/T", "/PID", String(pid)], {
+        windowsHide: true,
+        stdio: "ignore",
+      });
+      if (result.error) {
+        logger.error(
+          `taskkill failed for pipeline "${this.config.label}" (pid ${pid}): ${result.error.message}`,
+          { pipelineId: this.id },
+        );
+      } else if (result.status !== 0) {
+        // status 128 = process not found (already exited) -- benign.
+        logger.debug(
+          `taskkill exited ${result.status} for pipeline "${this.config.label}" (pid ${pid})`,
+          { pipelineId: this.id },
+        );
+      }
+    } catch (err) {
+      logger.error(
+        `taskkill threw for pipeline "${this.config.label}" (pid ${pid}): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        { pipelineId: this.id },
+      );
     }
   }
 

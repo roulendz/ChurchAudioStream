@@ -2,20 +2,23 @@
  * Pipeline manager -- registry and coordinator for all active GStreamer pipelines.
  *
  * Manages the full lifecycle of multiple GStreamerProcess instances:
- * creation, starting, stopping, removal, and crash recovery.
+ * creation, starting, stopping, atomic replacement, removal, and crash recovery.
  *
  * Events from individual pipelines are forwarded with pipeline IDs so
  * downstream consumers (WebSocket broadcast, admin UI) can identify the source.
  *
- * Pipeline IDs are GStreamerProcess UUIDs, not channel IDs. One channel may
- * have multiple pipelines. The channel manager (Plan 08) maps channel IDs
- * to pipeline IDs.
+ * Pipeline IDs are GStreamerProcess UUIDs (immutable per instance). After the
+ * 260429-hb3 refactor each channel runs ONE pipeline; channelId is the stable
+ * external key, pipelineId rotates on every replacePipeline call. The pipeline
+ * manager itself stays source-agnostic: it does not inspect source kinds. EOS
+ * loop policy lives in the channel manager (which owns the source list).
  */
 
 import { EventEmitter } from "node:events";
 import { GStreamerProcess } from "./gstreamer-process.js";
 import type {
-  PipelineConfig,
+  AnyPipelineConfig,
+  ChannelPipelineConfig,
   PipelineState,
   AudioLevels,
   PipelineError,
@@ -36,6 +39,17 @@ export interface PipelineManagerEvents {
   "pipeline-state-change": (pipelineId: string, state: PipelineState) => void;
   "pipeline-levels": (pipelineId: string, levels: AudioLevels) => void;
   "pipeline-error": (pipelineId: string, error: PipelineError) => void;
+  /**
+   * Fires for every non-crashed pipeline exit (clean stop or natural EOS).
+   * `wasStopRequested` is read at emit time from the live getter, so consumers
+   * see the actual flag value rather than a stale closure capture.
+   */
+  "pipeline-exit": (
+    pipelineId: string,
+    code: number | null,
+    signal: string | null,
+    wasStopRequested: boolean,
+  ) => void;
 }
 
 /**
@@ -45,9 +59,20 @@ export interface PipelineManagerEvents {
  * pipeline IDs, and implements auto-restart with configurable attempt limits.
  */
 export class PipelineManager extends EventEmitter {
+  /**
+   * How long a pipeline must remain in `streaming` state before its restart
+   * attempt counter is reset to zero. Prevents transient-streaming crash loops:
+   * a flaky source (WASAPI under jitter) can briefly enter `streaming` then
+   * crash within ~100ms -- without this gate, the counter resets on every
+   * such blip and the backoff never grows, so a degraded device thrashes
+   * forever instead of giving up.
+   */
+  private static readonly STREAMING_STABILITY_MS = 5000;
+
   private readonly pipelines = new Map<string, GStreamerProcess>();
   private readonly restartAttempts = new Map<string, number>();
   private readonly restartTimers = new Map<string, NodeJS.Timeout>();
+  private readonly streamingStabilityTimers = new Map<string, NodeJS.Timeout>();
   private readonly recoveryConfig: RecoveryConfig;
   private isShuttingDown = false;
 
@@ -62,7 +87,7 @@ export class PipelineManager extends EventEmitter {
    * Wires up event forwarding and crash recovery listeners.
    * Returns the pipeline ID (UUID) for subsequent lifecycle calls.
    */
-  createPipeline(config: PipelineConfig): string {
+  createPipeline(config: AnyPipelineConfig): string {
     const pipeline = new GStreamerProcess(config);
     const pipelineId = pipeline.id;
 
@@ -73,6 +98,38 @@ export class PipelineManager extends EventEmitter {
     logger.info(`Pipeline created: "${config.label}"`, { pipelineId });
 
     return pipelineId;
+  }
+
+  /**
+   * Atomically swap a running pipeline: stop+remove old, spawn new, return new id.
+   *
+   * `await this.removePipeline()` already includes the 400ms
+   * WINDOWS_SOCKET_RELEASE_DELAY_MS, so NO additional delay is needed
+   * (RESEARCH 260429-hb3 §3). Caller is responsible for re-keying any
+   * external Maps (e.g. channelPipelines).
+   *
+   * @throws Error if `oldPipelineId` is not registered.
+   */
+  async replacePipeline(
+    oldPipelineId: string,
+    newConfig: ChannelPipelineConfig,
+  ): Promise<string> {
+    const oldPipeline = this.pipelines.get(oldPipelineId);
+    if (!oldPipeline) {
+      throw new Error(`replacePipeline: old pipeline not found: ${oldPipelineId}`);
+    }
+    const oldLabel = oldPipeline.config.label;
+
+    await this.removePipeline(oldPipelineId);
+
+    const newPipelineId = this.createPipeline(newConfig);
+    this.startPipeline(newPipelineId);
+
+    logger.info(`Pipeline replaced: "${oldLabel}" -> "${newConfig.label}"`, {
+      oldPipelineId,
+      newPipelineId,
+    });
+    return newPipelineId;
   }
 
   /**
@@ -120,6 +177,7 @@ export class PipelineManager extends EventEmitter {
     await new Promise<void>((resolve) => setImmediate(resolve));
     pipeline.removeAllListeners();
 
+    this.disarmStreamingStability(pipelineId);
     this.pipelines.delete(pipelineId);
     this.restartAttempts.delete(pipelineId);
     this.restartTimers.delete(pipelineId);
@@ -145,7 +203,7 @@ export class PipelineManager extends EventEmitter {
   /**
    * Get the config of a pipeline, or null if not found.
    */
-  getPipelineConfig(pipelineId: string): PipelineConfig | null {
+  getPipelineConfig(pipelineId: string): AnyPipelineConfig | null {
     const pipeline = this.pipelines.get(pipelineId);
     return pipeline ? pipeline.config : null;
   }
@@ -225,9 +283,11 @@ export class PipelineManager extends EventEmitter {
     const pipelineId = pipeline.id;
 
     pipeline.on("state-change", (state: PipelineState) => {
-      // Successful streaming resets the restart counter
+      // Counter reset is gated by sustained `streaming` -- see armStreamingStability.
       if (state === "streaming") {
-        this.restartAttempts.set(pipelineId, 0);
+        this.armStreamingStability(pipelineId);
+      } else {
+        this.disarmStreamingStability(pipelineId);
       }
       this.emit("pipeline-state-change", pipelineId, state);
     });
@@ -240,10 +300,21 @@ export class PipelineManager extends EventEmitter {
       this.emit("pipeline-error", pipelineId, error);
     });
 
-    pipeline.on("exit", (_code: number | null, _signal: string | null) => {
+    pipeline.on("exit", (code: number | null, signal: string | null) => {
       if (pipeline.state === "crashed") {
         this.handleCrashedPipeline(pipelineId);
+        return;
       }
+      // Pipeline manager is source-agnostic: emit a generic exit event with a
+      // live `wasStopRequested` snapshot. Channel-manager owns the file-loop
+      // decision because only it has the source list (RESEARCH §6 option 2).
+      this.emit(
+        "pipeline-exit",
+        pipelineId,
+        code,
+        signal,
+        pipeline.wasStopRequested,
+      );
     });
   }
 
@@ -345,5 +416,37 @@ export class PipelineManager extends EventEmitter {
       clearTimeout(timer);
     }
     this.restartTimers.clear();
+    this.clearAllStreamingStabilityTimers();
+  }
+
+  /**
+   * Arm the streaming-stability timer: if the pipeline stays in `streaming`
+   * for STREAMING_STABILITY_MS, the restart attempt counter is reset to zero.
+   * Re-arming cancels any prior pending reset.
+   */
+  private armStreamingStability(pipelineId: string): void {
+    this.disarmStreamingStability(pipelineId);
+    const timer = setTimeout(() => {
+      this.streamingStabilityTimers.delete(pipelineId);
+      this.restartAttempts.set(pipelineId, 0);
+      logger.debug("Pipeline streaming stable; restart counter reset", { pipelineId });
+    }, PipelineManager.STREAMING_STABILITY_MS);
+    this.streamingStabilityTimers.set(pipelineId, timer);
+  }
+
+  /** Cancel any pending stability timer for a pipeline (called when leaving `streaming`). */
+  private disarmStreamingStability(pipelineId: string): void {
+    const timer = this.streamingStabilityTimers.get(pipelineId);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.streamingStabilityTimers.delete(pipelineId);
+  }
+
+  /** Cancel all pending stability timers (used on shutdown / destroy). */
+  private clearAllStreamingStabilityTimers(): void {
+    for (const timer of this.streamingStabilityTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.streamingStabilityTimers.clear();
   }
 }

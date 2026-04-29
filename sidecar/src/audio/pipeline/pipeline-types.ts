@@ -171,3 +171,11 @@ export interface ChannelPipelineConfig {
   readonly sources: ReadonlyArray<SourceSegment>;
   readonly shouldLoopOnEos: boolean;
 }
+
+/**
+ * Union of single-source and multi-source pipeline configs. Bridge type used
+ * during the migration from per-source pipelines to one-pipeline-per-channel.
+ * Task 7 collapses this back to `ChannelPipelineConfig` once `PipelineConfig`
+ * has no remaining callers.
+ */
+export type AnyPipelineConfig = PipelineConfig | ChannelPipelineConfig;
