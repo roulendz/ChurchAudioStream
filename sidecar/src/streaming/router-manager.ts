@@ -215,6 +215,19 @@ export class RouterManager extends EventEmitter {
   }
 
   /**
+   * Count active routers per worker index. Used by the admin dashboard's
+   * "mediasoup Workers" panel to fill in `routerCount` per worker.
+   * worker-manager doesn't track which routers it hosts; that's our job.
+   */
+  countRoutersByWorker(): Map<number, number> {
+    const counts = new Map<number, number>();
+    for (const entry of this.channels.values()) {
+      counts.set(entry.workerIndex, (counts.get(entry.workerIndex) ?? 0) + 1);
+    }
+    return counts;
+  }
+
+  /**
    * Build the channel list pushed to listeners.
    * The metadataResolver provides display info (name, format, default)
    * without creating a dependency on ChannelManager.

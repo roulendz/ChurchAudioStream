@@ -269,9 +269,18 @@ export class StreamingSubsystem extends EventEmitter {
     return this.signalingHandler?.getListenerSessions() ?? [];
   }
 
-  /** Get resource usage snapshots for all workers. */
+  /**
+   * Get resource usage snapshots for all workers.
+   *
+   * worker-manager fills index/memory/alive but leaves routerCount=0 because
+   * routers live in router-manager. We merge the two so admin UI sees the
+   * actual router count per worker.
+   */
   async getWorkerResourceInfo(): Promise<WorkerResourceInfo[]> {
-    return this.workerManager?.getWorkerResourceInfo() ?? [];
+    if (!this.workerManager) return [];
+    const workers = await this.workerManager.getWorkerResourceInfo();
+    const routersByWorker = this.routerManager?.countRoutersByWorker() ?? new Map<number, number>();
+    return workers.map((w) => ({ ...w, routerCount: routersByWorker.get(w.index) ?? 0 }));
   }
 
   /** Get the list of channels with active streaming routers. */

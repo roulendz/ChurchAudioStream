@@ -106,13 +106,17 @@ export function useResourceStats(
     };
   }, [subscribe]);
 
-  // Poll server:status on mount and every POLL_INTERVAL_MS
+  // Poll server:status AND streaming:status on mount and every POLL_INTERVAL_MS.
+  // streaming:status was previously polled only once on mount, so the workers
+  // list captured "0 workers" before any channel had started and never
+  // refreshed -- audio played fine, UI lied.
   useEffect(() => {
     sendMessage("server:status");
     sendMessage("streaming:status");
 
     pollTimerRef.current = setInterval(() => {
       sendMessage("server:status");
+      sendMessage("streaming:status");
     }, POLL_INTERVAL_MS);
 
     return () => {
