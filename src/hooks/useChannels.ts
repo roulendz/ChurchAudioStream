@@ -87,7 +87,7 @@ export function useChannels(
 
   // --- Subscriptions + initial request ---
   useEffect(() => {
-    // Request full channel list on mount
+    // Request full channel list on mount (may be dropped if WS not yet open)
     sendMessage("channels:list");
 
     const unsubList = subscribe("channels:list", (msg: WsMessage) => {
@@ -138,12 +138,20 @@ export function useChannels(
       }
     });
 
+    // Re-request after WS connects -- the mount-time sendMessage above is
+    // typically dropped because the WebSocket is still in CONNECTING state.
+    // The "welcome" event fires once the server acknowledges the connection.
+    const unsubWelcome = subscribe("welcome", () => {
+      sendMessage("channels:list");
+    });
+
     return () => {
       unsubList();
       unsubCreated();
       unsubUpdated();
       unsubRemoved();
       unsubState();
+      unsubWelcome();
     };
   }, [sendMessage, subscribe]);
 

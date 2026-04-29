@@ -5,7 +5,8 @@ import type { WsMessage } from "./useWebSocket";
 // Local type definitions (mirror server-side source-types.ts, not imported)
 // ---------------------------------------------------------------------------
 
-export type AudioApi = "wasapi2" | "asio" | "directsound";
+export type AudioApi = "wasapi2" | "wasapi" | "asio" | "directsound";
+export type DeviceDirection = "source" | "sink";
 export type SourceStatus = "available" | "unavailable" | "in-use" | "verifying";
 
 export interface AES67Source {
@@ -31,10 +32,24 @@ export interface LocalDeviceSource {
   readonly bitDepth: number;
   readonly channelCount: number;
   readonly isLoopback: boolean;
+  /** Device direction: "source" = input mic, "sink" = output/loopback */
+  readonly direction?: DeviceDirection;
   status: SourceStatus;
 }
 
-export type DiscoveredSource = AES67Source | LocalDeviceSource;
+export interface FileSource {
+  readonly id: string;
+  readonly type: "file";
+  readonly name: string;
+  readonly filePath: string;
+  readonly sampleRate: number;
+  readonly bitDepth: number;
+  readonly channelCount: number;
+  readonly loop: boolean;
+  status: SourceStatus;
+}
+
+export type DiscoveredSource = AES67Source | LocalDeviceSource | FileSource;
 
 // ---------------------------------------------------------------------------
 // Hook signature types
@@ -75,9 +90,22 @@ export function useSources(
       sendMessage("sources:list");
     });
 
+    // Re-request after initial connect -- the mount-time sendMessage above is
+    // typically dropped because the WebSocket is still in CONNECTING state.
+    // The "welcome" event fires once the server acknowledges the connection.
+    // Also re-request after a short delay to catch late-arriving devices
+    // (the audio subsystem starts after the WS server).
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubWelcome = subscribe("welcome", () => {
+      sendMessage("sources:list");
+      retryTimer = setTimeout(() => sendMessage("sources:list"), 3000);
+    });
+
     return () => {
       unsubList();
       unsubChanged();
+      unsubWelcome();
+      if (retryTimer !== null) clearTimeout(retryTimer);
     };
   }, [sendMessage, subscribe]);
 
