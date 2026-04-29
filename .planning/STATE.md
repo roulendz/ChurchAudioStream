@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 Phase: 6 of 10 (Admin Dashboard)
 Plan: 4 of 4 in current phase
 Status: Phase verified (26/26 must-haves)
-Last activity: 2026-02-10 -- Phase 6 verified: all 4 plans complete
+Last activity: 2026-04-29 -- Completed quick task 260429-hb3: multi-source audio mixing refactor (one gst-launch pipeline per channel)
 
 Progress: [████████████████████████████████████████] 100% (39/39 plans)
 
@@ -218,10 +218,11 @@ None.
 
 ### Quick Tasks Completed
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 001 | Local domain (church.audio) + hosts file auto-update + cert SAN | 2026-02-06 | 8f27c89 | [001-local-domain-hosts-cert](./quick/001-local-domain-hosts-cert/) |
-| 002 | Trusted Root CA for HTTPS (browser trust, no security warnings) | 2026-02-07 | f057dfc | [002-trusted-root-ca-for-https](./quick/002-trusted-root-ca-for-https/) |
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 001 | Local domain (church.audio) + hosts file auto-update + cert SAN | 2026-02-06 | 8f27c89 |  | [001-local-domain-hosts-cert](./quick/001-local-domain-hosts-cert/) |
+| 002 | Trusted Root CA for HTTPS (browser trust, no security warnings) | 2026-02-07 | f057dfc |  | [002-trusted-root-ca-for-https](./quick/002-trusted-root-ca-for-https/) |
+| 260429-hb3 | Multi-source audio mixing refactor — one gst-launch pipeline per channel via audiomixer | 2026-04-29 | a2e1480 | Needs Review (UAT) | [260429-hb3-multi-source-audio-mixing-refactor-one-g](./quick/260429-hb3-multi-source-audio-mixing-refactor-one-g/) |
 
 ### Blockers/Concerns
 
