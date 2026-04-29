@@ -60,5 +60,27 @@ export interface LocalDeviceSource {
   lastSeenAt: number;
 }
 
+/**
+ * A file-backed test audio source. Loops an MP3/WAV file as if it were a live
+ * input, so developers can verify the full capture -> encode -> stream pipeline
+ * without real audio hardware.
+ *
+ * Not produced by `gst-device-monitor`; registered explicitly at startup from
+ * `config.audio.testSources`. The `id` follows the pattern `file:{slug}`.
+ */
+export interface FileSource {
+  readonly id: string;
+  readonly type: "file";
+  readonly name: string;
+  readonly filePath: string;
+  readonly sampleRate: number;
+  readonly bitDepth: number;
+  readonly channelCount: number;
+  /** Whether the file should loop indefinitely (default true). */
+  readonly loop: boolean;
+  status: SourceStatus;
+  lastSeenAt: number;
+}
+
 /** Union of all discoverable audio source types, discriminated by `type` field. */
-export type DiscoveredSource = AES67Source | LocalDeviceSource;
+export type DiscoveredSource = AES67Source | LocalDeviceSource | FileSource;

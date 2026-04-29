@@ -54,6 +54,7 @@ export class AudioSubsystem extends EventEmitter {
     const config = this.configStore.get();
 
     this.sourceRegistry = new SourceRegistry(basePath);
+    this.sourceRegistry.registerTestSources(config.audio.testSources);
 
     this.pipelineManager = new PipelineManager(config.audio.pipelineRecovery);
 

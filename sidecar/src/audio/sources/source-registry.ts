@@ -56,11 +56,12 @@ export class SourceRegistry extends EventEmitter {
 
     if (existing) {
       const changed = hasSourceChanged(existing, source);
+      const statusChanged = existing.status !== source.status;
       // Always refresh lastSeenAt
       existing.lastSeenAt = source.lastSeenAt;
 
-      if (changed) {
-        // Replace the entry with the incoming data (preserves mutable fields)
+      if (changed || statusChanged) {
+        // Replace the entry with the incoming data
         this.sources.set(source.id, { ...source });
         this.emit("source-updated", this.sources.get(source.id)!);
       }
@@ -120,8 +121,97 @@ export class SourceRegistry extends EventEmitter {
   }
 
   /** Return all sources of a given type. */
-  getByType(type: "aes67" | "local"): DiscoveredSource[] {
+  getByType(type: DiscoveredSource["type"]): DiscoveredSource[] {
     return Array.from(this.sources.values()).filter((s) => s.type === type);
+  }
+
+  /**
+   * Register a list of test (file-backed) audio sources. Called once at startup
+   * from `audio.testSources` config. Each entry is validated to ensure the
+   * referenced file exists on disk before being added to the registry.
+   *
+   * Sources whose files are missing are still registered with `status:
+   * "unavailable"` so the admin sees them and can fix the path.
+   */
+  registerTestSources(
+    entries: ReadonlyArray<{ id: string; name: string; filePath: string; loop: boolean }>,
+  ): void {
+    if (entries.length === 0) return;
+
+    const now = Date.now();
+    let registeredCount = 0;
+
+    for (const entry of entries) {
+      const fileExists = fs.existsSync(entry.filePath);
+      if (!fileExists) {
+        logger.warn("Test source file not found, registering as unavailable", {
+          id: entry.id,
+          filePath: entry.filePath,
+        });
+      }
+      const effectivePath = fileExists
+        ? this.mirrorToGstreamerSafePath(entry.filePath)
+        : entry.filePath;
+      this.addOrUpdate({
+        id: entry.id,
+        type: "file",
+        name: entry.name,
+        filePath: effectivePath,
+        sampleRate: 48000,
+        bitDepth: 16,
+        channelCount: 2,
+        loop: entry.loop,
+        status: fileExists ? "available" : "unavailable",
+        lastSeenAt: now,
+      });
+      registeredCount++;
+    }
+
+    logger.info("Registered test audio sources", { count: registeredCount });
+  }
+
+  /**
+   * Mirror a media file to a sanitized path under `<basePath>/test-media/`
+   * if the source path contains spaces or other shell-hostile characters.
+   *
+   * Why: gst-launch on Windows runs through `cmd.exe` (shell:true is required
+   * for proper pipeline parsing) and cmd.exe mangles paths containing spaces
+   * even when wrapped in `"..."`. Mirroring to an ASCII-safe filename in our
+   * own directory sidesteps the issue without burdening the user.
+   *
+   * Returns the sanitized path if mirrored, or the original path if it's
+   * already shell-safe.
+   */
+  private mirrorToGstreamerSafePath(originalPath: string): string {
+    const baseName = path.basename(originalPath);
+    const isShellSafe = /^[A-Za-z0-9._-]+$/.test(baseName);
+    if (isShellSafe) return originalPath;
+
+    const safeName = baseName.replace(/[^A-Za-z0-9._-]/g, "_");
+    const mirrorDir = path.join(path.dirname(this.cacheFilePath), "test-media");
+    const mirrorPath = path.join(mirrorDir, safeName);
+
+    try {
+      fs.mkdirSync(mirrorDir, { recursive: true });
+      const sourceMtime = fs.statSync(originalPath).mtimeMs;
+      const mirrorIsCurrent =
+        fs.existsSync(mirrorPath) && fs.statSync(mirrorPath).mtimeMs >= sourceMtime;
+      if (!mirrorIsCurrent) {
+        fs.copyFileSync(originalPath, mirrorPath);
+        logger.info("Mirrored test source to GStreamer-safe path", {
+          source: originalPath,
+          mirror: mirrorPath,
+        });
+      }
+    } catch (error) {
+      logger.warn("Failed to mirror test source, falling back to original path", {
+        source: originalPath,
+        error: toErrorMessage(error),
+      });
+      return originalPath;
+    }
+
+    return mirrorPath;
   }
 
   /** Return sources that are available for use (status "available" or "in-use"). */
@@ -216,11 +306,17 @@ export class SourceRegistry extends EventEmitter {
 
 // -- Helpers ----------------------------------------------------------------
 
-/** Sort comparator: AES67 before local, then alphabetical by name. */
+/** Type-precedence ordering used by `compareSourcesByTypeAndName`. */
+const SOURCE_TYPE_ORDER: Record<DiscoveredSource["type"], number> = {
+  aes67: 0,
+  file: 1,
+  local: 2,
+};
+
+/** Sort comparator: AES67 first, then file (test) sources, then local devices. */
 function compareSourcesByTypeAndName(a: DiscoveredSource, b: DiscoveredSource): number {
-  if (a.type !== b.type) {
-    return a.type === "aes67" ? -1 : 1;
-  }
+  const orderDiff = SOURCE_TYPE_ORDER[a.type] - SOURCE_TYPE_ORDER[b.type];
+  if (orderDiff !== 0) return orderDiff;
   return a.name.localeCompare(b.name);
 }
 
@@ -235,8 +331,8 @@ function isValidSourceEntry(entry: unknown): boolean {
     }
   }
 
-  // Validate type discriminator
-  return obj["type"] === "aes67" || obj["type"] === "local";
+  const typeValue = obj["type"];
+  return typeValue === "aes67" || typeValue === "local" || typeValue === "file";
 }
 
 /**
@@ -264,7 +360,18 @@ function hasSourceChanged(existing: DiscoveredSource, incoming: DiscoveredSource
       existing.sampleRate !== incoming.sampleRate ||
       existing.bitDepth !== incoming.bitDepth ||
       existing.channelCount !== incoming.channelCount ||
-      existing.isLoopback !== incoming.isLoopback
+      existing.isLoopback !== incoming.isLoopback ||
+      existing.direction !== incoming.direction
+    );
+  }
+
+  if (existing.type === "file" && incoming.type === "file") {
+    return (
+      existing.filePath !== incoming.filePath ||
+      existing.loop !== incoming.loop ||
+      existing.sampleRate !== incoming.sampleRate ||
+      existing.bitDepth !== incoming.bitDepth ||
+      existing.channelCount !== incoming.channelCount
     );
   }
 

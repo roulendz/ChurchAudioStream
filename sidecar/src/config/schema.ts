@@ -148,12 +148,25 @@ export const DiscoveryCacheSchema = z.object({
   devicePollIntervalMs: z.number().int().min(1000).max(30000).default(5000),
 });
 
+/**
+ * Test audio source: a media file looped through GStreamer as if it were a
+ * live capture device. Used by developers to verify meters and the streaming
+ * path without real audio hardware.
+ */
+export const TestSourceSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  filePath: z.string().min(1),
+  loop: z.boolean().default(true),
+});
+
 /** Top-level audio configuration grouping channels, metering, recovery, and discovery. */
 export const AudioSchema = z.object({
   channels: z.array(ChannelSchema).default([]),
   levelMetering: LevelMeteringSchema.default(() => LevelMeteringSchema.parse({})),
   pipelineRecovery: PipelineRecoverySchema.default(() => PipelineRecoverySchema.parse({})),
   discoveryCache: DiscoveryCacheSchema.default(() => DiscoveryCacheSchema.parse({})),
+  testSources: z.array(TestSourceSchema).default([]),
 });
 
 // ---------------------------------------------------------------------------
