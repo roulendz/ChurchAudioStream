@@ -6,7 +6,10 @@
  */
 
 /** Windows audio APIs supported by GStreamer for local device capture. */
-export type AudioApi = "wasapi2" | "asio" | "directsound";
+export type AudioApi = "wasapi2" | "wasapi" | "asio" | "directsound";
+
+/** GStreamer device class indicating capture direction. */
+export type DeviceDirection = "source" | "sink";
 
 /** Lifecycle status of a discovered audio source. */
 export type SourceStatus = "available" | "unavailable" | "in-use" | "verifying";
@@ -51,6 +54,8 @@ export interface LocalDeviceSource {
   readonly bitDepth: number;
   readonly channelCount: number;
   readonly isLoopback: boolean;
+  /** Device direction: "source" = input mic, "sink" = output/loopback */
+  readonly direction: DeviceDirection;
   status: SourceStatus;
   lastSeenAt: number;
 }

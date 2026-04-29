@@ -1,7 +1,7 @@
 import { SapListener } from "./sap-listener.js";
 import { DeviceEnumerator, type EnumeratedDevice } from "./device-enumerator.js";
 import { SourceRegistry } from "../sources/source-registry.js";
-import type { AES67Source, LocalDeviceSource, AudioApi } from "../sources/source-types.js";
+import type { AES67Source, LocalDeviceSource, AudioApi, DeviceDirection } from "../sources/source-types.js";
 import type { Aes67SdpInfo } from "./sdp-parser.js";
 import { logger } from "../../utils/logger.js";
 import { toErrorMessage } from "../../utils/error-message.js";
@@ -10,6 +10,7 @@ import Bonjour from "bonjour-service";
 /** Human-readable display names for Windows audio APIs. */
 const API_DISPLAY_NAMES: Record<string, string> = {
   wasapi2: "WASAPI",
+  wasapi: "WASAPI",
   asio: "ASIO",
   directsound: "DirectSound",
 };
@@ -213,6 +214,13 @@ export class DiscoveryManager {
     this.deviceEnumerator.on(
       "enumeration-complete",
       (devices: EnumeratedDevice[]) => {
+        // Register every enumerated device in the source registry.
+        // This is essential for the initial enumeration (before polling starts)
+        // because "device-added" is only emitted for NEW devices during polling.
+        for (const device of devices) {
+          const source = this.convertDeviceToLocalSource(device);
+          this.sourceRegistry.addOrUpdate(source);
+        }
         this.reconcileLocalSources(devices);
       },
     );
@@ -235,6 +243,7 @@ export class DiscoveryManager {
       bitDepth: device.bitDepth,
       channelCount: device.channelCount,
       isLoopback: device.isLoopback,
+      direction: device.direction,
       status: "available",
       lastSeenAt: nowMs,
     };
