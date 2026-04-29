@@ -243,6 +243,7 @@ export class ChannelManager extends EventEmitter {
     logger.info(`Processing config updated for channel "${channel.name}"`, {
       channelId,
     });
+    this.assertSinglePipelinePerChannel();
     return channel;
   }
 
@@ -274,6 +275,7 @@ export class ChannelManager extends EventEmitter {
     logger.info(`Processing config reset for channel "${channel.name}"`, {
       channelId,
     });
+    this.assertSinglePipelinePerChannel();
     return channel;
   }
 
@@ -361,17 +363,14 @@ export class ChannelManager extends EventEmitter {
       );
     }
 
-    const assignment = channel.sources[sourceIndex];
-
-    if (updates.gain !== undefined) (assignment as { gain: number }).gain = updates.gain;
-    if (updates.muted !== undefined) (assignment as { muted: boolean }).muted = updates.muted;
-    if (updates.delayMs !== undefined) (assignment as { delayMs: number }).delayMs = updates.delayMs;
-    if (updates.selectedChannels !== undefined) {
-      channel.sources[sourceIndex] = {
-        ...assignment,
-        selectedChannels: updates.selectedChannels,
-      };
-    }
+    // SourceAssignment.gain/muted/delayMs/selectedChannels are not readonly,
+    // so a single immutable replacement is enough. The previous `as` casts
+    // were dead weight (fields are mutable) and mixed mutation styles within
+    // one function. One replace, one mental model.
+    channel.sources[sourceIndex] = {
+      ...channel.sources[sourceIndex],
+      ...updates,
+    };
 
     await this.applyPipelineForChannelChange(channel);
 
@@ -642,13 +641,8 @@ export class ChannelManager extends EventEmitter {
 
     try {
       const newPipelineId = await this.pipelineManager.replacePipeline(oldPipelineId, newConfig);
+      this.swapMonitorBookkeeping(oldPipelineId, newPipelineId, channel);
       this.channelPipelines.set(channelId, newPipelineId);
-      this.resourceMonitor.untrackPipeline(oldPipelineId);
-      this.levelMonitor.clearPipeline(oldPipelineId);
-
-      if (channel.processing.agc.enabled) {
-        this.levelMonitor.setProcessingTarget(newPipelineId, channel.processing.agc.targetLufs);
-      }
     } catch (err) {
       logger.error(`replaceRunningPipeline failed for "${channel.name}"`, {
         channelId,
@@ -656,6 +650,24 @@ export class ChannelManager extends EventEmitter {
       });
       this.channelPipelines.delete(channelId);
       this.setChannelStatus(channelId, "stopped");
+    }
+  }
+
+  /**
+   * Swap monitor + level state from an old pipelineId to a new one when a
+   * channel's pipeline is atomically replaced (config change, source edit,
+   * file-loop EOS restart). Single source of truth for both replace paths --
+   * file-loop path used to skip this and leaked Map entries every loop.
+   */
+  private swapMonitorBookkeeping(
+    oldPipelineId: string,
+    newPipelineId: string,
+    channel: AppChannel,
+  ): void {
+    this.resourceMonitor.untrackPipeline(oldPipelineId);
+    this.levelMonitor.clearPipeline(oldPipelineId);
+    if (channel.processing.agc.enabled) {
+      this.levelMonitor.setProcessingTarget(newPipelineId, channel.processing.agc.targetLufs);
     }
   }
 
@@ -880,6 +892,7 @@ export class ChannelManager extends EventEmitter {
 
     try {
       const newPipelineId = await this.pipelineManager.replacePipeline(oldPipelineId, config);
+      this.swapMonitorBookkeeping(oldPipelineId, newPipelineId, channel);
       this.channelPipelines.set(channelId, newPipelineId);
       this.assertSinglePipelinePerChannel();
     } catch (err) {
@@ -1058,13 +1071,19 @@ export class ChannelManager extends EventEmitter {
     };
   }
 
+  /**
+   * Channel index used for deterministic port allocation. Throws on miss --
+   * silent fall-through previously yielded an out-of-range index, leading
+   * `getPortsForChannel` to bind the channel to a port mediasoup never sees.
+   * Tiger-style: fail-loud at the boundary.
+   */
   private getChannelIndex(channelId: string): number {
     let index = 0;
     for (const id of this.channels.keys()) {
       if (id === channelId) return index;
       index++;
     }
-    return index;
+    throw new Error(`getChannelIndex: unknown channelId ${channelId}`);
   }
 
   // ---------------------------------------------------------------------------
