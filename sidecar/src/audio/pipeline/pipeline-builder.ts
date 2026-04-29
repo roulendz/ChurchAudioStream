@@ -579,16 +579,25 @@ function buildSourceSegment(seg: SourceSegment, segmentIndex: number): string {
  * Single code path for 1, 2, and N sources -- no special-case branch for
  * single-source channels (Tiger-style: one path, no DRY violations).
  *
+ * `tailOverride` swaps the standard processing+RTP tail for an arbitrary
+ * downstream chain. Production callers pass nothing (uses
+ * `buildProcessingAndOutputTail`). Integration tests pass e.g.
+ * `audioconvert ! wavenc ! filesink location=...` so the mixer output
+ * can be captured to a file and analyzed for left/right content.
+ *
  * @throws Error if `config.sources` is empty (channel-manager guarantees ≥1).
  */
-export function buildChannelPipelineString(config: ChannelPipelineConfig): string {
+export function buildChannelPipelineString(
+  config: ChannelPipelineConfig,
+  tailOverride?: string,
+): string {
   if (config.sources.length === 0) {
     throw new Error(
       `buildChannelPipelineString: channel "${config.label}" has zero sources`,
     );
   }
   const levelIntervalNs = msToGstNanoseconds(config.levelIntervalMs);
-  const tail = buildProcessingAndOutputTail(config.processing, levelIntervalNs);
+  const tail = tailOverride ?? buildProcessingAndOutputTail(config.processing, levelIntervalNs);
   const mixerHead =
     `audiomixer name=mix latency=${AUDIOMIXER_LATENCY_NS} ignore-inactive-pads=true ` +
     `! audio/x-raw,rate=48000,channels=2 ! ${tail} `;
