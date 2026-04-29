@@ -18,18 +18,76 @@ function buildChannelOptions(source: DiscoveredSource): number[] {
   return Array.from({ length: count }, (_, i) => i + 1);
 }
 
-/** Group sources by type for easier selection. */
+/**
+ * Derive a user-friendly group label for a source.
+ *
+ * Groups by source type first (AES67 vs local), then by device direction
+ * (microphones vs loopback/output) for local devices.
+ */
+function deriveGroupLabel(source: DiscoveredSource): string {
+  if (source.type === "aes67") return "AES67 / Dante";
+  if (source.type === "file") return "Test Sources (File Loop)";
+
+  if (source.isLoopback) return "Loopback (System Audio)";
+
+  const direction = source.direction ?? "source";
+  if (direction === "sink") return "Output Devices";
+
+  return "Input Devices (Microphones)";
+}
+
+/** Human-readable channel count label: "Mono", "Stereo", or "Nch". */
+function formatChannelCountLabel(channelCount: number | undefined): string {
+  if (!channelCount || channelCount < 1) return "?ch";
+  if (channelCount === 1) return "Mono";
+  if (channelCount === 2) return "Stereo";
+  return `${channelCount}ch`;
+}
+
+/** Human-readable sample rate label: "48kHz", "192kHz", or "?Hz" if unknown. */
+function formatSampleRateLabel(sampleRate: number | undefined): string {
+  if (!sampleRate || sampleRate < 1) return "?Hz";
+  if (sampleRate >= 1000) return `${Math.round(sampleRate / 1000)}kHz`;
+  return `${sampleRate}Hz`;
+}
+
+/** Combined source-format suffix shown after the source name: "[Stereo, 48kHz]". */
+function formatSourceSpecLabel(source: DiscoveredSource): string {
+  const channels = formatChannelCountLabel(source.channelCount);
+  const rate = formatSampleRateLabel(source.sampleRate);
+  return `[${channels}, ${rate}]`;
+}
+
+/** Ordered group labels for consistent dropdown rendering. */
+const GROUP_ORDER = [
+  "AES67 / Dante",
+  "Test Sources (File Loop)",
+  "Input Devices (Microphones)",
+  "Loopback (System Audio)",
+  "Output Devices",
+];
+
+/** Group sources by type and direction for easier selection. */
 function groupSourcesByType(
   sources: DiscoveredSource[],
 ): Map<string, DiscoveredSource[]> {
   const groups = new Map<string, DiscoveredSource[]>();
   for (const source of sources) {
-    const key = source.type === "aes67" ? "AES67 / Dante" : "Local Devices";
+    const key = deriveGroupLabel(source);
     const existing = groups.get(key) ?? [];
     existing.push(source);
     groups.set(key, existing);
   }
-  return groups;
+
+  // Return groups in a consistent order
+  const ordered = new Map<string, DiscoveredSource[]>();
+  for (const label of GROUP_ORDER) {
+    const items = groups.get(label);
+    if (items && items.length > 0) {
+      ordered.set(label, items);
+    }
+  }
+  return ordered;
 }
 
 /** Find source by ID in the flat source list. */
@@ -40,6 +98,15 @@ function findSourceById(
   return sources.find((s) => s.id === sourceId);
 }
 
+/** Filter out sources whose status is not "available" when the toggle is on. */
+function filterSourcesByAvailability(
+  sources: DiscoveredSource[],
+  hideUnavailable: boolean,
+): DiscoveredSource[] {
+  if (!hideUnavailable) return sources;
+  return sources.filter((source) => source.status === "available");
+}
+
 export function SourceSelector({
   sources,
   assignedSources,
@@ -48,14 +115,28 @@ export function SourceSelector({
 }: SourceSelectorProps) {
   const [selectedSourceId, setSelectedSourceId] = useState("");
   const [selectedChannels, setSelectedChannels] = useState<number[]>([]);
+  const [hideUnavailable, setHideUnavailable] = useState(true);
 
-  const grouped = groupSourcesByType(sources);
+  const visibleSources = filterSourcesByAvailability(sources, hideUnavailable);
+  const grouped = groupSourcesByType(visibleSources);
   const selectedSource = selectedSourceId
     ? findSourceById(sources, selectedSourceId)
     : undefined;
   const channelOptions = selectedSource
     ? buildChannelOptions(selectedSource)
     : [];
+
+  function handleToggleHideUnavailable(checked: boolean) {
+    setHideUnavailable(checked);
+    if (!checked) return;
+    if (!selectedSourceId) return;
+    const stillVisible = sources.some(
+      (source) => source.id === selectedSourceId && source.status === "available",
+    );
+    if (stillVisible) return;
+    setSelectedSourceId("");
+    setSelectedChannels([]);
+  }
 
   function handleSourceChange(sourceId: string) {
     setSelectedSourceId(sourceId);
@@ -78,7 +159,8 @@ export function SourceSelector({
 
   function handleAddSource() {
     if (!selectedSourceId || selectedChannels.length === 0) return;
-    onAddSource(selectedSourceId, selectedChannels);
+    const zeroIndexedChannels = selectedChannels.map((ch) => ch - 1);
+    onAddSource(selectedSourceId, zeroIndexedChannels);
     setSelectedSourceId("");
     setSelectedChannels([]);
   }
@@ -97,9 +179,10 @@ export function SourceSelector({
                 <div className="assigned-source-info">
                   <span className="assigned-source-name">
                     {source?.name ?? assignment.sourceId}
+                    {source ? ` ${formatSourceSpecLabel(source)}` : ""}
                   </span>
                   <span className="assigned-source-channels">
-                    Ch: {assignment.selectedChannels.join(", ")}
+                    Ch: {assignment.selectedChannels.map((c) => c + 1).join(", ")} → 48kHz
                   </span>
                 </div>
                 <button
@@ -122,6 +205,17 @@ export function SourceSelector({
 
       {/* Add source controls */}
       <div className="source-add-controls">
+        <div className="form-field form-field--checkbox">
+          <label>
+            <input
+              type="checkbox"
+              checked={hideUnavailable}
+              onChange={(e) => handleToggleHideUnavailable(e.target.checked)}
+            />
+            Hide unavailable sources
+          </label>
+        </div>
+
         <div className="form-field">
           <label htmlFor="source-select">Add Source</label>
           <select
@@ -134,7 +228,7 @@ export function SourceSelector({
               <optgroup key={groupName} label={groupName}>
                 {groupSources.map((src) => (
                   <option key={src.id} value={src.id}>
-                    {src.name}
+                    {src.name} {formatSourceSpecLabel(src)}
                     {src.status !== "available" ? ` (${src.status})` : ""}
                   </option>
                 ))}
