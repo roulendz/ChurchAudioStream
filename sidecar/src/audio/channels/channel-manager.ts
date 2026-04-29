@@ -658,6 +658,11 @@ export class ChannelManager extends EventEmitter {
    * channel's pipeline is atomically replaced (config change, source edit,
    * file-loop EOS restart). Single source of truth for both replace paths --
    * file-loop path used to skip this and leaked Map entries every loop.
+   *
+   * Note: ResourceMonitor.trackPipeline for the NEW pipelineId is wired by the
+   * "connecting" state-change handler (see wirePipelineEvents). Only the
+   * untrack of the OLD pipelineId belongs here -- the new pipeline announces
+   * itself once gst-launch has a PID.
    */
   private swapMonitorBookkeeping(
     oldPipelineId: string,
@@ -669,6 +674,18 @@ export class ChannelManager extends EventEmitter {
     if (channel.processing.agc.enabled) {
       this.levelMonitor.setProcessingTarget(newPipelineId, channel.processing.agc.targetLufs);
     }
+  }
+
+  /**
+   * Wire ResourceMonitor for a pipeline once gst-launch has a PID. Called from
+   * the "connecting" state-change handler so the same call site covers initial
+   * start, replace, and crash respawn. Skips silently when the PID is not yet
+   * available (race where state-change fires before child.pid lands).
+   */
+  private trackPipelineResource(pipelineId: string): void {
+    const pid = this.pipelineManager.getPipelinePid(pipelineId);
+    if (pid === null) return;
+    this.resourceMonitor.trackPipeline(pipelineId, pid);
   }
 
   // ---------------------------------------------------------------------------
@@ -791,7 +808,15 @@ export class ChannelManager extends EventEmitter {
   private wirePipelineEvents(): void {
     this.pipelineManager.on(
       "pipeline-state-change",
-      (pipelineId: string, _state: PipelineState) => {
+      (pipelineId: string, state: PipelineState) => {
+        // Track resource usage as soon as the gst-launch child has a PID.
+        // Covers (a) initial startChannel, (b) replacePipeline, (c) crash
+        // respawn (same pipelineId, new PID -- Map.set overwrites).
+        // Centralised here so a single state-driven path keeps ResourceMonitor
+        // and PipelineManager in lockstep (DRY).
+        if (state === "connecting") {
+          this.trackPipelineResource(pipelineId);
+        }
         const channelId = this.findChannelByPipelineId(pipelineId);
         if (channelId) this.updateChannelStatus(channelId);
       },
@@ -815,8 +840,12 @@ export class ChannelManager extends EventEmitter {
           technicalDetails: error.technicalDetails,
         });
         if (error.code === "MAX_RESTARTS_EXCEEDED") {
-          this.resourceMonitor.untrackPipeline(pipelineId);
-          this.levelMonitor.clearPipeline(pipelineId);
+          // Pipeline gave up. Tear it down via stopChannel (DRY: same path as
+          // user-initiated stop) so the dead GStreamerProcess is removed from
+          // pipelineManager.pipelines and channelPipelines is cleared --
+          // otherwise aggregateChannelStatus reports "crashed" forever.
+          this.handleMaxRestartsExceeded(channelId, pipelineId);
+          return;
         }
         this.updateChannelStatus(channelId);
       },
@@ -909,6 +938,28 @@ export class ChannelManager extends EventEmitter {
       clearTimeout(timer);
       this.fileLoopRestartTimers.delete(channelId);
     }
+  }
+
+  /**
+   * Auto-stop a channel after its pipeline exhausted the restart budget.
+   * Reuses stopChannel for cleanup (DRY) so the dead GStreamerProcess is
+   * removed from pipelineManager.pipelines and the channelPipelines mapping
+   * is cleared. Without this the channel reports "crashed" forever and the
+   * admin must manually stop+remove.
+   */
+  private handleMaxRestartsExceeded(channelId: string, pipelineId: string): void {
+    this.logChannelEvent(
+      channelId,
+      "error",
+      "Channel auto-stopped: pipeline exceeded max restart attempts",
+      { pipelineId },
+    );
+    this.stopChannel(channelId).catch((err) => {
+      logger.error(`Failed to cleanup zombie pipeline ${pipelineId}`, {
+        channelId,
+        error: toErrorMessage(err),
+      });
+    });
   }
 
   /** Linear scan of channelPipelines (single-pipeline Map). */

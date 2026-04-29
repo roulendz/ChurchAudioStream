@@ -215,6 +215,16 @@ export class PipelineManager extends EventEmitter {
   }
 
   /**
+   * Get the OS process id of a pipeline's gst-launch child, or null if the
+   * pipeline is unknown or not currently running. Used by ChannelManager to
+   * wire ResourceMonitor on every (re)start of the underlying process.
+   */
+  getPipelinePid(pipelineId: string): number | null {
+    const pipeline = this.pipelines.get(pipelineId);
+    return pipeline ? pipeline.pid : null;
+  }
+
+  /**
    * Stop all pipelines concurrently. Clears all restart timers first
    * to prevent zombie restarts during shutdown.
    */

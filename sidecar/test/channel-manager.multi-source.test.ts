@@ -42,23 +42,31 @@ function makePipelineManagerMock(bus: PipelineEventBus, options: {
   initialState?: "streaming" | "stopped" | "crashed";
 } = {}) {
   let nextPipelineCounter = 0;
+  let nextPid = 10000;
   const createdPipelines: Array<{ id: string; config: ChannelPipelineConfig }> = [];
+  const pipelinePids = new Map<string, number>();
 
   const createPipeline = vi.fn((config: ChannelPipelineConfig) => {
     nextPipelineCounter += 1;
     const id = `pipeline-${nextPipelineCounter}`;
     createdPipelines.push({ id, config });
+    pipelinePids.set(id, ++nextPid);
     return id;
   });
   const startPipeline = vi.fn();
-  const removePipeline = vi.fn().mockResolvedValue(undefined);
-  const replacePipeline = vi.fn(async (_oldId: string, config: ChannelPipelineConfig) => {
+  const removePipeline = vi.fn(async (id: string) => {
+    pipelinePids.delete(id);
+  });
+  const replacePipeline = vi.fn(async (oldId: string, config: ChannelPipelineConfig) => {
     nextPipelineCounter += 1;
     const id = `pipeline-${nextPipelineCounter}`;
     createdPipelines.push({ id, config });
+    pipelinePids.delete(oldId);
+    pipelinePids.set(id, ++nextPid);
     return id;
   });
   const getPipelineState = vi.fn().mockReturnValue(options.initialState ?? "streaming");
+  const getPipelinePid = vi.fn((id: string) => pipelinePids.get(id) ?? null);
 
   const on = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
     let list = bus.handlers.get(event);
@@ -76,11 +84,25 @@ function makePipelineManagerMock(bus: PipelineEventBus, options: {
     removePipeline,
     replacePipeline,
     getPipelineState,
+    getPipelinePid,
     on,
     emit: vi.fn(),
   } as unknown as PipelineManager;
 
-  return { pipelineManager, createdPipelines, mocks: { createPipeline, startPipeline, removePipeline, replacePipeline, getPipelineState, on } };
+  return {
+    pipelineManager,
+    createdPipelines,
+    pipelinePids,
+    mocks: {
+      createPipeline,
+      startPipeline,
+      removePipeline,
+      replacePipeline,
+      getPipelineState,
+      getPipelinePid,
+      on,
+    },
+  };
 }
 
 function makeFileSource(id: string, name: string, loop: boolean): FileSource {
@@ -113,6 +135,7 @@ function makeStubMonitors() {
   } as unknown as LevelMonitor;
 
   const resourceMonitor = {
+    trackPipeline: vi.fn(),
     untrackPipeline: vi.fn(),
   } as unknown as ResourceMonitor;
 
@@ -140,7 +163,7 @@ function makeManager(options: {
   initialState?: "streaming" | "stopped" | "crashed";
 } = { sources: [] }) {
   const bus = makePipelineEventBus();
-  const { pipelineManager, mocks, createdPipelines } = makePipelineManagerMock(bus, {
+  const { pipelineManager, mocks, createdPipelines, pipelinePids } = makePipelineManagerMock(bus, {
     initialState: options.initialState,
   });
   const sourceRegistry = makeSourceRegistry(options.sources);
@@ -155,7 +178,7 @@ function makeManager(options: {
     eventLogger,
     configStore,
   );
-  return { manager, bus, mocks, createdPipelines, pipelineManager, sourceRegistry };
+  return { manager, bus, mocks, createdPipelines, pipelinePids, pipelineManager, sourceRegistry };
 }
 
 // ---------------------------------------------------------------------------
@@ -413,5 +436,178 @@ describe("ChannelManager - single-pipeline-per-channel", () => {
     await vi.advanceTimersByTimeAsync(500);
 
     expect(mocks.replacePipeline).not.toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------------------------
+  // ResourceMonitor wiring (latent bug #1: trackPipeline never called)
+  // -------------------------------------------------------------------------
+
+  it("emits trackPipeline with PID on pipeline state -> connecting (initial start)", async () => {
+    const sourceA = makeFileSource("src-a", "A", true);
+    const { manager, bus, pipelinePids, mocks } = makeManager({ sources: [sourceA] });
+
+    const trackPipeline = vi.mocked(
+      (manager as unknown as { resourceMonitor: { trackPipeline: ReturnType<typeof vi.fn> } })
+        .resourceMonitor.trackPipeline,
+    );
+
+    const channel = manager.createChannel("ch1", "stereo");
+    await manager.addSource(channel.id, {
+      sourceId: "src-a", selectedChannels: [0], gain: 1, muted: false, delayMs: 0,
+    });
+
+    const pipelineId = manager.getChannelPipelineIds(channel.id)[0];
+    expect(pipelineId).toBeDefined();
+
+    expect(trackPipeline).not.toHaveBeenCalled();
+
+    bus.emit("pipeline-state-change", pipelineId, "connecting");
+
+    expect(trackPipeline).toHaveBeenCalledTimes(1);
+    expect(trackPipeline).toHaveBeenCalledWith(pipelineId, pipelinePids.get(pipelineId));
+    expect(mocks.getPipelinePid).toHaveBeenCalledWith(pipelineId);
+  });
+
+  it("re-tracks resource on respawn (same pipelineId, new PID)", async () => {
+    const sourceA = makeFileSource("src-a", "A", true);
+    const { manager, bus, pipelinePids } = makeManager({ sources: [sourceA] });
+
+    const trackPipeline = vi.mocked(
+      (manager as unknown as { resourceMonitor: { trackPipeline: ReturnType<typeof vi.fn> } })
+        .resourceMonitor.trackPipeline,
+    );
+
+    const channel = manager.createChannel("ch1", "stereo");
+    await manager.addSource(channel.id, {
+      sourceId: "src-a", selectedChannels: [0], gain: 1, muted: false, delayMs: 0,
+    });
+
+    const pipelineId = manager.getChannelPipelineIds(channel.id)[0];
+    bus.emit("pipeline-state-change", pipelineId, "connecting");
+    const firstCallPid = trackPipeline.mock.calls[0][1] as number;
+
+    // Simulate respawn: same pipelineId, new PID assigned by pipeline-manager.
+    pipelinePids.set(pipelineId, firstCallPid + 999);
+    bus.emit("pipeline-state-change", pipelineId, "connecting");
+
+    expect(trackPipeline).toHaveBeenCalledTimes(2);
+    expect(trackPipeline.mock.calls[1][0]).toBe(pipelineId);
+    expect(trackPipeline.mock.calls[1][1]).toBe(firstCallPid + 999);
+  });
+
+  it("skips trackPipeline silently when getPipelinePid returns null", async () => {
+    const sourceA = makeFileSource("src-a", "A", true);
+    const { manager, bus, mocks } = makeManager({ sources: [sourceA] });
+
+    const trackPipeline = vi.mocked(
+      (manager as unknown as { resourceMonitor: { trackPipeline: ReturnType<typeof vi.fn> } })
+        .resourceMonitor.trackPipeline,
+    );
+
+    const channel = manager.createChannel("ch1", "stereo");
+    await manager.addSource(channel.id, {
+      sourceId: "src-a", selectedChannels: [0], gain: 1, muted: false, delayMs: 0,
+    });
+
+    const pipelineId = manager.getChannelPipelineIds(channel.id)[0];
+    mocks.getPipelinePid.mockReturnValueOnce(null);
+    trackPipeline.mockClear();
+
+    bus.emit("pipeline-state-change", pipelineId, "connecting");
+
+    expect(trackPipeline).not.toHaveBeenCalled();
+  });
+
+  it("untrack still fires for OLD pipelineId on replacePipeline (swap path)", async () => {
+    const sourceA = makeFileSource("src-a", "A", true);
+    const sourceB = makeFileSource("src-b", "B", true);
+    const { manager, bus } = makeManager({ sources: [sourceA, sourceB] });
+
+    const untrackPipeline = vi.mocked(
+      (manager as unknown as { resourceMonitor: { untrackPipeline: ReturnType<typeof vi.fn> } })
+        .resourceMonitor.untrackPipeline,
+    );
+
+    const channel = manager.createChannel("ch1", "stereo");
+    await manager.addSource(channel.id, {
+      sourceId: "src-a", selectedChannels: [0], gain: 1, muted: false, delayMs: 0,
+    });
+    const oldPipelineId = manager.getChannelPipelineIds(channel.id)[0];
+    bus.emit("pipeline-state-change", oldPipelineId, "connecting");
+
+    (manager.getChannel(channel.id) as { status: string }).status = "streaming";
+    untrackPipeline.mockClear();
+
+    await manager.addSource(channel.id, {
+      sourceId: "src-b", selectedChannels: [1], gain: 1, muted: false, delayMs: 0,
+    });
+
+    expect(untrackPipeline).toHaveBeenCalledWith(oldPipelineId);
+  });
+
+  // -------------------------------------------------------------------------
+  // MAX_RESTARTS_EXCEEDED zombie cleanup (latent bug #2)
+  // -------------------------------------------------------------------------
+
+  it("MAX_RESTARTS_EXCEEDED triggers stopChannel cleanup (removePipeline + map cleared)", async () => {
+    const sourceA = makeFileSource("src-a", "A", true);
+    const { manager, bus, mocks } = makeManager({ sources: [sourceA] });
+
+    const channel = manager.createChannel("ch1", "stereo");
+    await manager.addSource(channel.id, {
+      sourceId: "src-a", selectedChannels: [0], gain: 1, muted: false, delayMs: 0,
+    });
+    (manager.getChannel(channel.id) as { status: string }).status = "streaming";
+
+    const pipelineId = manager.getChannelPipelineIds(channel.id)[0];
+    expect(pipelineId).toBeDefined();
+    mocks.removePipeline.mockClear();
+
+    bus.emit("pipeline-error", pipelineId, {
+      code: "MAX_RESTARTS_EXCEEDED",
+      message: "exceeded",
+      technicalDetails: "test",
+      timestamp: Date.now(),
+    });
+
+    // stopChannel awaits pipelineManager.removePipeline -- give the promise a tick.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(mocks.removePipeline).toHaveBeenCalledWith(pipelineId);
+    expect(manager.getChannelPipelineIds(channel.id).length).toBe(0);
+    expect(manager.getPipelineToChannelMap().size).toBe(0);
+  });
+
+  it("MAX_RESTARTS_EXCEEDED logs auto-stopped reason and clears resource tracking", async () => {
+    const sourceA = makeFileSource("src-a", "A", true);
+    const { manager, bus } = makeManager({ sources: [sourceA] });
+
+    const eventLogger = (manager as unknown as { eventLogger: { log: ReturnType<typeof vi.fn> } }).eventLogger;
+    const untrackPipeline = vi.mocked(
+      (manager as unknown as { resourceMonitor: { untrackPipeline: ReturnType<typeof vi.fn> } })
+        .resourceMonitor.untrackPipeline,
+    );
+
+    const channel = manager.createChannel("ch1", "stereo");
+    await manager.addSource(channel.id, {
+      sourceId: "src-a", selectedChannels: [0], gain: 1, muted: false, delayMs: 0,
+    });
+    (manager.getChannel(channel.id) as { status: string }).status = "streaming";
+
+    const pipelineId = manager.getChannelPipelineIds(channel.id)[0];
+    eventLogger.log.mockClear();
+    untrackPipeline.mockClear();
+
+    bus.emit("pipeline-error", pipelineId, {
+      code: "MAX_RESTARTS_EXCEEDED",
+      message: "exceeded",
+      technicalDetails: "test",
+      timestamp: Date.now(),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    const messages = eventLogger.log.mock.calls.map((c) => (c[0] as { message: string }).message);
+    expect(messages).toContain("Channel auto-stopped: pipeline exceeded max restart attempts");
+    expect(untrackPipeline).toHaveBeenCalledWith(pipelineId);
   });
 });
