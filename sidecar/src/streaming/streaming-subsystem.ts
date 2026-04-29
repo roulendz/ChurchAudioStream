@@ -607,16 +607,36 @@ export class StreamingSubsystem extends EventEmitter {
         await this.pushActiveChannelList();
       }
     }
-    // Transient pipeline states (stopped, error, crashed) do NOT tear down
-    // the Router or listener consumers. The pipeline-manager auto-restarts
-    // crashed pipelines on the same RTP port; once a fresh gst-launch begins
-    // sending, the existing PlainTransport receives RTP and the existing
-    // WebRTC consumers keep forwarding audio to phones. Tearing down on
-    // every crash event would kill the listener's media path -- the phone
-    // would need to re-run the signaling handshake to recover, but the
-    // protoo client has no auto-resubscribe logic, so audio stays silent
-    // until manual reconnect. Final teardown happens only on channel removal
-    // (handleChannelRemoved).
+    // User-initiated stop (admin removed all sources, called stopChannel,
+    // or otherwise drove the channel back to "stopped"). Tear down the
+    // Router + Producer + listener consumers so the next start cycle goes
+    // through createChannelRouter from scratch. Without this the second
+    // pass through "starting"/"streaming" short-circuits on
+    // routerManager.hasChannel(channelId) and the listener's existing
+    // consumer is left bound to a Producer whose underlying gst-launch
+    // process has been killed -- mediasoup keeps forwarding zero packets
+    // and the phone goes silent. Listeners receive `channelStopped` so the
+    // PWA flips to "reconnecting" and re-runs the signaling handshake when
+    // the channel returns.
+    if (status === "stopped") {
+      if (this.routerManager.hasChannel(channelId)) {
+        await this.signalingHandler.disconnectListenersFromChannel(channelId);
+        await this.routerManager.removeChannelRouter(channelId);
+        await this.pushActiveChannelList();
+      }
+      return;
+    }
+    // Transient pipeline failures (crashed, error) do NOT tear down the
+    // Router or listener consumers. The pipeline-manager auto-restarts
+    // crashed pipelines on the same RTP port; once a fresh gst-launch
+    // begins sending, the existing PlainTransport receives RTP and the
+    // existing WebRTC consumers keep forwarding audio to phones. Tearing
+    // down on every crash event would kill the listener's media path --
+    // the phone would need to re-run the signaling handshake to recover,
+    // but the protoo client has no auto-resubscribe logic, so audio stays
+    // silent until manual reconnect. Final teardown happens only on
+    // channel removal (handleChannelRemoved) or on user-initiated stop
+    // (the branch above).
   }
 
   private async handleChannelRemoved(channelId: string): Promise<void> {

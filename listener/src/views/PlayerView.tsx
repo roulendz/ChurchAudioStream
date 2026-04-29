@@ -186,30 +186,108 @@ export function PlayerView({
   }, [channel.id, peer, connectToChannel]);
 
   // ---- Notification listeners ----
+  //
+  // Server -> client signalling that drives the auto-resume flow:
+  //
+  // - `channelStopped` (channelId === ours): admin removed the last source or
+  //   stopped the channel. Server has already torn down our consumer +
+  //   transport. Flip to "reconnecting" and arm a retry of the full
+  //   handshake; the next `activeChannels` notification with
+  //   hasActiveProducer === true wakes the retry.
+  // - `activeChannels` / `listenerCounts` while reconnecting: if our channel
+  //   is back live, run connectToChannel again and resume playback. The
+  //   AudioContext was already unlocked by the original "Start Listening"
+  //   gesture so playback can restart without further user interaction.
+  // - `consumerClosed` (no auto-resume signal): treat as terminal,
+  //   transition to "channel-offline" so the user can pick another channel.
   useEffect(() => {
+    let cancelled = false;
+
+    const resumeAfterRestart = async (): Promise<void> => {
+      if (cancelled || !mountedRef.current) return;
+      try {
+        const track = await connectToChannel(channel.id, peer);
+        if (cancelled || !mountedRef.current) return;
+        trackRef.current = track;
+        await startPlayback(track);
+        if (cancelled || !mountedRef.current) return;
+        setPlayerState("playing");
+      } catch (error) {
+        if (cancelled || !mountedRef.current) return;
+        handleConnectionError(error);
+      }
+    };
+
     const handleNotification = (notification: {
       method: string;
       data?: Record<string, unknown>;
     }) => {
-      if (notification.method === "consumerClosed") {
-        // Stop elapsed timer and quality polling
+      if (notification.method === "channelStopped") {
+        const payload = notification.data as
+          | { channelId?: string }
+          | undefined;
+        if (payload?.channelId !== channel.id) return;
+
+        // Server already closed our consumer + transport. Drop any cached
+        // track and arm the retry path.
         clearTimers();
-        setPlayerState("channel-offline");
+        trackRef.current = null;
+        disconnectMediasoup();
+        setPlayerState("reconnecting");
+        return;
       }
 
-      if (notification.method === "listenerCounts" && notification.data) {
-        const counts = notification.data as Record<string, number>;
-        if (counts[channel.id] != null) {
-          setListenerCount(counts[channel.id]);
+      if (
+        notification.method === "activeChannels" ||
+        notification.method === "listenerCounts"
+      ) {
+        const payload = notification.data as
+          | { channels?: Array<{ id: string; hasActiveProducer: boolean }> }
+          | undefined;
+        const ours = payload?.channels?.find((ch) => ch.id === channel.id);
+
+        if (
+          playerState === "reconnecting" &&
+          ours?.hasActiveProducer === true
+        ) {
+          void resumeAfterRestart();
         }
+
+        if (notification.method === "listenerCounts" && ours) {
+          // Server includes per-channel listenerCount in the enriched list
+          // when the admin has toggled showListenerCount on. The previous
+          // implementation read notification.data as Record<string, number>
+          // which never matched the actual { channels: [...] } payload, so
+          // the count never updated. Reading from `ours.listenerCount` keeps
+          // the dependency on the new shape correct.
+          const enriched = ours as unknown as { listenerCount?: number };
+          if (typeof enriched.listenerCount === "number") {
+            setListenerCount(enriched.listenerCount);
+          }
+        }
+      }
+
+      if (notification.method === "consumerClosed") {
+        // No remainingChannels payload here -- server-initiated consumer
+        // close from a path that does not promise a comeback. Stay offline.
+        clearTimers();
+        setPlayerState("channel-offline");
       }
     };
 
     peer.on("notification", handleNotification);
     return () => {
+      cancelled = true;
       peer.off("notification", handleNotification);
     };
-  }, [peer, channel.id]);
+  }, [
+    peer,
+    channel.id,
+    playerState,
+    connectToChannel,
+    startPlayback,
+    disconnectMediasoup,
+  ]);
 
   // ---- Elapsed time counter ----
   useEffect(() => {
