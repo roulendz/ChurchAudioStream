@@ -572,13 +572,19 @@ export class StreamingSubsystem extends EventEmitter {
   ): Promise<void> {
     if (!this.routerManager || !this.signalingHandler) return;
 
-    if (status === "streaming") {
-      // Only create router if not already active
+    if (status === "starting" || status === "streaming") {
+      // Bind PlainTransport BEFORE pipeline emits packets. On Windows, sending
+      // UDP to an unbound port returns ICMP Port Unreachable, which causes
+      // udpsink to error and propagates "queue: not-linked" back upstream,
+      // crashing the pipeline. The pipeline-state transition `connecting ->
+      // streaming` fires only after the first level message arrives, by which
+      // time gst-launch has already pushed packets. Binding on "starting"
+      // closes that race window.
       if (this.routerManager.hasChannel(channelId)) return;
 
       const channel = this.audioSubsystem.getChannel(channelId);
       if (!channel?.processing?.rtpOutput) {
-        logger.warn("Channel streaming but no RTP output config", { channelId });
+        logger.warn("Channel starting but no RTP output config", { channelId });
         return;
       }
 
@@ -591,31 +597,26 @@ export class StreamingSubsystem extends EventEmitter {
         ssrc,
       );
 
-      // Notify all listeners of channel state change
-      await this.signalingHandler.notifyAllListeners("channelStateChanged", {
-        channelId,
-        state: "active",
-      });
-
-      // Push updated channel list to all listeners
-      await this.pushActiveChannelList();
-    } else if (
-      status === "stopped" ||
-      status === "error" ||
-      status === "crashed"
-    ) {
-      if (!this.routerManager.hasChannel(channelId)) return;
-
-      // Disconnect listeners on this channel: close consumers/transports,
-      // notify with remaining active channels per locked decision
-      await this.signalingHandler.disconnectListenersFromChannel(channelId);
-
-      // Remove the channel's router (cascades to PlainTransport + Producer)
-      await this.routerManager.removeChannelRouter(channelId);
-
-      // Notify all listeners of updated channel list
-      await this.pushActiveChannelList();
+      // Only emit channel-active notification + listener push on "streaming"
+      // (when audio is actually flowing). "starting" just binds the port.
+      if (status === "streaming") {
+        await this.signalingHandler.notifyAllListeners("channelStateChanged", {
+          channelId,
+          state: "active",
+        });
+        await this.pushActiveChannelList();
+      }
     }
+    // Transient pipeline states (stopped, error, crashed) do NOT tear down
+    // the Router or listener consumers. The pipeline-manager auto-restarts
+    // crashed pipelines on the same RTP port; once a fresh gst-launch begins
+    // sending, the existing PlainTransport receives RTP and the existing
+    // WebRTC consumers keep forwarding audio to phones. Tearing down on
+    // every crash event would kill the listener's media path -- the phone
+    // would need to re-run the signaling handshake to recover, but the
+    // protoo client has no auto-resubscribe logic, so audio stays silent
+    // until manual reconnect. Final teardown happens only on channel removal
+    // (handleChannelRemoved).
   }
 
   private async handleChannelRemoved(channelId: string): Promise<void> {
