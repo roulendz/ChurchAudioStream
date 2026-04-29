@@ -137,6 +137,14 @@ export const ChannelSchema = z.object({
 export const PipelineRecoverySchema = z.object({
   autoRestart: z.boolean().default(true),
   maxRestartAttempts: z.number().int().min(0).max(20).default(5),
+  /**
+   * Fast first-attempt delay (ms). On the FIRST restart after a crash, wait
+   * only this long before respawning -- shrinks the listener silence window
+   * for transient kills (Task Manager force-kill, GStreamer one-off panic).
+   * Subsequent attempts use restartDelayMs with exponential backoff so a
+   * flapping device still gets rate-limited.
+   */
+  firstAttemptDelayMs: z.number().int().min(100).max(5000).default(500),
   restartDelayMs: z.number().int().min(500).max(30000).default(2000),
   maxRestartDelayMs: z.number().int().min(1000).max(60000).default(30000),
   drainTimeoutMs: z.number().int().min(0).max(5000).default(500),

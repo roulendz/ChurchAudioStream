@@ -29,6 +29,13 @@ import { toErrorMessage } from "../../utils/error-message.js";
 export interface RecoveryConfig {
   readonly autoRestart: boolean;
   readonly maxRestartAttempts: number;
+  /**
+   * Delay (ms) before the FIRST restart attempt after a crash. Kept short to
+   * minimise listener silence on transient external kills. Subsequent attempts
+   * use `restartDelayMs` with exponential backoff so flapping devices still
+   * get rate-limited.
+   */
+  readonly firstAttemptDelayMs: number;
   readonly restartDelayMs: number;
   readonly maxRestartDelayMs: number;
   readonly drainTimeoutMs: number;
@@ -388,15 +395,17 @@ export class PipelineManager extends EventEmitter {
   }
 
   /**
-   * Compute exponential backoff delay: `baseDelay * 2^(attempt-1)`, capped.
+   * Compute restart delay.
    *
-   * Attempt 1 = baseDelay, attempt 2 = 2x, attempt 3 = 4x, etc.
-   * Capped at maxRestartDelayMs to prevent absurdly long waits.
+   * Attempt 1 uses `firstAttemptDelayMs` (fast path -- transient kill recovery).
+   * Attempts 2..N use exponential backoff `restartDelayMs * 2^(attempt-2)` so
+   * flapping devices get rate-limited (4s, 8s, 16s, capped at maxRestartDelayMs).
    */
   private computeBackoffDelay(attempt: number): number {
+    if (attempt <= 1) return this.recoveryConfig.firstAttemptDelayMs;
     const baseDelay = this.recoveryConfig.restartDelayMs;
     const maxDelay = this.recoveryConfig.maxRestartDelayMs;
-    const exponentialDelay = baseDelay * Math.pow(2, attempt - 1);
+    const exponentialDelay = baseDelay * Math.pow(2, attempt - 2);
     return Math.min(exponentialDelay, maxDelay);
   }
 
