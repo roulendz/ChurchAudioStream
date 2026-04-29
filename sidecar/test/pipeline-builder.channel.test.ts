@@ -228,6 +228,57 @@ describe("buildChannelPipelineString", () => {
     expect((out.match(/panorama=1\.0/g) ?? []).length).toBeGreaterThanOrEqual(1);
   });
 
+  it("namespaces deinterleave/interleave names per segment so multi-source pipelines don't collide on name=d", () => {
+    // Regression for UAT bug: 2 file segments both single-channel-extracting
+    // collided on `name=d`, gst-launch dropped one, only one source audible.
+    // Each segment now uses `name=d_${i}` / `name=i_${i}`.
+    const cfg: ChannelPipelineConfig = {
+      label: "ch-collision-regression",
+      levelIntervalMs: 50,
+      processing: PROCESSING,
+      sources: [
+        fileSegment("C:/song.mp3", [0], "mix.sink_0"),
+        fileSegment("C:/song.mp3", [1], "mix.sink_1"),
+      ],
+      shouldLoopOnEos: true,
+    };
+    const out = buildChannelPipelineString(cfg);
+
+    // Each segment must declare a UNIQUE deinterleave name.
+    expect(out).toMatch(/deinterleave name=d_0\b/);
+    expect(out).toMatch(/deinterleave name=d_1\b/);
+
+    // Pad references must match their declaring deinterleave (no cross-segment refs).
+    expect(out).toMatch(/\bd_0\.src_0\b/);
+    expect(out).toMatch(/\bd_1\.src_1\b/);
+
+    // Every deinterleave name in the pipeline must be distinct (Tiger-style invariant).
+    const declaredNames = (out.match(/deinterleave name=(\S+)/g) ?? [])
+      .map((decl) => decl.replace("deinterleave name=", ""));
+    expect(new Set(declaredNames).size).toBe(declaredNames.length);
+  });
+
+  it("namespaces interleave names too when 2-channel extraction is used in 2 segments (8-channel AES67 mix)", () => {
+    const cfg: ChannelPipelineConfig = {
+      label: "ch-interleave-collision",
+      levelIntervalMs: 50,
+      processing: PROCESSING,
+      sources: [
+        aes67Segment([0, 1], "mix.sink_0"),
+        aes67Segment([2, 3], "mix.sink_1"),
+      ],
+      shouldLoopOnEos: false,
+    };
+    const out = buildChannelPipelineString(cfg);
+
+    // Both segments use interleave; must have unique names.
+    expect(out).toMatch(/interleave name=i_0\b/);
+    expect(out).toMatch(/interleave name=i_1\b/);
+    const interleaveNames = (out.match(/interleave name=(\S+)/g) ?? [])
+      .map((decl) => decl.replace("interleave name=", ""));
+    expect(new Set(interleaveNames).size).toBe(interleaveNames.length);
+  });
+
   it("throws when any source segment has delayMs > 0 (fail-loud, not silently ignored)", () => {
     const seg = fileSegment("C:/a.mp3", [0], "mix.sink_0");
     const segWithDelay: SourceSegment = {

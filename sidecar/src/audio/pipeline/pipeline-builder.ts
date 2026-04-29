@@ -192,8 +192,10 @@ function buildProcessingAndOutputTail(
 function buildSingleChannelExtraction(
   channelIndex: number,
   totalSourceChannels?: number,
+  nameSuffix: string = "",
 ): string {
-  const head = `deinterleave name=d d.src_${channelIndex} ! queue ! `;
+  const deinterleaveName = `d${nameSuffix}`;
+  const head = `deinterleave name=${deinterleaveName} ${deinterleaveName}.src_${channelIndex} ! queue ! `;
   const isStereoSource = totalSourceChannels === 2;
   if (!isStereoSource) {
     return head;
@@ -220,10 +222,17 @@ function buildSingleChannelExtraction(
  * - 2 channels selected: deinterleave -> interleave two pads
  * - All channels selected (totalSourceChannels known): pass through
  * - N channels selected (N > 2, totalSourceChannels known): deinterleave + interleave N pads
+ *
+ * `nameSuffix` namespaces the `deinterleave name=d` and `interleave name=i`
+ * elements when multiple sources share one gst-launch pipeline (audiomixer
+ * channel mix). Without unique names, gst-launch's parser keeps the first
+ * `name=d` and silently drops the rest -- only the first source is audible.
+ * Callers from the channel-pipeline path pass `_${segmentIndex}`.
  */
 function buildChannelSelectionString(
   selectedChannels: number[],
   totalSourceChannels?: number,
+  nameSuffix: string = "",
 ): string {
   // When total is known and all channels are selected, no deinterleave needed
   if (totalSourceChannels !== undefined && selectedChannels.length === totalSourceChannels) {
@@ -231,17 +240,20 @@ function buildChannelSelectionString(
   }
 
   if (selectedChannels.length === 1) {
-    return buildSingleChannelExtraction(selectedChannels[0], totalSourceChannels);
+    return buildSingleChannelExtraction(selectedChannels[0], totalSourceChannels, nameSuffix);
   }
+
+  const deinterleaveName = `d${nameSuffix}`;
+  const interleaveName = `i${nameSuffix}`;
 
   if (selectedChannels.length === 2) {
     // Stereo pair extraction: deinterleave -> interleave two channels
     const [chA, chB] = selectedChannels;
     return (
-      `deinterleave name=d ` +
-      `d.src_${chA} ! queue ! interleave name=i ` +
-      `d.src_${chB} ! queue ! i. ` +
-      `i. ! `
+      `deinterleave name=${deinterleaveName} ` +
+      `${deinterleaveName}.src_${chA} ! queue ! interleave name=${interleaveName} ` +
+      `${deinterleaveName}.src_${chB} ! queue ! ${interleaveName}. ` +
+      `${interleaveName}. ! `
     );
   }
 
@@ -254,12 +266,12 @@ function buildChannelSelectionString(
   const interleaveInputs = selectedChannels
     .map((ch, index) =>
       index === 0
-        ? `d.src_${ch} ! queue ! interleave name=i`
-        : `d.src_${ch} ! queue ! i.`,
+        ? `${deinterleaveName}.src_${ch} ! queue ! interleave name=${interleaveName}`
+        : `${deinterleaveName}.src_${ch} ! queue ! ${interleaveName}.`,
     )
     .join(" ");
 
-  return `deinterleave name=d ${interleaveInputs} i. ! `;
+  return `deinterleave name=${deinterleaveName} ${interleaveInputs} ${interleaveName}. ! `;
 }
 
 /**
@@ -338,7 +350,7 @@ const WASAPI_LIVE_BUFFER_PROPS = `buffer-time=20000 latency-time=10000`;
  * which lives outside `gst-launch` in CLI mode. For now: file plays once,
  * pipeline manager schedules a clean restart when `loop=true`.
  */
-function buildFileSourceHead(config: FilePipelineConfig): string {
+function buildFileSourceHead(config: FilePipelineConfig, nameSuffix: string = ""): string {
   const { filePath, selectedChannels } = config;
   // GStreamer's pipeline parser uses '\' as an escape character, so backslashes
   // in Windows paths get stripped (`G:\Downloads` -> `G:Downloads`). Forward
@@ -347,7 +359,7 @@ function buildFileSourceHead(config: FilePipelineConfig): string {
   const gstSafePath = filePath.replace(/\\/g, "/");
   // File sources are always normalized to stereo at this stage; pass total=2
   // so an "all channels" selection short-circuits to a no-op.
-  const channelSelect = buildChannelSelectionString(selectedChannels, 2);
+  const channelSelect = buildChannelSelectionString(selectedChannels, 2, nameSuffix);
   return (
     `filesrc location="${gstSafePath}" ! decodebin ! audioconvert ! audioresample ! ` +
     `audio/x-raw,rate=48000,channels=2 ! ${channelSelect}`
@@ -355,7 +367,7 @@ function buildFileSourceHead(config: FilePipelineConfig): string {
 }
 
 /** Build the AES67 multicast RTP receive source head. */
-function buildAes67SourceHead(config: Aes67PipelineConfig): string {
+function buildAes67SourceHead(config: Aes67PipelineConfig, nameSuffix: string = ""): string {
   const {
     multicastAddress,
     port,
@@ -375,7 +387,7 @@ function buildAes67SourceHead(config: Aes67PipelineConfig): string {
 
   const jitterBuffer = `rtpjitterbuffer latency=5`;
 
-  const channelSelect = buildChannelSelectionString(selectedChannels, channelCount);
+  const channelSelect = buildChannelSelectionString(selectedChannels, channelCount, nameSuffix);
 
   return `${source} ! ${jitterBuffer} ! ${depayloader} ! ${channelSelect}`;
 }
@@ -390,15 +402,15 @@ function buildAes67SourceHead(config: Aes67PipelineConfig): string {
  * Returns empty string when no channels are selected, or when more than 2 are
  * selected without a known total (ambiguous routing for non-AES67 sources).
  */
-function buildLocalChannelSelectionSegment(config: LocalPipelineConfig): string {
+function buildLocalChannelSelectionSegment(config: LocalPipelineConfig, nameSuffix: string = ""): string {
   const { selectedChannels, totalChannelCount } = config;
   if (selectedChannels.length === 0) return "";
   if (selectedChannels.length > 2 && totalChannelCount === undefined) return "";
-  return buildChannelSelectionString(selectedChannels, totalChannelCount);
+  return buildChannelSelectionString(selectedChannels, totalChannelCount, nameSuffix);
 }
 
 /** Build a WASAPI2 capture source head (regular capture or loopback). */
-function buildWasapi2SourceHead(config: LocalPipelineConfig): string {
+function buildWasapi2SourceHead(config: LocalPipelineConfig, nameSuffix: string = ""): string {
   const { deviceId, isLoopback } = config;
 
   let sourceElement: string;
@@ -411,7 +423,7 @@ function buildWasapi2SourceHead(config: LocalPipelineConfig): string {
     sourceElement = `wasapi2src device=${quoteDeviceId(deviceId)} ${WASAPI_LIVE_BUFFER_PROPS}`;
   }
 
-  return `${sourceElement} ! ${buildLocalChannelSelectionSegment(config)}`;
+  return `${sourceElement} ! ${buildLocalChannelSelectionSegment(config, nameSuffix)}`;
 }
 
 /**
@@ -422,7 +434,7 @@ function buildWasapi2SourceHead(config: LocalPipelineConfig): string {
  * (GStreamer issue #922). The wasapi v1 plugin uses simpler `{flow}.{GUID}`
  * endpoint IDs that work reliably.
  */
-function buildWasapiV1SourceHead(config: LocalPipelineConfig): string {
+function buildWasapiV1SourceHead(config: LocalPipelineConfig, nameSuffix: string = ""): string {
   const { deviceId, isLoopback } = config;
 
   let sourceElement: string;
@@ -435,11 +447,11 @@ function buildWasapiV1SourceHead(config: LocalPipelineConfig): string {
     sourceElement = `wasapisrc device=${quoteDeviceId(deviceId)} ${WASAPI_LIVE_BUFFER_PROPS}`;
   }
 
-  return `${sourceElement} ! ${buildLocalChannelSelectionSegment(config)}`;
+  return `${sourceElement} ! ${buildLocalChannelSelectionSegment(config, nameSuffix)}`;
 }
 
 /** Build an ASIO capture source head. ASIO supports native channel selection. */
-function buildAsioSourceHead(config: LocalPipelineConfig): string {
+function buildAsioSourceHead(config: LocalPipelineConfig, _nameSuffix: string = ""): string {
   const { deviceId, selectedChannels, bufferSize } = config;
 
   let sourceElement = `asiosrc device-clsid=${quoteDeviceId(deviceId)}`;
@@ -456,18 +468,18 @@ function buildAsioSourceHead(config: LocalPipelineConfig): string {
 }
 
 /** Build a DirectSound capture source head (fallback for legacy compatibility). */
-function buildDirectSoundSourceHead(config: LocalPipelineConfig): string {
+function buildDirectSoundSourceHead(config: LocalPipelineConfig, nameSuffix: string = ""): string {
   const { deviceId } = config;
 
   const sourceElement = `directsoundsrc device-name=${quoteDeviceId(deviceId)}`;
 
-  return `${sourceElement} ! ${buildLocalChannelSelectionSegment(config)}`;
+  return `${sourceElement} ! ${buildLocalChannelSelectionSegment(config, nameSuffix)}`;
 }
 
 /** Dispatch table mapping AudioApi values to their source head builder functions. */
 const LOCAL_SOURCE_HEAD_BUILDERS: Record<
   AudioApi,
-  (config: LocalPipelineConfig) => string
+  (config: LocalPipelineConfig, nameSuffix?: string) => string
 > = {
   wasapi2: buildWasapi2SourceHead,
   wasapi: buildWasapiV1SourceHead,
@@ -495,11 +507,19 @@ function computeEffectiveGain(assignment: SourceSegment["assignment"]): number {
   return assignment.muted ? 0 : assignment.gain;
 }
 
-/** Pure dispatcher -- picks correct head builder per source kind. */
-function buildSourceHeadForSegment(seg: SourceSegment): string {
+/**
+ * Pure dispatcher -- picks correct head builder per source kind.
+ *
+ * `nameSuffix` namespaces deinterleave/interleave element names so multiple
+ * source segments in the same gst-launch pipeline don't collide on `name=d`
+ * or `name=i`. Without this, only the first segment's channel-selection
+ * elements survive parsing -- the symptom is a multi-source channel where
+ * only one source is audible.
+ */
+function buildSourceHeadForSegment(seg: SourceSegment, nameSuffix: string): string {
   const { source } = seg;
-  if (source.kind === "file") return buildFileSourceHead(source.config);
-  if (source.kind === "aes67") return buildAes67SourceHead(source.config);
+  if (source.kind === "file") return buildFileSourceHead(source.config, nameSuffix);
+  if (source.kind === "aes67") return buildAes67SourceHead(source.config, nameSuffix);
   const builderFn = LOCAL_SOURCE_HEAD_BUILDERS[source.config.api];
   if (!builderFn) {
     throw new Error(
@@ -507,7 +527,7 @@ function buildSourceHeadForSegment(seg: SourceSegment): string {
       `Supported APIs: ${Object.keys(LOCAL_SOURCE_HEAD_BUILDERS).join(", ")}.`,
     );
   }
-  return builderFn(source.config);
+  return builderFn(source.config, nameSuffix);
 }
 
 /**
@@ -533,7 +553,7 @@ function buildLiveCaptureSegmentForSegment(seg: SourceSegment): string {
  *   yet wired to a GStreamer element (no `audiodelay` in the standard 1.26
  *   plugin set). Fail-loud rather than silently ignore the value.
  */
-function buildSourceSegment(seg: SourceSegment): string {
+function buildSourceSegment(seg: SourceSegment, segmentIndex: number): string {
   if (seg.assignment.delayMs > 0) {
     throw new Error(
       `buildSourceSegment: per-source delayMs not supported yet ` +
@@ -541,7 +561,8 @@ function buildSourceSegment(seg: SourceSegment): string {
       `Set delayMs to 0 or implement audiodelay in the segment builder.`,
     );
   }
-  const head = buildSourceHeadForSegment(seg);
+  const nameSuffix = `_${segmentIndex}`;
+  const head = buildSourceHeadForSegment(seg, nameSuffix);
   const liveQueue = buildLiveCaptureSegmentForSegment(seg);
   const effectiveGain = computeEffectiveGain(seg.assignment);
   return (
@@ -571,6 +592,8 @@ export function buildChannelPipelineString(config: ChannelPipelineConfig): strin
   const mixerHead =
     `audiomixer name=mix latency=${AUDIOMIXER_LATENCY_NS} ignore-inactive-pads=true ` +
     `! audio/x-raw,rate=48000,channels=2 ! ${tail} `;
-  const segments = config.sources.map(buildSourceSegment).join(" ");
+  const segments = config.sources
+    .map((seg, segmentIndex) => buildSourceSegment(seg, segmentIndex))
+    .join(" ");
   return mixerHead + segments;
 }
