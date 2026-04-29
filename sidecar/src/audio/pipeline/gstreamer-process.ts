@@ -14,10 +14,10 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import { buildPipelineString, buildChannelPipelineString } from "./pipeline-builder.js";
+import { buildChannelPipelineString } from "./pipeline-builder.js";
 import { createBusMessageLineParser } from "./metering-parser.js";
 import type {
-  AnyPipelineConfig,
+  ChannelPipelineConfig,
   PipelineState,
   AudioLevels,
   PipelineError,
@@ -69,7 +69,7 @@ export interface GStreamerProcessEvents {
  */
 export class GStreamerProcess extends EventEmitter {
   readonly id: string;
-  readonly config: AnyPipelineConfig;
+  readonly config: ChannelPipelineConfig;
 
   private currentState: PipelineState = "stopped";
   private childProcess: ChildProcess | null = null;
@@ -77,7 +77,7 @@ export class GStreamerProcess extends EventEmitter {
   private processStartedAt: number | null = null;
   private stopRequested = false;
 
-  constructor(config: AnyPipelineConfig) {
+  constructor(config: ChannelPipelineConfig) {
     super();
     this.id = randomUUID();
     this.config = config;
@@ -126,13 +126,7 @@ export class GStreamerProcess extends EventEmitter {
     this.stopRequested = false;
     this.transitionState("initializing");
 
-    // Self-explanatory: presence of `sources` field uniquely identifies
-    // ChannelPipelineConfig (multi-source). Otherwise legacy PipelineConfig
-    // (per-source). Task 7 collapses this once channel-manager only emits
-    // ChannelPipelineConfig.
-    const pipelineString = "sources" in this.config
-      ? buildChannelPipelineString(this.config)
-      : buildPipelineString(this.config);
+    const pipelineString = buildChannelPipelineString(this.config);
 
     logger.info(`Spawning GStreamer pipeline "${this.config.label}"`, {
       pipelineId: this.id,

@@ -1,19 +1,23 @@
 /**
  * GStreamer pipeline string builder.
  *
- * Constructs `gst-launch-1.0` CLI pipeline strings for all supported audio source types:
- * AES67 multicast, WASAPI, ASIO, DirectSound, and WASAPI Loopback.
+ * Constructs `gst-launch-1.0` CLI pipeline strings for one-pipeline-per-channel
+ * deployments: N source segments combined inside a single process via
+ * `audiomixer name=mix`. Supported source kinds: AES67 multicast, WASAPI v1/v2
+ * (regular + loopback), ASIO, DirectSound, file (decodebin).
  *
- * Phase 3 processing support: when `PipelineConfig.processing` is present,
- * the pipeline includes audioloudnorm (AGC), opusenc + rtpopuspay (Opus/RTP encoding),
- * and a tee splitting to metering and encoding branches.
+ * Pipeline string layout:
+ *   audiomixer name=mix latency=10000000 ignore-inactive-pads=true
+ *     ! audio/x-raw,rate=48000,channels=2 ! <processing+output tail>
+ *   <source-0-head> ! <queue if live> volume volume=g0 ! audioconvert
+ *     ! audioresample ! audio/x-raw,rate=48000,channels=2 ! mix.sink_0
+ *   ...repeated for each source...
  *
- * Pure function module -- no side effects, no state, no I/O.
- * The process manager consumes these strings to spawn GStreamer child processes.
+ * Pure function module -- no side effects, no state, no I/O. Process manager
+ * consumes the returned string to spawn one GStreamer child per channel.
  */
 
 import type {
-  PipelineConfig,
   Aes67PipelineConfig,
   LocalPipelineConfig,
   FilePipelineConfig,
@@ -470,102 +474,6 @@ const LOCAL_SOURCE_HEAD_BUILDERS: Record<
   asio: buildAsioSourceHead,
   directsound: buildDirectSoundSourceHead,
 };
-
-// ---------------------------------------------------------------------------
-// Top-level source head dispatcher
-// ---------------------------------------------------------------------------
-
-/**
- * Build the source-specific head of the pipeline (source element + channel selection).
- * Does NOT include the tail (metering or processing).
- *
- * @throws Error if configuration is invalid (missing required config for source type).
- */
-function buildSourceHead(config: PipelineConfig): string {
-  if (config.sourceType === "aes67") {
-    if (!config.aes67Config) {
-      throw new Error(
-        `Pipeline config has sourceType "aes67" but aes67Config is missing.`,
-      );
-    }
-    return buildAes67SourceHead(config.aes67Config);
-  }
-
-  if (config.sourceType === "local") {
-    if (!config.localConfig) {
-      throw new Error(
-        `Pipeline config has sourceType "local" but localConfig is missing.`,
-      );
-    }
-
-    const builderFn = LOCAL_SOURCE_HEAD_BUILDERS[config.localConfig.api];
-    if (!builderFn) {
-      throw new Error(
-        `Unsupported audio API: "${config.localConfig.api}". ` +
-        `Supported APIs: ${Object.keys(LOCAL_SOURCE_HEAD_BUILDERS).join(", ")}.`,
-      );
-    }
-
-    return builderFn(config.localConfig);
-  }
-
-  if (config.sourceType === "file") {
-    if (!config.fileConfig) {
-      throw new Error(
-        `Pipeline config has sourceType "file" but fileConfig is missing.`,
-      );
-    }
-    return buildFileSourceHead(config.fileConfig);
-  }
-
-  // TypeScript exhaustiveness -- should never reach here with discriminated union
-  throw new Error(`Unknown source type: "${(config as { sourceType: string }).sourceType}".`);
-}
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Build a complete GStreamer pipeline string from a PipelineConfig.
- *
- * The returned string is ready to be passed as arguments to `gst-launch-1.0 -m -e`.
- *
- * When `config.processing` is present, produces a Phase 3 pipeline with
- * AGC (audioloudnorm), Opus encoding, and RTP output.
- * When absent, produces the Phase 2 metering-only pipeline.
- *
- * @throws Error if configuration is invalid (missing required config for source type).
- */
-export function buildPipelineString(config: PipelineConfig): string {
-  const levelIntervalNs = msToGstNanoseconds(config.levelIntervalMs);
-  const sourceHead = buildSourceHead(config);
-  const liveQueueSegment = buildLiveCaptureSegment(config);
-
-  if (config.processing) {
-    return sourceHead + liveQueueSegment + buildProcessingAndOutputTail(config.processing, levelIntervalNs);
-  }
-
-  return sourceHead + liveQueueSegment + buildMeteringTail(levelIntervalNs);
-}
-
-/**
- * Return the live-capture queue segment (with trailing `! `) for local sources,
- * empty string for AES67 (which uses `rtpjitterbuffer` upstream) and for file
- * sources (where leaky=downstream would drop the in-burst decode output and
- * leave udpsink waiting forever for timestamps that never arrive).
- *
- * Live capture (WASAPI/DirectSound) cannot pause and emits realtime samples,
- * so the leaky decoupling queue protects the pipeline from brief stalls.
- * File sources push the entire decoded stream as fast as decodebin can run
- * and rely on a downstream sync=true sink to pace output -- inserting a
- * leaky queue between filesrc and that sink would discard most of the audio.
- */
-function buildLiveCaptureSegment(config: PipelineConfig): string {
-  if (config.sourceType === "aes67") return "";
-  if (config.sourceType === "file") return "";
-  return `${LIVE_CAPTURE_QUEUE_SEGMENT} ! `;
-}
 
 // ---------------------------------------------------------------------------
 // Multi-source channel pipeline (audiomixer)

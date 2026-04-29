@@ -17,7 +17,6 @@
 import { EventEmitter } from "node:events";
 import { GStreamerProcess } from "./gstreamer-process.js";
 import type {
-  AnyPipelineConfig,
   ChannelPipelineConfig,
   PipelineState,
   AudioLevels,
@@ -87,7 +86,7 @@ export class PipelineManager extends EventEmitter {
    * Wires up event forwarding and crash recovery listeners.
    * Returns the pipeline ID (UUID) for subsequent lifecycle calls.
    */
-  createPipeline(config: AnyPipelineConfig): string {
+  createPipeline(config: ChannelPipelineConfig): string {
     const pipeline = new GStreamerProcess(config);
     const pipelineId = pipeline.id;
 
@@ -203,7 +202,7 @@ export class PipelineManager extends EventEmitter {
   /**
    * Get the config of a pipeline, or null if not found.
    */
-  getPipelineConfig(pipelineId: string): AnyPipelineConfig | null {
+  getPipelineConfig(pipelineId: string): ChannelPipelineConfig | null {
     const pipeline = this.pipelines.get(pipelineId);
     return pipeline ? pipeline.config : null;
   }

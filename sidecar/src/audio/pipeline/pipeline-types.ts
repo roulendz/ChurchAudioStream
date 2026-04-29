@@ -98,26 +98,6 @@ export interface LocalPipelineConfig {
 }
 
 /**
- * Complete configuration needed to construct and run a GStreamer pipeline.
- *
- * Discriminated by `sourceType`: exactly one of `aes67Config` or `localConfig`
- * will be populated based on the source type.
- *
- * When `processing` is present, the pipeline builder produces a Phase 3
- * processing + encoding pipeline (AGC -> Opus -> RTP).
- * When `processing` is undefined, it produces the Phase 2 metering-only pipeline.
- */
-export type PipelineConfig = {
-  readonly levelIntervalMs: number;
-  readonly label: string;
-  readonly processing?: ProcessingConfig;
-} & (
-  | { readonly sourceType: "aes67"; readonly aes67Config: Aes67PipelineConfig; readonly localConfig?: never; readonly fileConfig?: never }
-  | { readonly sourceType: "local"; readonly localConfig: LocalPipelineConfig; readonly aes67Config?: never; readonly fileConfig?: never }
-  | { readonly sourceType: "file"; readonly fileConfig: FilePipelineConfig; readonly aes67Config?: never; readonly localConfig?: never }
-);
-
-/**
  * A single source within a multi-source channel pipeline.
  *
  * `mixerPadName` is the literal pipeline-string token like `mix.sink_0` that
@@ -172,10 +152,3 @@ export interface ChannelPipelineConfig {
   readonly shouldLoopOnEos: boolean;
 }
 
-/**
- * Union of single-source and multi-source pipeline configs. Bridge type used
- * during the migration from per-source pipelines to one-pipeline-per-channel.
- * Task 7 collapses this back to `ChannelPipelineConfig` once `PipelineConfig`
- * has no remaining callers.
- */
-export type AnyPipelineConfig = PipelineConfig | ChannelPipelineConfig;
