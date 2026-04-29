@@ -1,0 +1,67 @@
+{
+  "_comment": "Sample sidecar config. Copy to src-tauri/config.json and edit paths/host. Real config is gitignored (per-machine).",
+  "server": {
+    "port": 7777,
+    "host": "192.168.1.79",
+    "listenHost": "0.0.0.0"
+  },
+  "network": {
+    "domain": "church.audio",
+    "mdns": {
+      "enabled": true
+    },
+    "hostsFile": {
+      "enabled": true
+    }
+  },
+  "certificate": {
+    "certPath": "cert.pem",
+    "keyPath": "key.pem",
+    "caCertPath": "ca-cert.pem",
+    "caKeyPath": "ca-key.pem"
+  },
+  "audio": {
+    "channels": [],
+    "levelMetering": {
+      "intervalMs": 100
+    },
+    "pipelineRecovery": {
+      "autoRestart": true,
+      "maxRestartAttempts": 5,
+      "firstAttemptDelayMs": 500,
+      "restartDelayMs": 2000,
+      "maxRestartDelayMs": 30000,
+      "drainTimeoutMs": 500
+    },
+    "discoveryCache": {
+      "enabled": true,
+      "devicePollIntervalMs": 5000
+    },
+    "testSources": [
+      {
+        "id": "file:worship-test",
+        "name": "Test Loop - Es pacelu savas acis",
+        "filePath": "C:\\path\\to\\GuP_Worship_-_Es_pacelu_savas_acis.mp3",
+        "loop": true
+      },
+      {
+        "id": "file:worship-dievu-slavejam",
+        "name": "Test Loop - Dievu slavejam mes",
+        "filePath": "C:\\laragon\\www\\ChurchAudioStream\\src-tauri\\test-media\\GuP_Worship_-_Dievu_slavejam_mes.mp3",
+        "loop": true
+      }
+    ]
+  },
+  "mediasoup": {
+    "workerCount": 1,
+    "rtcMinPort": 40000,
+    "rtcMaxPort": 49999,
+    "logLevel": "warn"
+  },
+  "streaming": {
+    "heartbeatIntervalMs": 30000,
+    "rateLimitPerIp": 5,
+    "rateLimitWindowMs": 10000,
+    "shutdownDrainMs": 5000
+  }
+}
