@@ -1,9 +1,10 @@
 /**
  * Channel manager -- central orchestrator for app channel lifecycle.
  *
- * Manages the full lifecycle of app channels: creation, source assignment,
- * pipeline orchestration, and config persistence. Each source assignment
- * spawns an independent GStreamer pipeline via PipelineManager.
+ * After 260429-hb3 refactor: ONE GStreamer pipeline per channel, multiple
+ * sources combined inside via `audiomixer name=mix`. channelPipelines is a
+ * `Map<channelId, pipelineId>` -- channelId is the stable external key,
+ * pipelineId rotates on every replacePipeline call.
  *
  * Coordinates PipelineManager, SourceRegistry, LevelMonitor, ResourceMonitor,
  * EventLogger, and ConfigStore into a cohesive channel control plane.
@@ -24,9 +25,15 @@ import type {
   ChannelOutputFormat,
 } from "./channel-types.js";
 import type { PipelineManager } from "../pipeline/pipeline-manager.js";
-import type { PipelineConfig, PipelineState, AudioLevels, PipelineError } from "../pipeline/pipeline-types.js";
+import type {
+  ChannelPipelineConfig,
+  SourceSegment,
+  PipelineState,
+  AudioLevels,
+  PipelineError,
+} from "../pipeline/pipeline-types.js";
 import type { SourceRegistry } from "../sources/source-registry.js";
-import type { AES67Source, LocalDeviceSource, DiscoveredSource } from "../sources/source-types.js";
+import type { DiscoveredSource } from "../sources/source-types.js";
 import type { LevelMonitor } from "../monitor/level-monitor.js";
 import type { ResourceMonitor } from "../monitor/resource-monitor.js";
 import type { EventLogger, ChannelEventType } from "../monitor/event-logger.js";
@@ -41,6 +48,15 @@ import { toErrorMessage } from "../../utils/error-message.js";
 
 /** Debounce delay (ms) before restarting pipelines after processing config change. */
 const PROCESSING_DEBOUNCE_MS = 1500;
+
+/**
+ * Delay before respawning a file-loop pipeline on clean EOS.
+ *
+ * Matches the prior pipeline-manager constant (200ms). Short delay prevents
+ * tight respawn loops on instantly-EOSing files (e.g. zero-byte or corrupted
+ * media). Named module-level constant -- no inline magic number.
+ */
+const FILE_LOOP_RESTART_DELAY_MS = 200;
 
 /** Subset of AppChannel fields that can be updated after creation. */
 export type ChannelUpdatableFields = Partial<
@@ -62,21 +78,20 @@ export interface ChannelManagerEvents {
 /**
  * Central orchestrator for app channel lifecycle and source-to-pipeline mapping.
  *
- * Each source assignment within a channel maps to exactly one GStreamer pipeline.
- * Phase 2 does not mix multiple sources -- each pipeline runs independently.
- * Source switching uses instant cut (stop old pipeline, start new).
+ * One pipeline per channel; sources combined via `audiomixer`. channelId is
+ * the stable external key, pipelineId rotates on replace.
  */
 export class ChannelManager extends EventEmitter {
   private readonly channels = new Map<string, AppChannel>();
 
-  /**
-   * Maps channelId -> Map<sourceIndex (as string), pipelineId>.
-   * Source index is stringified because Map keys use identity comparison.
-   */
-  private readonly channelPipelines = new Map<string, Map<string, string>>();
+  /** channelId -> pipelineId (single pipeline per channel; value rotates on replace). */
+  private readonly channelPipelines = new Map<string, string>();
 
   /** Per-channel debounce timers for processing config change restarts. */
   private readonly restartDebounceTimers = new Map<string, NodeJS.Timeout>();
+
+  /** Per-channel timers for file-loop EOS restart (only one pending per channel). */
+  private readonly fileLoopRestartTimers = new Map<string, NodeJS.Timeout>();
 
   private readonly pipelineManager: PipelineManager;
   private readonly sourceRegistry: SourceRegistry;
@@ -109,12 +124,6 @@ export class ChannelManager extends EventEmitter {
   // Channel CRUD
   // ---------------------------------------------------------------------------
 
-  /**
-   * Create a new app channel with default settings.
-   *
-   * The channel starts with no source assignments and status "stopped".
-   * AutoStart defaults to true so the channel starts on next app launch.
-   */
   createChannel(
     name: string,
     outputFormat: ChannelOutputFormat = "mono",
@@ -147,55 +156,39 @@ export class ChannelManager extends EventEmitter {
     };
 
     this.channels.set(channel.id, channel);
-    this.channelPipelines.set(channel.id, new Map());
     this.persistChannels();
 
     this.logChannelEvent(channel.id, "info", `Channel created: "${name}"`);
     this.emit("channel-created", channel);
+    this.assertSinglePipelinePerChannel();
 
     logger.info(`Channel created: "${name}"`, { channelId: channel.id });
     return channel;
   }
 
-  /**
-   * Remove a channel and stop all its pipelines.
-   *
-   * Event logs are preserved for admin review (not cleared on removal).
-   */
   async removeChannel(channelId: string): Promise<void> {
     const channel = this.getChannelOrThrow(channelId);
 
     this.clearDebouncedRestart(channelId);
+    this.clearFileLoopTimer(channelId);
     await this.stopChannel(channelId);
 
     this.channels.delete(channelId);
     this.channelPipelines.delete(channelId);
     this.persistChannels();
+    this.assertSinglePipelinePerChannel();
 
     this.emit("channel-removed", channelId);
     logger.info(`Channel removed: "${channel.name}"`, { channelId });
   }
 
-  /**
-   * Update mutable channel properties (name, outputFormat, autoStart).
-   *
-   * Does not affect running pipelines -- format changes take effect on next start.
-   */
   updateChannel(channelId: string, updates: ChannelUpdatableFields): AppChannel {
     const channel = this.getChannelOrThrow(channelId);
 
-    if (updates.name !== undefined) {
-      channel.name = updates.name;
-    }
-    if (updates.outputFormat !== undefined) {
-      channel.outputFormat = updates.outputFormat;
-    }
-    if (updates.autoStart !== undefined) {
-      channel.autoStart = updates.autoStart;
-    }
-    if (updates.visible !== undefined) {
-      channel.visible = updates.visible;
-    }
+    if (updates.name !== undefined) channel.name = updates.name;
+    if (updates.outputFormat !== undefined) channel.outputFormat = updates.outputFormat;
+    if (updates.autoStart !== undefined) channel.autoStart = updates.autoStart;
+    if (updates.visible !== undefined) channel.visible = updates.visible;
 
     this.persistChannels();
     this.emit("channel-updated", channel);
@@ -208,21 +201,12 @@ export class ChannelManager extends EventEmitter {
   // Processing Config
   // ---------------------------------------------------------------------------
 
-  /**
-   * Update a channel's processing config with a partial update.
-   *
-   * Deep-merges nested objects (agc, opus, rtpOutput). When `mode` is provided,
-   * derives mode-dependent settings (audioType, maxTruePeakDbtp) via
-   * `deriveSettingsFromMode`. Persists immediately and schedules a debounced
-   * pipeline restart if the channel is actively streaming.
-   */
   updateProcessingConfig(
     channelId: string,
     updates: ProcessingConfigUpdate,
   ): AppChannel {
     const channel = this.getChannelOrThrow(channelId);
 
-    // Deep-merge each nested config object
     if (updates.agc) {
       channel.processing = {
         ...channel.processing,
@@ -242,7 +226,6 @@ export class ChannelManager extends EventEmitter {
       };
     }
 
-    // Mode switch derives dependent settings (audioType, maxTruePeakDbtp)
     if (updates.mode !== undefined) {
       channel.processing = deriveSettingsFromMode(
         updates.mode,
@@ -257,19 +240,12 @@ export class ChannelManager extends EventEmitter {
     }
 
     this.emit("channel-updated", channel);
-
     logger.info(`Processing config updated for channel "${channel.name}"`, {
       channelId,
     });
     return channel;
   }
 
-  /**
-   * Reset a channel's processing config to defaults.
-   *
-   * Preserves the channel's allocated RTP ports and SSRC.
-   * Persists immediately and schedules debounced restart if streaming.
-   */
   resetProcessingDefaults(channelId: string): AppChannel {
     const channel = this.getChannelOrThrow(channelId);
 
@@ -295,8 +271,7 @@ export class ChannelManager extends EventEmitter {
     }
 
     this.emit("channel-updated", channel);
-
-    logger.info(`Processing config reset to defaults for channel "${channel.name}"`, {
+    logger.info(`Processing config reset for channel "${channel.name}"`, {
       channelId,
     });
     return channel;
@@ -309,9 +284,9 @@ export class ChannelManager extends EventEmitter {
   /**
    * Add a source assignment to a channel.
    *
-   * Validates the source exists in the registry and that selected channels
-   * are within the source's channel count. If the channel is currently
-   * streaming, hot-adds a new pipeline for the assignment.
+   * If channel running: build new ChannelPipelineConfig + replacePipeline.
+   * If channel stopped + autoStart: startChannel.
+   * Otherwise: persist for next start.
    */
   async addSource(channelId: string, assignment: SourceAssignment): Promise<AppChannel> {
     const channel = this.getChannelOrThrow(channelId);
@@ -324,29 +299,23 @@ export class ChannelManager extends EventEmitter {
     this.validateSelectedChannels(source, assignment.selectedChannels);
 
     channel.sources.push({ ...assignment });
-
-    // Hot-add: if channel is streaming, start a pipeline for the new source
-    if (channel.status === "streaming" || channel.status === "starting") {
-      const sourceIndex = channel.sources.length - 1;
-      await this.startPipelineForSource(channelId, sourceIndex, assignment);
-    }
+    await this.applyPipelineForChannelChange(channel);
 
     this.persistChannels();
-    this.logChannelEvent(
-      channelId,
-      "source-change",
-      `Source added: "${source.name}"`,
-      { sourceId: assignment.sourceId },
-    );
+    this.logChannelEvent(channelId, "source-change", `Source added: "${source.name}"`, {
+      sourceId: assignment.sourceId,
+    });
     this.emit("channel-updated", channel);
-
+    this.assertSinglePipelinePerChannel();
     return channel;
   }
 
   /**
    * Remove a source assignment from a channel by index.
    *
-   * Stops the corresponding pipeline if one is running.
+   * If remaining sources > 0 and channel running: replacePipeline with smaller
+   * source list. If remaining === 0: stop pipeline + clear Map entry (NOT
+   * replacePipeline -- empty mixers are illegal). Otherwise: persist.
    */
   async removeSource(channelId: string, sourceIndex: number): Promise<AppChannel> {
     const channel = this.getChannelOrThrow(channelId);
@@ -357,33 +326,27 @@ export class ChannelManager extends EventEmitter {
       );
     }
 
-    // Stop pipeline for this source if running
-    await this.stopPipelineForSource(channelId, sourceIndex);
-
-    // Remove the source assignment
     channel.sources.splice(sourceIndex, 1);
 
-    // Re-key pipeline mappings after splice (indices shifted)
-    this.rekeyPipelineMappings(channelId, sourceIndex);
+    if (channel.sources.length === 0) {
+      await this.stopChannel(channelId);
+    } else {
+      await this.applyPipelineForChannelChange(channel);
+    }
 
     this.persistChannels();
     this.logChannelEvent(channelId, "source-change", "Source removed", {
       removedIndex: sourceIndex,
     });
     this.emit("channel-updated", channel);
-
-    // Re-aggregate status after source removal
-    this.updateChannelStatus(channelId);
-
+    this.assertSinglePipelinePerChannel();
     return channel;
   }
 
   /**
-   * Update a source assignment's properties (gain, mute, delay, selectedChannels).
-   *
-   * If selectedChannels changed and the pipeline is running, it is restarted
-   * via instant cut (stop old, start new). Gain/mute/delay are persisted
-   * but not applied to running pipelines until Phase 3 (mixing).
+   * Update a source assignment. selectedChannels/gain/muted/delayMs all flow
+   * into the pipeline string now (Task 5 makes gain/mute live), so any change
+   * triggers replacePipeline when the channel is running.
    */
   async updateSource(
     channelId: string,
@@ -399,46 +362,56 @@ export class ChannelManager extends EventEmitter {
     }
 
     const assignment = channel.sources[sourceIndex];
-    const selectedChannelsChanged =
-      updates.selectedChannels !== undefined &&
-      !arraysEqual(updates.selectedChannels, assignment.selectedChannels);
 
-    // Apply updates to assignment
-    if (updates.gain !== undefined) {
-      (assignment as { gain: number }).gain = updates.gain;
-    }
-    if (updates.muted !== undefined) {
-      (assignment as { muted: boolean }).muted = updates.muted;
-    }
-    if (updates.delayMs !== undefined) {
-      (assignment as { delayMs: number }).delayMs = updates.delayMs;
-    }
+    if (updates.gain !== undefined) (assignment as { gain: number }).gain = updates.gain;
+    if (updates.muted !== undefined) (assignment as { muted: boolean }).muted = updates.muted;
+    if (updates.delayMs !== undefined) (assignment as { delayMs: number }).delayMs = updates.delayMs;
     if (updates.selectedChannels !== undefined) {
-      // selectedChannels is readonly on the interface -- use object spread to replace
       channel.sources[sourceIndex] = {
         ...assignment,
         selectedChannels: updates.selectedChannels,
       };
     }
 
-    // Instant cut: restart pipeline if selectedChannels changed while running
-    if (selectedChannelsChanged) {
-      const pipelineMap = this.channelPipelines.get(channelId);
-      const existingPipelineId = pipelineMap?.get(String(sourceIndex));
-
-      if (existingPipelineId) {
-        await this.stopAndRemovePipeline(channelId, sourceIndex, existingPipelineId);
-        await this.startPipelineForSource(
-          channelId,
-          sourceIndex,
-          channel.sources[sourceIndex],
-        );
-      }
-    }
+    await this.applyPipelineForChannelChange(channel);
 
     this.persistChannels();
     this.emit("channel-updated", channel);
+    this.assertSinglePipelinePerChannel();
+    return channel;
+  }
 
+  /**
+   * Reorder sources in a channel. mixerPadName is reassigned in array order on
+   * the next pipeline build, so a permutation triggers replacePipeline.
+   */
+  async reorderSources(channelId: string, newOrder: number[]): Promise<AppChannel> {
+    const channel = this.getChannelOrThrow(channelId);
+
+    if (newOrder.length !== channel.sources.length) {
+      throw new Error(
+        `Reorder array length (${newOrder.length}) does not match source count (${channel.sources.length})`,
+      );
+    }
+    const seen = new Set<number>();
+    for (const idx of newOrder) {
+      if (idx < 0 || idx >= channel.sources.length) {
+        throw new Error(`Reorder index ${idx} out of range`);
+      }
+      if (seen.has(idx)) {
+        throw new Error(`Reorder array has duplicate index ${idx}`);
+      }
+      seen.add(idx);
+    }
+
+    const reordered = newOrder.map((idx) => channel.sources[idx]);
+    channel.sources = reordered;
+
+    await this.applyPipelineForChannelChange(channel);
+
+    this.persistChannels();
+    this.emit("channel-updated", channel);
+    this.assertSinglePipelinePerChannel();
     return channel;
   }
 
@@ -447,10 +420,9 @@ export class ChannelManager extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   /**
-   * Start all pipelines for a channel's source assignments.
+   * Start the single pipeline for this channel from all assigned sources.
    *
-   * Sources that no longer exist in the registry (stale config) are logged
-   * and skipped rather than causing a failure.
+   * Skips when zero sources (matches prior behavior).
    */
   async startChannel(channelId: string): Promise<void> {
     const channel = this.getChannelOrThrow(channelId);
@@ -463,98 +435,71 @@ export class ChannelManager extends EventEmitter {
     }
 
     this.setChannelStatus(channelId, "starting");
-    this.logChannelEvent(
-      channelId,
-      "start",
-      `Channel starting with ${channel.sources.length} source(s)`,
-    );
+    this.logChannelEvent(channelId, "start", `Channel starting with ${channel.sources.length} source(s)`);
 
-    let startedCount = 0;
-
-    for (let i = 0; i < channel.sources.length; i++) {
-      const assignment = channel.sources[i];
-      const source = this.sourceRegistry.getById(assignment.sourceId);
-
-      if (!source) {
-        logger.warn(
-          `Skipping stale source "${assignment.sourceId}" in channel "${channel.name}"`,
-          { channelId, sourceIndex: i },
-        );
-        this.logChannelEvent(channelId, "warning", `Stale source skipped: ${assignment.sourceId}`, {
-          sourceIndex: i,
-        });
-        continue;
-      }
-
-      try {
-        await this.startPipelineForSource(channelId, i, assignment);
-        startedCount++;
-      } catch (err) {
-        const errorMessage = toErrorMessage(err);
-        logger.error(
-          `Failed to start pipeline for source "${source.name}" in channel "${channel.name}"`,
-          { channelId, sourceIndex: i, error: errorMessage },
-        );
-        this.logChannelEvent(channelId, "error", `Failed to start source: "${source.name}"`, {
-          sourceIndex: i,
-          error: errorMessage,
-        });
-      }
-    }
-
-    logger.info(
-      `Channel "${channel.name}" started ${startedCount}/${channel.sources.length} pipeline(s)`,
-      { channelId },
-    );
-  }
-
-  /**
-   * Stop all pipelines for a channel.
-   *
-   * Unregisters from resource monitor and clears level data for each pipeline.
-   */
-  async stopChannel(channelId: string): Promise<void> {
-    this.clearDebouncedRestart(channelId);
-
-    const pipelineMap = this.channelPipelines.get(channelId);
-    if (!pipelineMap || pipelineMap.size === 0) {
-      const channel = this.channels.get(channelId);
-      if (channel) {
-        this.setChannelStatus(channelId, "stopped");
-      }
+    const config = this.buildChannelPipelineConfig(channelId);
+    if (!config) {
+      logger.warn(`Channel "${channel.name}": no valid sources after stale-source filter`, {
+        channelId,
+      });
+      this.setChannelStatus(channelId, "stopped");
       return;
     }
 
-    const pipelineIds = Array.from(pipelineMap.values());
+    try {
+      const pipelineId = this.pipelineManager.createPipeline(config);
+      this.pipelineManager.startPipeline(pipelineId);
+      this.channelPipelines.set(channelId, pipelineId);
 
-    await Promise.allSettled(
-      pipelineIds.map(async (pipelineId) => {
-        try {
-          await this.pipelineManager.removePipeline(pipelineId);
-        } catch (err) {
-          logger.warn(`Failed to stop pipeline ${pipelineId}`, {
-            channelId,
-            error: toErrorMessage(err),
-          });
-        }
-        this.resourceMonitor.untrackPipeline(pipelineId);
-        this.levelMonitor.clearPipeline(pipelineId);
-      }),
-    );
+      if (channel.processing.agc.enabled) {
+        this.levelMonitor.setProcessingTarget(pipelineId, channel.processing.agc.targetLufs);
+      }
+    } catch (err) {
+      const errorMessage = toErrorMessage(err);
+      logger.error(`Failed to start pipeline for channel "${channel.name}"`, {
+        channelId,
+        error: errorMessage,
+      });
+      this.logChannelEvent(channelId, "error", `Failed to start channel: ${errorMessage}`);
+      this.setChannelStatus(channelId, "stopped");
+    }
 
-    pipelineMap.clear();
+    this.assertSinglePipelinePerChannel();
+    logger.info(`Channel "${channel.name}" started`, { channelId });
+  }
+
+  async stopChannel(channelId: string): Promise<void> {
+    this.clearDebouncedRestart(channelId);
+    this.clearFileLoopTimer(channelId);
+
+    const pipelineId = this.channelPipelines.get(channelId);
+    if (!pipelineId) {
+      const channel = this.channels.get(channelId);
+      if (channel) this.setChannelStatus(channelId, "stopped");
+      return;
+    }
+
+    try {
+      await this.pipelineManager.removePipeline(pipelineId);
+    } catch (err) {
+      logger.warn(`Failed to stop pipeline ${pipelineId}`, {
+        channelId,
+        error: toErrorMessage(err),
+      });
+    }
+    this.resourceMonitor.untrackPipeline(pipelineId);
+    this.levelMonitor.clearPipeline(pipelineId);
+    this.channelPipelines.delete(channelId);
+
     this.setChannelStatus(channelId, "stopped");
 
     const channel = this.channels.get(channelId);
     const channelName = channel?.name ?? channelId;
     this.logChannelEvent(channelId, "stop", "Channel stopped");
+    this.assertSinglePipelinePerChannel();
     logger.info(`Channel "${channelName}" stopped`, { channelId });
   }
 
-  /**
-   * Auto-start all channels where autoStart is true.
-   * Called from sidecar/src/index.ts on app launch.
-   */
   async startAll(): Promise<void> {
     const autoStartChannels = Array.from(this.channels.values()).filter(
       (ch) => ch.autoStart,
@@ -566,7 +511,6 @@ export class ChannelManager extends EventEmitter {
     }
 
     logger.info(`Auto-starting ${autoStartChannels.length} channel(s)`);
-
     for (const channel of autoStartChannels) {
       try {
         await this.startChannel(channel.id);
@@ -577,18 +521,14 @@ export class ChannelManager extends EventEmitter {
         });
       }
     }
-
     logger.info(`Auto-started ${autoStartChannels.length} channel(s)`);
   }
 
-  /** Stop all channels. Called during graceful shutdown. */
   async stopAll(): Promise<void> {
     const channelIds = Array.from(this.channels.keys());
-
     await Promise.allSettled(
       channelIds.map((channelId) => this.stopChannel(channelId)),
     );
-
     logger.info(`All channels stopped (${channelIds.length} total)`);
   }
 
@@ -596,31 +536,22 @@ export class ChannelManager extends EventEmitter {
   // Accessors
   // ---------------------------------------------------------------------------
 
-  /** Get a channel by ID, or undefined if not found. */
   getChannel(channelId: string): AppChannel | undefined {
     return this.channels.get(channelId);
   }
 
-  /** Get all channels as an array, sorted by sortOrder ascending. */
   getAllChannels(): AppChannel[] {
     return Array.from(this.channels.values()).sort(
       (a, b) => a.sortOrder - b.sortOrder,
     );
   }
 
-  /**
-   * Reorder channels by setting sortOrder based on the provided ID array.
-   *
-   * Validates all IDs exist and the array length matches the channel count.
-   * Persists the new order and emits channel-updated for each changed channel.
-   */
   reorderChannels(orderedIds: string[]): AppChannel[] {
     if (orderedIds.length !== this.channels.size) {
       throw new Error(
         `Reorder array length (${orderedIds.length}) does not match channel count (${this.channels.size})`,
       );
     }
-
     for (const id of orderedIds) {
       if (!this.channels.has(id)) {
         throw new Error(`Channel not found: ${id}`);
@@ -634,123 +565,98 @@ export class ChannelManager extends EventEmitter {
         this.emit("channel-updated", channel);
       }
     }
-
     this.persistChannels();
 
     logger.info(`Channels reordered`, { order: orderedIds });
     return this.getAllChannels();
   }
 
-  /**
-   * Build a reverse map from pipelineId to channelId.
-   *
-   * Used by the level broadcast to enrich level data with channelId
-   * so the admin UI can map VU meters to channels without a separate lookup.
-   */
+  /** Reverse map pipelineId -> channelId. One entry per active channel. */
   getPipelineToChannelMap(): Map<string, string> {
     const reverseMap = new Map<string, string>();
-    for (const [channelId, pipelineMap] of this.channelPipelines) {
-      for (const pipelineId of pipelineMap.values()) {
-        reverseMap.set(pipelineId, channelId);
-      }
+    for (const [channelId, pipelineId] of this.channelPipelines) {
+      reverseMap.set(pipelineId, channelId);
     }
     return reverseMap;
   }
 
-  /** Get all pipeline IDs associated with a channel. */
+  /** Single-element array (or empty) -- public API preserved for callers. */
   getChannelPipelineIds(channelId: string): string[] {
-    const pipelineMap = this.channelPipelines.get(channelId);
-    return pipelineMap ? Array.from(pipelineMap.values()) : [];
+    const pipelineId = this.channelPipelines.get(channelId);
+    return pipelineId ? [pipelineId] : [];
   }
 
   // ---------------------------------------------------------------------------
   // Private: Pipeline lifecycle helpers
   // ---------------------------------------------------------------------------
 
-  /** Start a single pipeline for a source assignment within a channel. */
-  private async startPipelineForSource(
-    channelId: string,
-    sourceIndex: number,
-    assignment: SourceAssignment,
-  ): Promise<void> {
-    const pipelineConfig = this.buildPipelineConfigFromAssignment(
-      channelId,
-      assignment,
-    );
-
-    if (!pipelineConfig) {
+  /**
+   * Apply a channel-source change to the running pipeline (or trigger autoStart).
+   *
+   * - Channel running (streaming/starting): build new config, replacePipeline, update Map.
+   * - Channel stopped + autoStart: full startChannel.
+   * - Otherwise: do nothing (next start picks up new sources).
+   */
+  private async applyPipelineForChannelChange(channel: AppChannel): Promise<void> {
+    const isRunning = channel.status === "streaming" || channel.status === "starting";
+    if (isRunning) {
+      await this.replaceRunningPipeline(channel.id);
       return;
     }
-
-    const pipelineId = this.pipelineManager.createPipeline(pipelineConfig);
-    this.pipelineManager.startPipeline(pipelineId);
-
-    const pipelineMap = this.getOrCreatePipelineMap(channelId);
-    pipelineMap.set(String(sourceIndex), pipelineId);
-
-    // Set AGC target on level monitor so gain reduction is computed
-    const channel = this.channels.get(channelId);
-    if (channel?.processing.agc.enabled) {
-      this.levelMonitor.setProcessingTarget(
-        pipelineId,
-        channel.processing.agc.targetLufs,
-      );
-    }
-  }
-
-  /** Stop and remove a single pipeline, cleaning up monitor state. */
-  private async stopAndRemovePipeline(
-    channelId: string,
-    sourceIndex: number,
-    pipelineId: string,
-  ): Promise<void> {
-    await this.pipelineManager.removePipeline(pipelineId);
-    this.resourceMonitor.untrackPipeline(pipelineId);
-    this.levelMonitor.clearPipeline(pipelineId);
-
-    const pipelineMap = this.channelPipelines.get(channelId);
-    pipelineMap?.delete(String(sourceIndex));
-  }
-
-  /** Stop the pipeline for a specific source index if one exists. */
-  private async stopPipelineForSource(
-    channelId: string,
-    sourceIndex: number,
-  ): Promise<void> {
-    const pipelineMap = this.channelPipelines.get(channelId);
-    const pipelineId = pipelineMap?.get(String(sourceIndex));
-
-    if (pipelineId) {
-      await this.stopAndRemovePipeline(channelId, sourceIndex, pipelineId);
+    if (channel.autoStart && channel.sources.length > 0 && channel.status === "stopped") {
+      await this.startChannel(channel.id);
     }
   }
 
   /**
-   * Re-key pipeline mappings after a source is spliced out.
-   *
-   * When source at index N is removed, all sources at index > N shift down by 1.
-   * Pipeline mappings must be updated to match the new indices.
+   * Rebuild the channel pipeline config and atomically replace the running
+   * pipeline. Caller already mutated `channel.sources` to the desired state.
    */
-  private rekeyPipelineMappings(
-    channelId: string,
-    removedIndex: number,
-  ): void {
-    const pipelineMap = this.channelPipelines.get(channelId);
-    if (!pipelineMap) return;
+  private async replaceRunningPipeline(channelId: string): Promise<void> {
+    const channel = this.channels.get(channelId);
+    if (!channel) return;
 
-    const newMap = new Map<string, string>();
-
-    for (const [indexStr, pipelineId] of pipelineMap) {
-      const index = Number(indexStr);
-      if (index < removedIndex) {
-        newMap.set(indexStr, pipelineId);
-      } else if (index > removedIndex) {
-        newMap.set(String(index - 1), pipelineId);
-      }
-      // index === removedIndex is skipped (already stopped)
+    const oldPipelineId = this.channelPipelines.get(channelId);
+    if (!oldPipelineId) {
+      logger.warn(`replaceRunningPipeline: no current pipeline for "${channel.name}", starting fresh`, {
+        channelId,
+      });
+      await this.startChannel(channelId);
+      return;
     }
 
-    this.channelPipelines.set(channelId, newMap);
+    if (channel.sources.length === 0) {
+      // Defensive: caller should have routed empty-source case to stopChannel.
+      await this.stopChannel(channelId);
+      return;
+    }
+
+    const newConfig = this.buildChannelPipelineConfig(channelId);
+    if (!newConfig) {
+      logger.warn(`replaceRunningPipeline: no valid config for "${channel.name}", stopping`, {
+        channelId,
+      });
+      await this.stopChannel(channelId);
+      return;
+    }
+
+    try {
+      const newPipelineId = await this.pipelineManager.replacePipeline(oldPipelineId, newConfig);
+      this.channelPipelines.set(channelId, newPipelineId);
+      this.resourceMonitor.untrackPipeline(oldPipelineId);
+      this.levelMonitor.clearPipeline(oldPipelineId);
+
+      if (channel.processing.agc.enabled) {
+        this.levelMonitor.setProcessingTarget(newPipelineId, channel.processing.agc.targetLufs);
+      }
+    } catch (err) {
+      logger.error(`replaceRunningPipeline failed for "${channel.name}"`, {
+        channelId,
+        error: toErrorMessage(err),
+      });
+      this.channelPipelines.delete(channelId);
+      this.setChannelStatus(channelId, "stopped");
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -758,85 +664,42 @@ export class ChannelManager extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   /**
-   * Build a PipelineConfig from a source assignment and registry data.
+   * Build a ChannelPipelineConfig combining all sources of a channel.
    *
-   * Returns null if the source is not found in the registry (stale config).
-   * Includes processing config from the channel when present, with port
-   * allocation and SSRC computed from the channel's position and ID.
+   * Skips stale sources (warn logged). Returns null if zero valid sources
+   * remain. mixerPadName is assigned in source-array order so segment ordering
+   * matches admin UI ordering.
    */
-  private buildPipelineConfigFromAssignment(
-    channelId: string,
-    assignment: SourceAssignment,
-  ): PipelineConfig | null {
-    const source = this.sourceRegistry.getById(assignment.sourceId);
-    if (!source) {
-      logger.warn(`Cannot build pipeline: source "${assignment.sourceId}" not found in registry`, {
-        channelId,
-      });
-      return null;
-    }
-
+  private buildChannelPipelineConfig(channelId: string): ChannelPipelineConfig | null {
     const channel = this.channels.get(channelId);
-    const channelName = channel?.name ?? "Unknown";
-    const label = `${channelName} - ${source.name}`;
+    if (!channel) return null;
 
-    const levelIntervalMs =
-      this.configStore.get().audio.levelMetering.intervalMs;
-
-    // Compute processing config with proper port allocation and SSRC
-    const processing = channel ? this.buildProcessingForPipeline(channel) : undefined;
-
-    if (source.type === "aes67") {
-      return this.buildAes67PipelineConfig(source, assignment, label, levelIntervalMs, processing);
+    const segments: SourceSegment[] = [];
+    for (let i = 0; i < channel.sources.length; i++) {
+      const assignment = channel.sources[i];
+      const source = this.sourceRegistry.getById(assignment.sourceId);
+      if (!source) {
+        logger.warn(`Skipping stale source "${assignment.sourceId}" in channel "${channel.name}"`, {
+          channelId,
+          sourceIndex: i,
+        });
+        continue;
+      }
+      segments.push(toSourceSegment(source, assignment, `mix.sink_${segments.length}`));
     }
 
-    return this.buildLocalPipelineConfig(source, assignment, label, levelIntervalMs, processing);
-  }
+    if (segments.length === 0) return null;
 
-  /** Build PipelineConfig for an AES67 multicast source. */
-  private buildAes67PipelineConfig(
-    source: AES67Source,
-    assignment: SourceAssignment,
-    label: string,
-    levelIntervalMs: number,
-    processing?: ProcessingConfig,
-  ): PipelineConfig {
-    return {
-      sourceType: "aes67",
-      label,
-      levelIntervalMs,
-      processing,
-      aes67Config: {
-        multicastAddress: source.multicastAddress,
-        port: source.port,
-        sampleRate: source.sampleRate,
-        channelCount: source.channelCount,
-        bitDepth: source.bitDepth,
-        payloadType: source.payloadType,
-        selectedChannels: assignment.selectedChannels,
-      },
-    };
-  }
+    const shouldLoopOnEos = segments.every(
+      (seg) => seg.source.kind === "file" && seg.source.config.loop === true,
+    );
 
-  /** Build PipelineConfig for a local audio device source. */
-  private buildLocalPipelineConfig(
-    source: LocalDeviceSource,
-    assignment: SourceAssignment,
-    label: string,
-    levelIntervalMs: number,
-    processing?: ProcessingConfig,
-  ): PipelineConfig {
     return {
-      sourceType: "local",
-      label,
-      levelIntervalMs,
-      processing,
-      localConfig: {
-        deviceId: source.deviceId,
-        api: source.api,
-        selectedChannels: assignment.selectedChannels,
-        isLoopback: source.isLoopback,
-      },
+      label: channel.name,
+      levelIntervalMs: this.configStore.get().audio.levelMetering.intervalMs,
+      processing: this.buildProcessingForPipeline(channel),
+      sources: segments,
+      shouldLoopOnEos,
     };
   }
 
@@ -844,45 +707,20 @@ export class ChannelManager extends EventEmitter {
   // Private: Status aggregation
   // ---------------------------------------------------------------------------
 
-  /**
-   * Derive channel status from the aggregate state of its pipelines.
-   *
-   * Priority: error/crashed > streaming > starting states > stopped
-   */
   private aggregateChannelStatus(channelId: string): ChannelStatus {
-    const pipelineIds = this.getChannelPipelineIds(channelId);
+    const pipelineId = this.channelPipelines.get(channelId);
+    if (!pipelineId) return "stopped";
 
-    if (pipelineIds.length === 0) {
-      return "stopped";
-    }
-
-    const states: PipelineState[] = [];
-    for (const pipelineId of pipelineIds) {
-      const state = this.pipelineManager.getPipelineState(pipelineId);
-      if (state !== null) {
-        states.push(state);
-      }
-    }
-
-    if (states.length === 0) {
-      return "stopped";
-    }
-
-    if (states.some((s) => s === "crashed")) return "crashed";
-    if (states.some((s) => s === "stopped" && pipelineIds.length > 0)) {
-      // If some pipelines stopped unexpectedly while others run, report error
-      if (states.some((s) => s === "streaming")) return "error";
-    }
-    if (states.every((s) => s === "streaming")) return "streaming";
-    if (states.some((s) => s === "initializing" || s === "connecting" || s === "buffering")) {
+    const state = this.pipelineManager.getPipelineState(pipelineId);
+    if (state === null) return "stopped";
+    if (state === "crashed") return "crashed";
+    if (state === "streaming") return "streaming";
+    if (state === "initializing" || state === "connecting" || state === "buffering") {
       return "starting";
     }
-    if (states.every((s) => s === "stopped" || s === "stopping")) return "stopped";
-
     return "stopped";
   }
 
-  /** Update a channel's status and emit event if changed. */
   private updateChannelStatus(channelId: string): void {
     const channel = this.channels.get(channelId);
     if (!channel) return;
@@ -894,11 +732,9 @@ export class ChannelManager extends EventEmitter {
     this.emit("channel-state-changed", channelId, newStatus);
   }
 
-  /** Set channel status directly (used for explicit start/stop transitions). */
   private setChannelStatus(channelId: string, status: ChannelStatus): void {
     const channel = this.channels.get(channelId);
     if (!channel) return;
-
     if (channel.status === status) return;
 
     channel.status = status;
@@ -906,18 +742,46 @@ export class ChannelManager extends EventEmitter {
   }
 
   // ---------------------------------------------------------------------------
+  // Private: Tiger-style invariant guard
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Tiger-style: every Map mutation must preserve the single-pipeline-per-channel
+   * invariant. Throws (fail-fast, fail-loud) on any violation.
+   */
+  private assertSinglePipelinePerChannel(): void {
+    const distinctPipelineIds = new Set(this.channelPipelines.values());
+    if (distinctPipelineIds.size !== this.channelPipelines.size) {
+      throw new Error(
+        `INVARIANT VIOLATED: channelPipelines has duplicate pipelineId values. ` +
+        `entries=${this.channelPipelines.size}, distinct=${distinctPipelineIds.size}`,
+      );
+    }
+    if (this.channelPipelines.size > this.channels.size) {
+      throw new Error(
+        `INVARIANT VIOLATED: channelPipelines.size (${this.channelPipelines.size}) ` +
+        `> channels.size (${this.channels.size})`,
+      );
+    }
+    for (const channelId of this.channelPipelines.keys()) {
+      if (!this.channels.has(channelId)) {
+        throw new Error(
+          `INVARIANT VIOLATED: channelPipelines has entry for unknown channelId "${channelId}"`,
+        );
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Private: Event wiring
   // ---------------------------------------------------------------------------
 
-  /** Wire PipelineManager events to channel status updates and monitor forwarding. */
   private wirePipelineEvents(): void {
     this.pipelineManager.on(
       "pipeline-state-change",
       (pipelineId: string, _state: PipelineState) => {
         const channelId = this.findChannelByPipelineId(pipelineId);
-        if (channelId) {
-          this.updateChannelStatus(channelId);
-        }
+        if (channelId) this.updateChannelStatus(channelId);
       },
     );
 
@@ -932,34 +796,112 @@ export class ChannelManager extends EventEmitter {
       "pipeline-error",
       (pipelineId: string, error: PipelineError) => {
         const channelId = this.findChannelByPipelineId(pipelineId);
-        if (channelId) {
-          this.logChannelEvent(channelId, "error", error.message, {
-            pipelineId,
-            errorCode: error.code,
-            technicalDetails: error.technicalDetails,
-          });
-
-          // When crash recovery gives up, clean up monitor state for the
-          // abandoned pipeline to prevent unbounded Map growth.
-          if (error.code === "MAX_RESTARTS_EXCEEDED") {
-            this.resourceMonitor.untrackPipeline(pipelineId);
-            this.levelMonitor.clearPipeline(pipelineId);
-          }
-
-          this.updateChannelStatus(channelId);
+        if (!channelId) return;
+        this.logChannelEvent(channelId, "error", error.message, {
+          pipelineId,
+          errorCode: error.code,
+          technicalDetails: error.technicalDetails,
+        });
+        if (error.code === "MAX_RESTARTS_EXCEEDED") {
+          this.resourceMonitor.untrackPipeline(pipelineId);
+          this.levelMonitor.clearPipeline(pipelineId);
         }
+        this.updateChannelStatus(channelId);
+      },
+    );
+
+    this.pipelineManager.on(
+      "pipeline-exit",
+      (pipelineId: string, code: number | null, _signal: string | null, wasStopRequested: boolean) => {
+        this.handlePipelineExit(pipelineId, code, wasStopRequested);
       },
     );
   }
 
-  /** Find which channel owns a pipeline ID by searching the pipeline maps. */
+  /**
+   * Decide whether a clean EOS exit should trigger a file-loop restart.
+   *
+   * Triggers only when ALL of:
+   * - exit was clean (`code === 0`)
+   * - user did NOT request stop (`wasStopRequested === false`)
+   * - the pipeline still belongs to a channel we manage
+   * - the channel's computed `shouldLoopOnEos` is true (all sources file+loop)
+   */
+  private handlePipelineExit(
+    pipelineId: string,
+    code: number | null,
+    wasStopRequested: boolean,
+  ): void {
+    if (wasStopRequested) return;
+    if (code !== 0) return;
+
+    const channelId = this.findChannelByPipelineId(pipelineId);
+    if (!channelId) return;
+
+    const channel = this.channels.get(channelId);
+    if (!channel || channel.sources.length === 0) return;
+
+    const config = this.buildChannelPipelineConfig(channelId);
+    if (!config || !config.shouldLoopOnEos) return;
+
+    this.scheduleFileLoopRestart(channelId, pipelineId);
+  }
+
+  private scheduleFileLoopRestart(channelId: string, oldPipelineId: string): void {
+    const existing = this.fileLoopRestartTimers.get(channelId);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      this.fileLoopRestartTimers.delete(channelId);
+      this.replaceChannelPipelineForLoop(channelId, oldPipelineId).catch((err) => {
+        logger.error(`File-loop restart failed for channel ${channelId}`, {
+          error: toErrorMessage(err),
+        });
+      });
+    }, FILE_LOOP_RESTART_DELAY_MS);
+
+    this.fileLoopRestartTimers.set(channelId, timer);
+  }
+
+  private async replaceChannelPipelineForLoop(
+    channelId: string,
+    oldPipelineId: string,
+  ): Promise<void> {
+    const channel = this.channels.get(channelId);
+    if (!channel) return;
+    // Only attempt if Map still references the old pipeline -- otherwise the
+    // user replaced/removed sources mid-loop, in which case the new lifecycle
+    // path already handled the restart.
+    const currentPipelineId = this.channelPipelines.get(channelId);
+    if (currentPipelineId !== oldPipelineId) return;
+
+    const config = this.buildChannelPipelineConfig(channelId);
+    if (!config) return;
+
+    try {
+      const newPipelineId = await this.pipelineManager.replacePipeline(oldPipelineId, config);
+      this.channelPipelines.set(channelId, newPipelineId);
+      this.assertSinglePipelinePerChannel();
+    } catch (err) {
+      logger.error(`Failed to loop-restart channel pipeline "${channel.name}"`, {
+        channelId,
+        error: toErrorMessage(err),
+      });
+    }
+  }
+
+  private clearFileLoopTimer(channelId: string): void {
+    const timer = this.fileLoopRestartTimers.get(channelId);
+    if (timer) {
+      clearTimeout(timer);
+      this.fileLoopRestartTimers.delete(channelId);
+    }
+  }
+
+  /** Linear scan of channelPipelines (single-pipeline Map). */
   private findChannelByPipelineId(pipelineId: string): string | null {
-    for (const [channelId, pipelineMap] of this.channelPipelines) {
-      for (const mappedPipelineId of pipelineMap.values()) {
-        if (mappedPipelineId === pipelineId) {
-          return channelId;
-        }
-      }
+    for (const [channelId, mappedPipelineId] of this.channelPipelines) {
+      if (mappedPipelineId === pipelineId) return channelId;
     }
     return null;
   }
@@ -968,12 +910,6 @@ export class ChannelManager extends EventEmitter {
   // Private: Config persistence
   // ---------------------------------------------------------------------------
 
-  /**
-   * Load channels from the config store on startup.
-   *
-   * The Zod ProcessingSchema provides factory defaults for channels that
-   * were saved before Phase 3 (no processing field in stored config).
-   */
   private loadChannelsFromConfig(): void {
     const config = this.configStore.get();
     const savedChannels = config.audio.channels;
@@ -1014,7 +950,6 @@ export class ChannelManager extends EventEmitter {
       };
 
       this.channels.set(channel.id, channel);
-      this.channelPipelines.set(channel.id, new Map());
     }
 
     if (savedChannels.length > 0) {
@@ -1022,12 +957,6 @@ export class ChannelManager extends EventEmitter {
     }
   }
 
-  /**
-   * Persist all channels to the config store.
-   *
-   * Strips runtime-only fields (status, createdAt) to match ChannelSchema.
-   * Includes processing config (agc, opus, rtpOutput, mode) for persistence.
-   */
   private persistChannels(): void {
     const channelArray = Array.from(this.channels.values()).map((ch) => ({
       id: ch.id,
@@ -1067,16 +996,9 @@ export class ChannelManager extends EventEmitter {
   }
 
   // ---------------------------------------------------------------------------
-  // Private: Debounced pipeline restart
+  // Private: Debounced pipeline restart (processing-config changes)
   // ---------------------------------------------------------------------------
 
-  /**
-   * Schedule a debounced pipeline restart for a channel.
-   *
-   * Clears any existing pending restart for the channel and sets a new timer.
-   * After the debounce delay, all pipelines for the channel are stopped and
-   * restarted with the updated processing config baked into the pipeline string.
-   */
   private scheduleDebouncedRestart(channelId: string): void {
     scheduleDebounced(
       this.restartDebounceTimers,
@@ -1092,86 +1014,29 @@ export class ChannelManager extends EventEmitter {
     );
   }
 
-  /** Clear a pending debounced restart for a channel if one exists. */
   private clearDebouncedRestart(channelId: string): void {
     clearDebounceTimer(this.restartDebounceTimers, channelId);
   }
 
-  /**
-   * Restart all pipelines for a channel with the current processing config.
-   *
-   * Stops all existing pipelines (clearing monitors), then starts fresh
-   * pipelines using the latest processing config. Produces new GStreamer
-   * processes with updated pipeline strings.
-   */
+  /** Rebuild the pipeline config and replace the single pipeline atomically. */
   private async restartChannelPipelines(channelId: string): Promise<void> {
     const channel = this.channels.get(channelId);
     if (!channel) return;
 
-    logger.info(`Restarting pipelines for channel "${channel.name}" (processing config changed)`, {
+    logger.info(`Restarting pipeline for channel "${channel.name}" (processing config changed)`, {
       channelId,
     });
 
-    // Stop all pipelines for this channel
-    const pipelineMap = this.channelPipelines.get(channelId);
-    if (pipelineMap && pipelineMap.size > 0) {
-      const pipelineIds = Array.from(pipelineMap.values());
-      await Promise.allSettled(
-        pipelineIds.map(async (pipelineId) => {
-          try {
-            await this.pipelineManager.removePipeline(pipelineId);
-          } catch (err) {
-            logger.warn(`Failed to stop pipeline ${pipelineId} during restart`, {
-              channelId,
-              error: toErrorMessage(err),
-            });
-          }
-          this.resourceMonitor.untrackPipeline(pipelineId);
-          this.levelMonitor.clearPipeline(pipelineId);
-        }),
-      );
-      pipelineMap.clear();
-    }
+    await this.replaceRunningPipeline(channelId);
+    this.assertSinglePipelinePerChannel();
 
-    // Restart all source pipelines with the updated config
-    for (let i = 0; i < channel.sources.length; i++) {
-      const assignment = channel.sources[i];
-      const source = this.sourceRegistry.getById(assignment.sourceId);
-
-      if (!source) {
-        logger.warn(`Skipping stale source during restart: ${assignment.sourceId}`, {
-          channelId,
-          sourceIndex: i,
-        });
-        continue;
-      }
-
-      try {
-        await this.startPipelineForSource(channelId, i, assignment);
-      } catch (err) {
-        logger.error(`Failed to restart pipeline for source "${source.name}"`, {
-          channelId,
-          sourceIndex: i,
-          error: toErrorMessage(err),
-        });
-      }
-    }
-
-    this.logChannelEvent(
-      channelId,
-      "info",
-      "Pipelines restarted (processing config changed)",
-    );
+    this.logChannelEvent(channelId, "info", "Pipeline restarted (processing config changed)");
   }
 
   // ---------------------------------------------------------------------------
   // Private: Processing config helpers
   // ---------------------------------------------------------------------------
 
-  /**
-   * Build the processing config for a pipeline, ensuring port allocation
-   * and SSRC are correctly set based on the channel's current position.
-   */
   private buildProcessingForPipeline(channel: AppChannel): ProcessingConfig {
     const channelIndex = this.getChannelIndex(channel.id);
     const ports = getPortsForChannel(channelIndex);
@@ -1193,10 +1058,6 @@ export class ChannelManager extends EventEmitter {
     };
   }
 
-  /**
-   * Get the zero-based index of a channel in the channel map.
-   * Used for deterministic port allocation.
-   */
   private getChannelIndex(channelId: string): number {
     let index = 0;
     for (const id of this.channels.keys()) {
@@ -1210,7 +1071,6 @@ export class ChannelManager extends EventEmitter {
   // Private: Helpers
   // ---------------------------------------------------------------------------
 
-  /** Get a channel by ID or throw if not found. */
   private getChannelOrThrow(channelId: string): AppChannel {
     const channel = this.channels.get(channelId);
     if (!channel) {
@@ -1219,26 +1079,11 @@ export class ChannelManager extends EventEmitter {
     return channel;
   }
 
-  /** Get or create the pipeline map for a channel. */
-  private getOrCreatePipelineMap(channelId: string): Map<string, string> {
-    let pipelineMap = this.channelPipelines.get(channelId);
-    if (!pipelineMap) {
-      pipelineMap = new Map();
-      this.channelPipelines.set(channelId, pipelineMap);
-    }
-    return pipelineMap;
-  }
-
-  /**
-   * Validate that selected channels are within the source's channel count.
-   * Channel indices are 0-based.
-   */
   private validateSelectedChannels(
     source: DiscoveredSource,
     selectedChannels: number[],
   ): void {
     const maxChannel = source.channelCount - 1;
-
     for (const ch of selectedChannels) {
       if (ch < 0 || ch > maxChannel) {
         throw new Error(
@@ -1248,7 +1093,6 @@ export class ChannelManager extends EventEmitter {
     }
   }
 
-  /** Log an event for a channel via the EventLogger. */
   private logChannelEvent(
     channelId: string,
     type: ChannelEventType,
@@ -1270,9 +1114,74 @@ export class ChannelManager extends EventEmitter {
 // ---------------------------------------------------------------------------
 
 /**
+ * Convert a (DiscoveredSource, SourceAssignment) pair into a SourceSegment.
+ * Single source of truth for source -> SourceSegment mapping (DRY).
+ */
+function toSourceSegment(
+  source: DiscoveredSource,
+  assignment: SourceAssignment,
+  mixerPadName: string,
+): SourceSegment {
+  const segmentAssignment = {
+    sourceId: assignment.sourceId,
+    gain: assignment.gain,
+    muted: assignment.muted,
+    delayMs: assignment.delayMs,
+  };
+
+  if (source.type === "aes67") {
+    return {
+      source: {
+        kind: "aes67",
+        config: {
+          multicastAddress: source.multicastAddress,
+          port: source.port,
+          sampleRate: source.sampleRate,
+          channelCount: source.channelCount,
+          bitDepth: source.bitDepth,
+          payloadType: source.payloadType,
+          selectedChannels: assignment.selectedChannels,
+        },
+      },
+      assignment: segmentAssignment,
+      mixerPadName,
+    };
+  }
+
+  if (source.type === "file") {
+    return {
+      source: {
+        kind: "file",
+        config: {
+          filePath: source.filePath,
+          loop: source.loop,
+          selectedChannels: assignment.selectedChannels,
+        },
+      },
+      assignment: segmentAssignment,
+      mixerPadName,
+    };
+  }
+
+  return {
+    source: {
+      kind: "local",
+      config: {
+        deviceId: source.deviceId,
+        api: source.api,
+        selectedChannels: assignment.selectedChannels,
+        totalChannelCount: source.channelCount,
+        isLoopback: source.isLoopback,
+      },
+    },
+    assignment: segmentAssignment,
+    mixerPadName,
+  };
+}
+
+/**
  * Normalize a source assignment to a plain object with a fresh selectedChannels copy.
- * Used by both load-from-config and persist-to-config paths to avoid duplicating
- * the field mapping.
+ * Used by load-from-config and persist-to-config paths.
  */
 function normalizeSourceAssignment(
   s: SourceAssignment,
@@ -1286,10 +1195,7 @@ function normalizeSourceAssignment(
   };
 }
 
-/**
- * Normalize an AGC config to a plain object.
- * Used by both load-from-config and persist-to-config paths.
- */
+/** Normalize an AGC config to a plain object. */
 function normalizeAgcConfig(
   agc: { enabled: boolean; targetLufs: number; maxTruePeakDbtp: number },
 ): { enabled: boolean; targetLufs: number; maxTruePeakDbtp: number } {
@@ -1298,13 +1204,4 @@ function normalizeAgcConfig(
     targetLufs: agc.targetLufs,
     maxTruePeakDbtp: agc.maxTruePeakDbtp,
   };
-}
-
-/** Shallow comparison of two number arrays. */
-function arraysEqual(a: readonly number[], b: readonly number[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
 }
