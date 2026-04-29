@@ -134,20 +134,6 @@ export class GStreamerProcess extends EventEmitter {
       ? buildChannelPipelineString(this.config)
       : buildPipelineString(this.config);
 
-    // Pre-spawn cleanup: nuke any leftover gst-launch.exe still bound to this
-    // pipeline's sender port. Race scenarios that produce orphans:
-    //   1. Manual stop fires while pipeline-manager's restart timer was already
-    //      delivering its callback; the timer-spawned child slips past the stop.
-    //   2. start() is called concurrently from updateSource and a loop-restart;
-    //      both spawn before either records the pid.
-    // Once an orphan exists, channel-manager only tracks the latest pipelineId,
-    // so the X button kills the tracked child and the orphan keeps streaming.
-    // Killing by port is the one invariant we control end-to-end -- bind-port
-    // is deterministic per channel (rtpPort + 1000).
-    if (IS_WINDOWS) {
-      this.killOrphansBoundToSenderPort(pipelineString);
-    }
-
     logger.info(`Spawning GStreamer pipeline "${this.config.label}"`, {
       pipelineId: this.id,
       pipelineString,
@@ -281,45 +267,6 @@ export class GStreamerProcess extends EventEmitter {
     } else {
       // SIGINT triggers EOS processing in gst-launch-1.0 with -e flag
       child.kill("SIGINT");
-    }
-  }
-
-  /**
-   * Kill any gst-launch-1.0.exe whose UDP socket is bound to the
-   * `bind-port=` value embedded in our about-to-spawn pipeline string.
-   * Belt-and-suspenders cleanup for orphans the lifecycle layer missed.
-   */
-  private killOrphansBoundToSenderPort(pipelineString: string): void {
-    const match = pipelineString.match(/bind-port=(\d+)/);
-    if (!match) return;
-    const senderPort = match[1];
-    try {
-      const find = spawnSync(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-Command",
-          `Get-NetUDPEndpoint -LocalPort ${senderPort} -ErrorAction SilentlyContinue | ForEach-Object { $_.OwningProcess }`,
-        ],
-        { windowsHide: true, encoding: "utf8" },
-      );
-      const pids = (find.stdout ?? "")
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => /^\d+$/.test(line));
-      for (const pidStr of pids) {
-        spawnSync("taskkill", ["/F", "/T", "/PID", pidStr], {
-          windowsHide: true,
-          stdio: "ignore",
-        });
-        logger.warn(`Killed orphan process ${pidStr} bound to sender port ${senderPort}`, {
-          pipelineId: this.id,
-        });
-      }
-    } catch (err) {
-      logger.warn(`Orphan-by-port sweep failed for port ${senderPort}: ${
-        err instanceof Error ? err.message : String(err)
-      }`, { pipelineId: this.id });
     }
   }
 
