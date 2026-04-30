@@ -73,8 +73,35 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
                 }
             };
 
-            // Pass --config-path pointing to the resource directory next to the executable
-            let sidecar_command = sidecar_command.args(["--config-path", "."]);
+            // Pass --config-path pointing to the per-user app data dir.
+            // Cannot use install dir: Program Files is non-writable for non-admin since Vista,
+            // so the sidecar's first-run config.json save would EPERM.
+            let app_data_dir = match app_handle.path().app_data_dir() {
+                Ok(dir) => dir,
+                Err(error) => {
+                    let error_message = format!("Failed to resolve app data dir: {error}");
+                    let _ = app_handle.emit("sidecar-crash", &error_message);
+                    eprintln!("{error_message}");
+                    tokio::time::sleep(std::time::Duration::from_secs(RESTART_DELAY_SECONDS))
+                        .await;
+                    continue;
+                }
+            };
+
+            if let Err(error) = std::fs::create_dir_all(&app_data_dir) {
+                let error_message = format!(
+                    "Failed to create app data dir {}: {error}",
+                    app_data_dir.display()
+                );
+                let _ = app_handle.emit("sidecar-crash", &error_message);
+                eprintln!("{error_message}");
+                tokio::time::sleep(std::time::Duration::from_secs(RESTART_DELAY_SECONDS)).await;
+                continue;
+            }
+
+            let app_data_dir_argument = app_data_dir.to_string_lossy().into_owned();
+            let sidecar_command =
+                sidecar_command.args(["--config-path", &app_data_dir_argument]);
 
             let (mut event_receiver, child) = match sidecar_command.spawn() {
                 Ok(result) => result,
