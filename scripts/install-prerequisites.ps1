@@ -130,12 +130,58 @@ if ($gstInstalled) {
   Write-Host "    Already installed, skipping." -ForegroundColor Green
 } else {
   if (-not (Test-CommandExists "winget")) {
-    Write-Host "[X] winget not found." -ForegroundColor Red
-    Write-Host "    Install 'App Installer' from Microsoft Store, then re-run this script:" -ForegroundColor Yellow
-    Write-Host "    https://apps.microsoft.com/detail/9NBLGGH4NNS1" -ForegroundColor Cyan
-    Write-Host "    Or download the MSI manually from https://gstreamer.freedesktop.org/download/" -ForegroundColor Yellow
-    Write-Host "    and choose 'Complete' install." -ForegroundColor Yellow
-    exit 1
+    Write-Host "    winget not found — bootstrapping App Installer..." -ForegroundColor Yellow
+
+    # Auto-bootstrap winget via the official MS aka.ms/getwinget link
+    # (downloads Microsoft.DesktopAppInstaller_*.msixbundle).
+    $wingetBundle = Join-Path $env:TEMP "Microsoft.DesktopAppInstaller.msixbundle"
+    $wingetUrl = "https://aka.ms/getwinget"
+    $bootstrapped = $false
+
+    try {
+      Write-Host "    Downloading App Installer from aka.ms/getwinget..." -ForegroundColor Gray
+      Invoke-Download -Url $wingetUrl -OutFile $wingetBundle
+      $sizeMB = [math]::Round((Get-Item $wingetBundle).Length / 1MB, 1)
+      Write-Host "    Downloaded $sizeMB MB. Installing via Add-AppxPackage..." -ForegroundColor Gray
+      Add-AppxPackage -Path $wingetBundle -ErrorAction Stop
+      Update-SessionPath
+      Start-Sleep -Seconds 2
+      if (Test-CommandExists "winget") {
+        Write-Host "    winget installed." -ForegroundColor Green
+        $bootstrapped = $true
+      }
+    } catch {
+      Write-Host "[!] Auto-install failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    } finally {
+      Remove-Item $wingetBundle -Force -ErrorAction SilentlyContinue
+    }
+
+    if (-not $bootstrapped) {
+      Write-Host ""
+      Write-Host "[X] Could not bootstrap winget automatically. Manual install required:" -ForegroundColor Red
+      Write-Host ""
+      Write-Host "    OPTION A (easiest) — Microsoft Store:" -ForegroundColor Yellow
+      Write-Host "    1. Open Microsoft Store" -ForegroundColor White
+      Write-Host "    2. Search for 'App Installer' (publisher: Microsoft)" -ForegroundColor White
+      Write-Host "    3. Click Install or Update" -ForegroundColor White
+      Write-Host "    4. Or visit: https://apps.microsoft.com/detail/9NBLGGH4NNS1" -ForegroundColor Cyan
+      Write-Host ""
+      Write-Host "    OPTION B — manual MSIX download (offline / no Store):" -ForegroundColor Yellow
+      Write-Host "    1. Browse: https://github.com/microsoft/winget-cli/releases/latest" -ForegroundColor Cyan
+      Write-Host "    2. Download Microsoft.DesktopAppInstaller_*.msixbundle" -ForegroundColor White
+      Write-Host "    3. Right-click the .msixbundle -> Install" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    OPTION C — skip winget, install GStreamer manually:" -ForegroundColor Yellow
+      Write-Host "    1. Open https://gstreamer.freedesktop.org/download/ in your browser" -ForegroundColor Cyan
+      Write-Host "    2. Download 'GStreamer 1.26 runtime' MSVC 64-bit" -ForegroundColor White
+      Write-Host "    3. Run installer, choose 'Complete' (NOT 'Typical')" -ForegroundColor White
+      Write-Host "    4. Reboot, skip this script, run the ChurchAudioStream installer" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    After completing one of the above, re-run this script:" -ForegroundColor Cyan
+      Write-Host "    iwr -useb https://raw.githubusercontent.com/roulendz/ChurchAudioStream/master/scripts/install-prerequisites.ps1 | iex" -ForegroundColor White
+      Write-Host ""
+      exit 1
+    }
   }
 
   Write-Host "    Running: winget install gstreamerproject.gstreamer (Complete profile)..." -ForegroundColor Gray
