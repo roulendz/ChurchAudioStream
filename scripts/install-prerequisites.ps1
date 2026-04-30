@@ -195,16 +195,38 @@ if ($gstInstalled) {
   }
 
   # Fresh winget bootstrap may not have synced its source index yet.
-  # Force a source update so package lookups work.
-  Write-Host "    Updating winget source index..." -ForegroundColor Gray
-  $srcUpd = Start-Process -FilePath $wingetExe -ArgumentList @("source","update","--accept-source-agreements") -Wait -PassThru -NoNewWindow
-  if ($srcUpd.ExitCode -ne 0) {
-    Write-Host "[!] winget source update exit $($srcUpd.ExitCode). Trying source reset..." -ForegroundColor Yellow
+  # 'winget source update' subcommand has NO --accept-source-agreements flag.
+  # The index downloads lazily on first 'search'/'install' that DOES accept the
+  # agreements. So we trigger sync via 'search', which IS allowed to auto-accept.
+  Write-Host "    Syncing winget source index (may take 30-60s)..." -ForegroundColor Gray
+  $searchArgs = @(
+    "search",
+    "--id", "gstreamerproject.gstreamer",
+    "--exact",
+    "--source", "winget",
+    "--accept-source-agreements",
+    "--disable-interactivity"
+  )
+  $srch = Start-Process -FilePath $wingetExe -ArgumentList $searchArgs -Wait -PassThru -NoNewWindow
+  if ($srch.ExitCode -ne 0) {
+    Write-Host "[!] Initial search exit $($srch.ExitCode). Trying source reset + retry..." -ForegroundColor Yellow
     Start-Process -FilePath $wingetExe -ArgumentList @("source","reset","--force") -Wait -PassThru -NoNewWindow | Out-Null
+    # Force re-add the official source if reset didn't do it
+    Start-Process -FilePath $wingetExe -ArgumentList @("source","add","-n","winget","-a","https://cdn.winget.microsoft.com/cache","-t","Microsoft.PreIndexed.Package") -Wait -PassThru -NoNewWindow | Out-Null
+    $srch2 = Start-Process -FilePath $wingetExe -ArgumentList $searchArgs -Wait -PassThru -NoNewWindow
+    if ($srch2.ExitCode -ne 0) {
+      Write-Host "[X] Could not sync winget source index (exit $($srch2.ExitCode))." -ForegroundColor Red
+      Write-Host "    Manual GStreamer install required:" -ForegroundColor Yellow
+      Write-Host "    1. Open https://gstreamer.freedesktop.org/download/ in browser" -ForegroundColor Cyan
+      Write-Host "    2. Download GStreamer 1.26 runtime (MSVC 64-bit)" -ForegroundColor White
+      Write-Host "    3. Run installer, choose 'Complete' (NOT 'Typical')" -ForegroundColor White
+      Write-Host "    4. Reboot, then run the ChurchAudioStream installer" -ForegroundColor White
+      exit 1
+    }
   }
 
-  Write-Host "    Running: winget install gstreamerproject.gstreamer (Complete profile)..." -ForegroundColor Gray
-  Write-Host "    This downloads ~150 MB and may take 2-5 minutes." -ForegroundColor DarkGray
+  Write-Host "    Source synced. Installing GStreamer (Complete profile)..." -ForegroundColor Gray
+  Write-Host "    Downloads ~150 MB; takes 2-5 minutes." -ForegroundColor DarkGray
 
   $wingetArgs = @(
     "install",
@@ -214,22 +236,22 @@ if ($gstInstalled) {
     "--source", "winget",
     "--accept-package-agreements",
     "--accept-source-agreements",
+    "--disable-interactivity",
     "--override", "/quiet ADDLOCAL=ALL"
   )
   $proc = Start-Process -FilePath $wingetExe -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
   # winget exit codes:
   #   0           = ok
   #  -1978335189  = APPINSTALLER_CLI_ERROR_PACKAGE_ALREADY_INSTALLED
-  #  -1978335212  = APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND (source not synced)
+  #  -1978335212  = APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND
   if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq -1978335189) {
     Write-Host "    GStreamer installed." -ForegroundColor Green
   } elseif ($proc.ExitCode -eq -1978335212) {
     Write-Host "[X] winget could not find package gstreamerproject.gstreamer." -ForegroundColor Red
-    Write-Host "    Your winget source index may be stale. Try manually:" -ForegroundColor Yellow
-    Write-Host "    1. winget source update" -ForegroundColor White
-    Write-Host "    2. winget search gstreamer" -ForegroundColor White
-    Write-Host "    Then re-run this script. Or install GStreamer manually:" -ForegroundColor Yellow
-    Write-Host "    https://gstreamer.freedesktop.org/download/  -> Complete install" -ForegroundColor Cyan
+    Write-Host "    Manual GStreamer install required:" -ForegroundColor Yellow
+    Write-Host "    1. Open https://gstreamer.freedesktop.org/download/ in browser" -ForegroundColor Cyan
+    Write-Host "    2. Download GStreamer 1.26 runtime (MSVC 64-bit)" -ForegroundColor White
+    Write-Host "    3. Run installer, choose 'Complete' (NOT 'Typical')" -ForegroundColor White
     exit 1
   } else {
     Write-Host "[!] winget exit code $($proc.ExitCode). Continuing - may have installed regardless." -ForegroundColor Yellow
