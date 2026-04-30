@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Install ChurchAudioStream prerequisites on Windows 10/11.
 
@@ -32,7 +32,9 @@ param(
 # ----- PowerShell 5.1+ compatibility ------------------------------------------------
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$ProgressPreference = "SilentlyContinue"  # speeds up Invoke-WebRequest
+# NOTE: keep progress visible for big downloads (winget bundle ~200 MB, GStreamer ~150 MB).
+# Set per-call to "SilentlyContinue" only for fast HEAD probes.
+$ProgressPreference = "Continue"
 
 # Detect PowerShell version
 $psMajor = $PSVersionTable.PSVersion.Major
@@ -78,6 +80,17 @@ function Test-CommandExists {
   param([string]$Name)
   $cmd = Get-Command -Name $Name -ErrorAction SilentlyContinue
   return [bool]$cmd
+}
+
+# ----- Helper: locate winget.exe by checking PATH AND known WindowsApps install dir.
+# Add-AppxPackage registers winget but doesn't always update $env:Path in the
+# current PS session, so PATH lookup can fail right after install.
+function Resolve-WingetPath {
+  $cmd = Get-Command -Name "winget" -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+  $direct = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\winget.exe"
+  if (Test-Path $direct) { return $direct }
+  return $null
 }
 
 # ----- Helper: refresh PATH from registry without reboot ----------------------------
@@ -129,26 +142,39 @@ if (-not $gstInstalled) {
 if ($gstInstalled) {
   Write-Host "    Already installed, skipping." -ForegroundColor Green
 } else {
-  if (-not (Test-CommandExists "winget")) {
-    Write-Host "    winget not found — bootstrapping App Installer..." -ForegroundColor Yellow
+  $wingetExe = Resolve-WingetPath
+  if (-not $wingetExe) {
+    Write-Host "    winget not found - bootstrapping App Installer..." -ForegroundColor Yellow
 
-    # Auto-bootstrap winget via the official MS aka.ms/getwinget link
-    # (downloads Microsoft.DesktopAppInstaller_*.msixbundle).
+    # Auto-bootstrap winget via official MS aka.ms/getwinget (msixbundle ~200 MB).
     $wingetBundle = Join-Path $env:TEMP "Microsoft.DesktopAppInstaller.msixbundle"
-    $wingetUrl = "https://aka.ms/getwinget"
     $bootstrapped = $false
 
     try {
-      Write-Host "    Downloading App Installer from aka.ms/getwinget..." -ForegroundColor Gray
-      Invoke-Download -Url $wingetUrl -OutFile $wingetBundle
+      Write-Host "    Downloading App Installer from aka.ms/getwinget (~200 MB)..." -ForegroundColor Gray
+      # Prefer BITS for a real progress bar; fall back to Invoke-WebRequest.
+      $bitsAvailable = $null -ne (Get-Module -ListAvailable -Name BitsTransfer)
+      if ($bitsAvailable) {
+        Import-Module BitsTransfer
+        Start-BitsTransfer -Source "https://aka.ms/getwinget" -Destination $wingetBundle -DisplayName "App Installer" -Description "Downloading winget bootstrapper"
+      } else {
+        Invoke-Download -Url "https://aka.ms/getwinget" -OutFile $wingetBundle
+      }
+
       $sizeMB = [math]::Round((Get-Item $wingetBundle).Length / 1MB, 1)
       Write-Host "    Downloaded $sizeMB MB. Installing via Add-AppxPackage..." -ForegroundColor Gray
       Add-AppxPackage -Path $wingetBundle -ErrorAction Stop
       Update-SessionPath
-      Start-Sleep -Seconds 2
-      if (Test-CommandExists "winget") {
-        Write-Host "    winget installed." -ForegroundColor Green
+      Start-Sleep -Seconds 3
+
+      # Resolve directly by path (PATH refresh may not include WindowsApps yet)
+      $wingetExe = Resolve-WingetPath
+      if ($wingetExe) {
+        Write-Host "    winget installed at: $wingetExe" -ForegroundColor Green
         $bootstrapped = $true
+      } else {
+        Write-Host "[!] App Installer registered but winget.exe not yet visible." -ForegroundColor Yellow
+        Write-Host "    Close ALL PowerShell windows, open a new one, then re-run this script." -ForegroundColor Yellow
       }
     } catch {
       Write-Host "[!] Auto-install failed: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -158,27 +184,26 @@ if ($gstInstalled) {
 
     if (-not $bootstrapped) {
       Write-Host ""
-      Write-Host "[X] Could not bootstrap winget automatically. Manual install required:" -ForegroundColor Red
+      Write-Host "[X] Could not bootstrap winget in this session. Pick one of:" -ForegroundColor Red
       Write-Host ""
-      Write-Host "    OPTION A (easiest) — Microsoft Store:" -ForegroundColor Yellow
-      Write-Host "    1. Open Microsoft Store" -ForegroundColor White
-      Write-Host "    2. Search for 'App Installer' (publisher: Microsoft)" -ForegroundColor White
-      Write-Host "    3. Click Install or Update" -ForegroundColor White
-      Write-Host "    4. Or visit: https://apps.microsoft.com/detail/9NBLGGH4NNS1" -ForegroundColor Cyan
+      Write-Host "    OPTION A (easiest) - close this PowerShell window, open a NEW elevated one, re-run:" -ForegroundColor Yellow
+      Write-Host "    Set-ExecutionPolicy -Scope Process Bypass -Force; iwr -useb https://raw.githubusercontent.com/roulendz/ChurchAudioStream/master/scripts/install-prerequisites.ps1 | iex" -ForegroundColor White
       Write-Host ""
-      Write-Host "    OPTION B — manual MSIX download (offline / no Store):" -ForegroundColor Yellow
-      Write-Host "    1. Browse: https://github.com/microsoft/winget-cli/releases/latest" -ForegroundColor Cyan
+      Write-Host "    OPTION B - Microsoft Store:" -ForegroundColor Yellow
+      Write-Host "    1. Open Microsoft Store, search 'App Installer' (publisher: Microsoft)" -ForegroundColor White
+      Write-Host "    2. Click Install or Update" -ForegroundColor White
+      Write-Host "    3. Or visit: https://apps.microsoft.com/detail/9NBLGGH4NNS1" -ForegroundColor Cyan
+      Write-Host ""
+      Write-Host "    OPTION C - manual MSIX (offline / no Store):" -ForegroundColor Yellow
+      Write-Host "    1. https://github.com/microsoft/winget-cli/releases/latest" -ForegroundColor Cyan
       Write-Host "    2. Download Microsoft.DesktopAppInstaller_*.msixbundle" -ForegroundColor White
-      Write-Host "    3. Right-click the .msixbundle -> Install" -ForegroundColor White
+      Write-Host "    3. Right-click the .msixbundle and Install" -ForegroundColor White
       Write-Host ""
-      Write-Host "    OPTION C — skip winget, install GStreamer manually:" -ForegroundColor Yellow
-      Write-Host "    1. Open https://gstreamer.freedesktop.org/download/ in your browser" -ForegroundColor Cyan
-      Write-Host "    2. Download 'GStreamer 1.26 runtime' MSVC 64-bit" -ForegroundColor White
+      Write-Host "    OPTION D - skip winget, install GStreamer manually:" -ForegroundColor Yellow
+      Write-Host "    1. https://gstreamer.freedesktop.org/download/" -ForegroundColor Cyan
+      Write-Host "    2. Download GStreamer 1.26 runtime (MSVC 64-bit)" -ForegroundColor White
       Write-Host "    3. Run installer, choose 'Complete' (NOT 'Typical')" -ForegroundColor White
-      Write-Host "    4. Reboot, skip this script, run the ChurchAudioStream installer" -ForegroundColor White
-      Write-Host ""
-      Write-Host "    After completing one of the above, re-run this script:" -ForegroundColor Cyan
-      Write-Host "    iwr -useb https://raw.githubusercontent.com/roulendz/ChurchAudioStream/master/scripts/install-prerequisites.ps1 | iex" -ForegroundColor White
+      Write-Host "    4. Reboot, then run the ChurchAudioStream installer (skip this script)" -ForegroundColor White
       Write-Host ""
       exit 1
     }
@@ -196,10 +221,10 @@ if ($gstInstalled) {
     "--accept-source-agreements",
     "--override", "/quiet ADDLOCAL=ALL"
   )
-  $proc = Start-Process -FilePath "winget" -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
-  # winget exit codes: 0 = ok, -1978335189 = already installed, 0x8A150011 = already up to date
+  $proc = Start-Process -FilePath $wingetExe -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
+  # winget exit codes: 0 = ok, -1978335189 = already installed
   if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne -1978335189) {
-    Write-Host "[!] winget exit code $($proc.ExitCode). Continuing — may have installed regardless." -ForegroundColor Yellow
+    Write-Host "[!] winget exit code $($proc.ExitCode). Continuing - may have installed regardless." -ForegroundColor Yellow
   } else {
     Write-Host "    GStreamer installed." -ForegroundColor Green
   }
@@ -240,7 +265,7 @@ if ($SkipWebView2) {
       Invoke-Download -Url $wv2Url -OutFile $wv2Exe
     } catch {
       Write-Host "[X] WebView2 download failed: $($_.Exception.Message)" -ForegroundColor Red
-      Write-Host "    Continuing — most Win10 22H2+ and Win11 already have it." -ForegroundColor Yellow
+      Write-Host "    Continuing - most Win10 22H2+ and Win11 already have it." -ForegroundColor Yellow
     }
     if (Test-Path $wv2Exe) {
       Write-Host "    Installing silently..." -ForegroundColor Gray
