@@ -87,12 +87,36 @@ function Update-SessionPath {
   $env:Path = "$machinePath;$userPath"
 }
 
-# ----- Step 1: GStreamer 1.26 -------------------------------------------------------
-Write-Host "[1/3] GStreamer $GstVersion (MSVC 64-bit, Complete install)" -ForegroundColor Cyan
+# ----- Helper: download with browser UA (gstreamer.freedesktop.org returns 418 to PS UA) -----
+$BrowserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+
+function Invoke-Download {
+  param(
+    [Parameter(Mandatory=$true)][string]$Url,
+    [Parameter(Mandatory=$true)][string]$OutFile
+  )
+  Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -UserAgent $BrowserUA -MaximumRedirection 10
+}
+
+function Test-UrlExists {
+  param([Parameter(Mandatory=$true)][string]$Url)
+  try {
+    $resp = Invoke-WebRequest -Uri $Url -Method Head -UseBasicParsing -UserAgent $BrowserUA -MaximumRedirection 10 -TimeoutSec 15
+    return ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 400)
+  } catch {
+    return $false
+  }
+}
+
+# ----- Step 1: GStreamer (via winget) -----------------------------------------------
+# gstreamer.freedesktop.org runs Anubis anti-bot (returns 418 to PowerShell), so
+# we use winget to fetch the official MSI from MS-curated mirrors.
+# Package: gstreamerproject.gstreamer (currently 1.28.x; ABI-compatible with 1.26).
+# We pass /quiet ADDLOCAL=ALL via --override to force the "Complete" feature set.
+Write-Host "[1/3] GStreamer (MSVC 64-bit, Complete install) via winget" -ForegroundColor Cyan
 
 $gstInstalled = Test-CommandExists "gst-launch-1.0.exe"
 if (-not $gstInstalled) {
-  # Try common install dirs even if not on PATH yet (installer just ran in same session)
   $gstCandidates = @(
     "C:\gstreamer\1.0\msvc_x86_64\bin\gst-launch-1.0.exe",
     "C:\Program Files\gstreamer\1.0\msvc_x86_64\bin\gst-launch-1.0.exe"
@@ -103,45 +127,37 @@ if (-not $gstInstalled) {
 }
 
 if ($gstInstalled) {
-  Write-Host "    Already installed, skipping download." -ForegroundColor Green
+  Write-Host "    Already installed, skipping." -ForegroundColor Green
 } else {
-  $gstUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/$GstVersion/msvc/gstreamer-1.0-msvc-x86_64-$GstVersion.msi"
-  $gstMsi = Join-Path $env:TEMP "gstreamer-1.0-msvc-x86_64-$GstVersion.msi"
-
-  Write-Host "    Downloading from gstreamer.freedesktop.org..." -ForegroundColor Gray
-  Write-Host "    URL: $gstUrl" -ForegroundColor DarkGray
-  try {
-    Invoke-WebRequest -Uri $gstUrl -OutFile $gstMsi -UseBasicParsing
-  } catch {
-    Write-Host "[X] Download failed: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host "    Verify version $GstVersion exists at:" -ForegroundColor Yellow
-    Write-Host "    https://gstreamer.freedesktop.org/data/pkg/windows/" -ForegroundColor Yellow
-    Write-Host "    Re-run with -GstVersion <newer>" -ForegroundColor Yellow
+  if (-not (Test-CommandExists "winget")) {
+    Write-Host "[X] winget not found." -ForegroundColor Red
+    Write-Host "    Install 'App Installer' from Microsoft Store, then re-run this script:" -ForegroundColor Yellow
+    Write-Host "    https://apps.microsoft.com/detail/9NBLGGH4NNS1" -ForegroundColor Cyan
+    Write-Host "    Or download the MSI manually from https://gstreamer.freedesktop.org/download/" -ForegroundColor Yellow
+    Write-Host "    and choose 'Complete' install." -ForegroundColor Yellow
     exit 1
   }
 
-  $sizeMB = [math]::Round((Get-Item $gstMsi).Length / 1MB, 1)
-  Write-Host "    Downloaded $sizeMB MB. Installing (Complete = ADDLOCAL=ALL)..." -ForegroundColor Gray
-  Write-Host "    This may take 1-2 minutes; no progress bar." -ForegroundColor DarkGray
+  Write-Host "    Running: winget install gstreamerproject.gstreamer (Complete profile)..." -ForegroundColor Gray
+  Write-Host "    This downloads ~150 MB and may take 2-5 minutes." -ForegroundColor DarkGray
 
-  $msiArgs = @(
-    "/i", "`"$gstMsi`"",
-    "/quiet",
-    "/norestart",
-    "ADDLOCAL=ALL"
+  $wingetArgs = @(
+    "install",
+    "--id", "gstreamerproject.gstreamer",
+    "--exact",
+    "--silent",
+    "--accept-package-agreements",
+    "--accept-source-agreements",
+    "--override", "/quiet ADDLOCAL=ALL"
   )
-  $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru
-  if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
-    Write-Host "[X] msiexec exit code $($proc.ExitCode)" -ForegroundColor Red
-    exit 1
-  }
-  if ($proc.ExitCode -eq 3010) {
-    Write-Host "    GStreamer installed; reboot pending (exit 3010)." -ForegroundColor Yellow
+  $proc = Start-Process -FilePath "winget" -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
+  # winget exit codes: 0 = ok, -1978335189 = already installed, 0x8A150011 = already up to date
+  if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne -1978335189) {
+    Write-Host "[!] winget exit code $($proc.ExitCode). Continuing — may have installed regardless." -ForegroundColor Yellow
   } else {
     Write-Host "    GStreamer installed." -ForegroundColor Green
   }
 
-  Remove-Item $gstMsi -Force -ErrorAction SilentlyContinue
   Update-SessionPath
 }
 
@@ -175,7 +191,7 @@ if ($SkipWebView2) {
     $wv2Exe = Join-Path $env:TEMP "MicrosoftEdgeWebview2Setup.exe"
     Write-Host "    Downloading Evergreen Bootstrapper..." -ForegroundColor Gray
     try {
-      Invoke-WebRequest -Uri $wv2Url -OutFile $wv2Exe -UseBasicParsing
+      Invoke-Download -Url $wv2Url -OutFile $wv2Exe
     } catch {
       Write-Host "[X] WebView2 download failed: $($_.Exception.Message)" -ForegroundColor Red
       Write-Host "    Continuing — most Win10 22H2+ and Win11 already have it." -ForegroundColor Yellow
