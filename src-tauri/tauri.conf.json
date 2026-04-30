@@ -6,15 +6,18 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build:bundle-deps",
     "beforeDevCommand": "npm run dev"
   },
   "bundle": {
     "active": true,
     "targets": "all",
     "externalBin": ["binaries/server"],
-    "resources": ["binaries/mediasoup-worker*"],
-    "icon": []
+    "resources": {
+      "binaries/mediasoup-worker.exe": "binaries/mediasoup-worker.exe",
+      "../sidecar/public": "public"
+    },
+    "icon": ["icons/icon.ico"]
   },
   "app": {
     "windows": [

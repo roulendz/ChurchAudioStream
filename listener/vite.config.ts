@@ -28,8 +28,8 @@ export default defineConfig({
       manifest: {
         name: "Church Audio Stream",
         short_name: "CAS",
-        theme_color: "#1a1a2e",
-        background_color: "#1a1a2e",
+        theme_color: "#16a34a",
+        background_color: "#16a34a",
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
