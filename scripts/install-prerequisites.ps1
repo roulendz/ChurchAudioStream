@@ -1,40 +1,25 @@
-﻿<#
-.SYNOPSIS
-  Install ChurchAudioStream prerequisites on Windows 10/11.
-
-.DESCRIPTION
-  Installs GStreamer 1.26 (MSVC 64-bit, Complete) and Edge WebView2 Runtime,
-  then verifies installation. Reboot may be required after GStreamer install
-  to refresh system PATH for child processes.
-
-  Compatible with Windows PowerShell 5.1 (default on Win10) and PowerShell 7+.
-
-.PARAMETER GstVersion
-  GStreamer version to install. Default: 1.26.0.
-
-.PARAMETER SkipWebView2
-  Skip WebView2 install (already present on Win10 22H2+ and Win11).
-
-.EXAMPLE
-  iwr -useb https://raw.githubusercontent.com/roulendz/ChurchAudioStream/master/scripts/install-prerequisites.ps1 | iex
-
-.EXAMPLE
-  # Local run with explicit version
-  .\install-prerequisites.ps1 -GstVersion 1.26.0
-#>
-
-[CmdletBinding()]
-param(
-  [string]$GstVersion = "1.26.0",
-  [switch]$SkipWebView2
-)
+﻿# ChurchAudioStream prerequisites installer
+#
+# Installs GStreamer (MSVC 64-bit, Complete) and Edge WebView2 Runtime via winget,
+# then verifies installation. Compatible with Windows PowerShell 5.1 and PowerShell 7+.
+#
+# RUN (one-liner, requires elevated PowerShell):
+#   Set-ExecutionPolicy -Scope Process Bypass -Force; iwr -useb https://raw.githubusercontent.com/roulendz/ChurchAudioStream/master/scripts/install-prerequisites.ps1 | iex
+#
+# OPTIONS (set as environment variables BEFORE running):
+#   $env:CAS_SKIP_WEBVIEW2 = "1"  # skip WebView2 (preinstalled on Win10 22H2+ / Win11)
+#
+# NOTE: This script intentionally has NO param() / [CmdletBinding()] block because
+# those are illegal inside Invoke-Expression input. Configure via env vars instead.
 
 # ----- PowerShell 5.1+ compatibility ------------------------------------------------
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 # NOTE: keep progress visible for big downloads (winget bundle ~200 MB, GStreamer ~150 MB).
-# Set per-call to "SilentlyContinue" only for fast HEAD probes.
 $ProgressPreference = "Continue"
+
+# Read options from environment
+$SkipWebView2 = ($env:CAS_SKIP_WEBVIEW2 -eq "1")
 
 # Detect PowerShell version
 $psMajor = $PSVersionTable.PSVersion.Major
