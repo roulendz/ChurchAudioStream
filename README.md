@@ -4,6 +4,31 @@ Cross-platform desktop app (Tauri 2.x + Node.js sidecar) that captures Dante/AES
 
 ---
 
+## Quick install (end users)
+
+**On a fresh Windows 10 / 11 PC**, open an **elevated PowerShell** (right-click → "Run as administrator") and paste:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass -Force; iwr -useb https://raw.githubusercontent.com/roulendz/ChurchAudioStream/master/scripts/install-prerequisites.ps1 | iex
+```
+
+This installs **GStreamer 1.26 (Complete profile)** and **WebView2 Runtime** silently. Works on **Windows PowerShell 5.1** (default Win10 shell) and **PowerShell 7+**.
+
+After it finishes:
+1. **Reboot** (so PATH is refreshed for all processes)
+2. Download the latest installer from [Releases](https://github.com/roulendz/ChurchAudioStream/releases/latest):
+   - `ChurchAudioStream_<ver>_x64-setup.exe` (NSIS, ~23 MB) — recommended for single PC
+   - `ChurchAudioStream_<ver>_x64_en-US.msi` (~34 MB) — for AD/Intune deployment
+3. Run installer, allow firewall on **Private network**
+4. Phones on same WiFi → open `https://<host-ip>:7777`
+
+> If you only have **PowerShell 7.5** open and `iex` complains, run the script in `powershell.exe` (5.1) explicitly:
+> ```powershell
+> powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/roulendz/ChurchAudioStream/master/scripts/install-prerequisites.ps1 | iex"
+> ```
+
+---
+
 ## Architecture (high level)
 
 | Component | Path | Output | Role |
@@ -34,6 +59,9 @@ Cross-platform desktop app (Tauri 2.x + Node.js sidecar) that captures Dante/AES
 
 ### GStreamer install (mandatory — NOT bundled in MSI)
 
+**Easy path** — use the [Quick install](#quick-install-end-users) script above (auto-installs Complete profile + adds to PATH).
+
+**Manual path**:
 1. Download: https://gstreamer.freedesktop.org/download/ → MSVC 64-bit **runtime**
 2. Run installer → choose **Complete** install (need `level`, `audioconvert`, `opusenc`, `rtpopuspay`, ASIO/WASAPI plugins)
 3. Add `C:\gstreamer\1.0\msvc_x86_64\bin` to system PATH
