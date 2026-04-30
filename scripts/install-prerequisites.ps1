@@ -1,4 +1,4 @@
-﻿# ChurchAudioStream prerequisites installer
+# ChurchAudioStream prerequisites installer
 #
 # Installs GStreamer (MSVC 64-bit, Complete) and Edge WebView2 Runtime via winget,
 # then verifies installation. Compatible with Windows PowerShell 5.1 and PowerShell 7+.
@@ -194,6 +194,15 @@ if ($gstInstalled) {
     }
   }
 
+  # Fresh winget bootstrap may not have synced its source index yet.
+  # Force a source update so package lookups work.
+  Write-Host "    Updating winget source index..." -ForegroundColor Gray
+  $srcUpd = Start-Process -FilePath $wingetExe -ArgumentList @("source","update","--accept-source-agreements") -Wait -PassThru -NoNewWindow
+  if ($srcUpd.ExitCode -ne 0) {
+    Write-Host "[!] winget source update exit $($srcUpd.ExitCode). Trying source reset..." -ForegroundColor Yellow
+    Start-Process -FilePath $wingetExe -ArgumentList @("source","reset","--force") -Wait -PassThru -NoNewWindow | Out-Null
+  }
+
   Write-Host "    Running: winget install gstreamerproject.gstreamer (Complete profile)..." -ForegroundColor Gray
   Write-Host "    This downloads ~150 MB and may take 2-5 minutes." -ForegroundColor DarkGray
 
@@ -202,16 +211,28 @@ if ($gstInstalled) {
     "--id", "gstreamerproject.gstreamer",
     "--exact",
     "--silent",
+    "--source", "winget",
     "--accept-package-agreements",
     "--accept-source-agreements",
     "--override", "/quiet ADDLOCAL=ALL"
   )
   $proc = Start-Process -FilePath $wingetExe -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
-  # winget exit codes: 0 = ok, -1978335189 = already installed
-  if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne -1978335189) {
-    Write-Host "[!] winget exit code $($proc.ExitCode). Continuing - may have installed regardless." -ForegroundColor Yellow
-  } else {
+  # winget exit codes:
+  #   0           = ok
+  #  -1978335189  = APPINSTALLER_CLI_ERROR_PACKAGE_ALREADY_INSTALLED
+  #  -1978335212  = APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND (source not synced)
+  if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq -1978335189) {
     Write-Host "    GStreamer installed." -ForegroundColor Green
+  } elseif ($proc.ExitCode -eq -1978335212) {
+    Write-Host "[X] winget could not find package gstreamerproject.gstreamer." -ForegroundColor Red
+    Write-Host "    Your winget source index may be stale. Try manually:" -ForegroundColor Yellow
+    Write-Host "    1. winget source update" -ForegroundColor White
+    Write-Host "    2. winget search gstreamer" -ForegroundColor White
+    Write-Host "    Then re-run this script. Or install GStreamer manually:" -ForegroundColor Yellow
+    Write-Host "    https://gstreamer.freedesktop.org/download/  -> Complete install" -ForegroundColor Cyan
+    exit 1
+  } else {
+    Write-Host "[!] winget exit code $($proc.ExitCode). Continuing - may have installed regardless." -ForegroundColor Yellow
   }
 
   Update-SessionPath
