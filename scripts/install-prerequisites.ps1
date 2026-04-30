@@ -308,47 +308,99 @@ if ($SkipWebView2) {
   }
 }
 
-# ----- Step 3: Verify ---------------------------------------------------------------
+# ----- Step 3: Ensure GStreamer bin is on the MACHINE PATH --------------------------
+# GStreamer's MSI doesn't always append C:\gstreamer\1.0\msvc_x86_64\bin to PATH on
+# Win10. Without this, Tauri-spawned sidecar can't find gst-launch / gst-device-monitor
+# and audio source enumeration returns empty. We force-add to MACHINE PATH (persists,
+# inherited by all future processes after reboot).
 Write-Host ""
-Write-Host "[3/3] Verifying GStreamer on PATH" -ForegroundColor Cyan
+Write-Host "[3/4] Ensuring GStreamer bin is on the machine PATH" -ForegroundColor Cyan
 
-Update-SessionPath
-$gstExe = Get-Command "gst-launch-1.0.exe" -ErrorAction SilentlyContinue
-if ($gstExe) {
-  $gstPath = $gstExe.Source
-  Write-Host "    Found: $gstPath" -ForegroundColor Green
-  try {
-    $verOut = & $gstPath --version 2>&1 | Select-Object -First 1
-    Write-Host "    $verOut" -ForegroundColor Green
-  } catch {
-    Write-Host "[!] gst-launch-1.0.exe ran but errored: $($_.Exception.Message)" -ForegroundColor Yellow
-  }
+$gstBin = $null
+$gstCandidates = @(
+  "C:\gstreamer\1.0\msvc_x86_64\bin",
+  "C:\Program Files\gstreamer\1.0\msvc_x86_64\bin",
+  "${env:ProgramFiles}\gstreamer\1.0\msvc_x86_64\bin"
+) | Select-Object -Unique
+foreach ($c in $gstCandidates) {
+  if (Test-Path (Join-Path $c "gst-launch-1.0.exe")) { $gstBin = $c; break }
+}
+
+if (-not $gstBin) {
+  Write-Host "[X] GStreamer bin directory not found in any expected location." -ForegroundColor Red
+  Write-Host "    Re-run the GStreamer installer with 'Complete' profile (NOT Typical)." -ForegroundColor Yellow
+  exit 1
+}
+Write-Host "    Found: $gstBin" -ForegroundColor Green
+
+$machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+$pathParts = $machinePath -split ';' | Where-Object { $_.Trim().Length -gt 0 }
+$alreadyInPath = $pathParts | Where-Object { $_.TrimEnd('\') -ieq $gstBin.TrimEnd('\') }
+if ($alreadyInPath) {
+  Write-Host "    Already in machine PATH." -ForegroundColor Green
 } else {
-  # Look in standard install dirs even if PATH didn't refresh
-  $found = $null
-  foreach ($c in @("C:\gstreamer\1.0\msvc_x86_64\bin\gst-launch-1.0.exe", "C:\Program Files\gstreamer\1.0\msvc_x86_64\bin\gst-launch-1.0.exe")) {
-    if (Test-Path $c) { $found = $c; break }
-  }
-  if ($found) {
-    Write-Host "[!] Found at $found but PATH not yet refreshed in this session." -ForegroundColor Yellow
-    Write-Host "    REBOOT required for new processes (including ChurchAudioStream) to see GStreamer." -ForegroundColor Yellow
-  } else {
-    Write-Host "[X] gst-launch-1.0.exe not found anywhere. Installation may have failed." -ForegroundColor Red
-    exit 1
+  $newMachinePath = ($machinePath.TrimEnd(';')) + ";$gstBin"
+  [Environment]::SetEnvironmentVariable("Path", $newMachinePath, "Machine")
+  Write-Host "    Added to MACHINE PATH (reboot needed for sidecar to inherit)." -ForegroundColor Green
+}
+Update-SessionPath
+
+# Functional verify in current session
+$gstExe = Join-Path $gstBin "gst-launch-1.0.exe"
+try {
+  $verOut = & $gstExe --version 2>&1 | Select-Object -First 1
+  Write-Host "    $verOut" -ForegroundColor Green
+} catch {
+  Write-Host "[!] gst-launch-1.0.exe present but errored: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
+# ----- Step 4: Firewall rule for phones on LAN --------------------------------------
+Write-Host ""
+Write-Host "[4/4] Firewall rule for port 7777 (Private network)" -ForegroundColor Cyan
+
+$existingRule = Get-NetFirewallRule -DisplayName "ChurchAudioStream" -ErrorAction SilentlyContinue
+if ($existingRule) {
+  Write-Host "    Rule 'ChurchAudioStream' already exists." -ForegroundColor Green
+} else {
+  try {
+    New-NetFirewallRule `
+      -DisplayName "ChurchAudioStream" `
+      -Description "Allow phones on LAN to reach the listener PWA + WebRTC signaling" `
+      -Direction Inbound `
+      -LocalPort 7777 `
+      -Protocol TCP `
+      -Action Allow `
+      -Profile Private `
+      -ErrorAction Stop | Out-Null
+    Write-Host "    Created inbound rule: TCP 7777, Private profile." -ForegroundColor Green
+  } catch {
+    Write-Host "[!] Could not create firewall rule: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "    Manual: New-NetFirewallRule -DisplayName 'ChurchAudioStream' -Direction Inbound -LocalPort 7777 -Protocol TCP -Action Allow -Profile Private" -ForegroundColor Yellow
   }
 }
 
 # ----- Done -------------------------------------------------------------------------
+$lanIps = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+  Where-Object { $_.IPAddress -notmatch '^(127|169\.254|255)' -and $_.PrefixOrigin -ne 'WellKnown' } |
+  Select-Object -ExpandProperty IPAddress)
+
 Write-Host ""
 Write-Host "===========================================================" -ForegroundColor Green
 Write-Host "  Prerequisites installed." -ForegroundColor Green
 Write-Host "===========================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "NEXT STEPS:" -ForegroundColor Cyan
-Write-Host "  1. REBOOT this PC (refreshes PATH for all processes)." -ForegroundColor White
+Write-Host "  1. REBOOT this PC (so all processes see the new PATH)." -ForegroundColor White
 Write-Host "  2. Download ChurchAudioStream installer:" -ForegroundColor White
 Write-Host "     https://github.com/roulendz/ChurchAudioStream/releases/latest" -ForegroundColor Cyan
 Write-Host "  3. Run the .msi or -setup.exe installer." -ForegroundColor White
-Write-Host "  4. Allow firewall on Private network (port 7777, mDNS)." -ForegroundColor White
-Write-Host "  5. Phones on same WiFi: open https://<host-ip>:7777" -ForegroundColor White
+Write-Host "  4. Launch ChurchAudioStream from Start Menu." -ForegroundColor White
+if ($lanIps.Count -gt 0) {
+  Write-Host "  5. Phones on same WiFi: open https://$($lanIps[0]):7777" -ForegroundColor White
+  if ($lanIps.Count -gt 1) {
+    Write-Host "     (other LAN IPs: $($lanIps[1..($lanIps.Count-1)] -join ', '))" -ForegroundColor Gray
+  }
+} else {
+  Write-Host "  5. Phones on same WiFi: open https://<this-pc-ip>:7777" -ForegroundColor White
+}
 Write-Host ""
