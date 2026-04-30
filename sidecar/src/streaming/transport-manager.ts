@@ -1,10 +1,15 @@
 /**
  * WebRtcTransport lifecycle management for listeners.
  *
- * Creates on-demand WebRtcTransports per listener with the server's LAN IP
- * as the announced ICE candidate address. UDP-only for lowest latency on
- * local WiFi (no TURN server). Provides transport connection, stats, and
- * cleanup with proper event-driven resource management.
+ * Creates on-demand WebRtcTransports per listener. Advertises both the
+ * server's LAN IP (so phones on the same WiFi can reach the host) and the
+ * IPv4 loopback address (so a desktop browser running on the same Windows
+ * machine as the sidecar can reach mediasoup without a UDP hairpin through
+ * the LAN NIC). Enables both UDP and TCP for ICE so transient UDP hairpin
+ * failures fall back to TCP rather than stalling at bytesReceived=0.
+ *
+ * Provides transport connection, stats, and cleanup with proper
+ * event-driven resource management.
  */
 
 import type { types as mediasoupTypes } from "mediasoup";
@@ -20,6 +25,11 @@ const INITIAL_AVAILABLE_OUTGOING_BITRATE = 128_000;
 
 /** ICE consent timeout in seconds before transport is considered dead. */
 const ICE_CONSENT_TIMEOUT_SECONDS = 30;
+
+/** IPv4 loopback address — used as a second announced ICE candidate so
+ *  same-host desktop browsers can connect via 127.0.0.1 instead of a
+ *  hairpin through the LAN NIC. */
+const LOOPBACK_IPV4 = "127.0.0.1";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,8 +54,9 @@ export class TransportManager {
 
   /**
    * @param announcedIpAddress  LAN IP from config.server.host, used as
-   *                            the ICE candidate announced address so phone
-   *                            browsers can reach the server on the local network.
+   *                            the primary ICE candidate announced address
+   *                            so phone browsers can reach the server on
+   *                            the local network.
    */
   constructor(announcedIpAddress: string) {
     this.announcedIpAddress = announcedIpAddress;
@@ -58,9 +69,11 @@ export class TransportManager {
   /**
    * Create a WebRtcTransport for a listener on the given channel router.
    *
-   * The transport listens on 0.0.0.0 (all interfaces) but announces the
-   * server's LAN IP so ICE candidates resolve to the correct address.
-   * UDP-only for lowest latency on local WiFi (no TURN server needed).
+   * Listens on 0.0.0.0 (all interfaces) for both UDP and TCP, and announces
+   * two ICE candidate addresses: the configured LAN IP (for remote/mobile
+   * clients) and 127.0.0.1 (for same-host desktop browsers). UDP is
+   * preferred for latency; TCP is enabled purely as ICE fallback when UDP
+   * hairpin or NAT scenarios fail.
    *
    * @param router  The channel's mediasoup Router
    * @param peerId  Unique peer identifier (for tracking)
@@ -71,16 +84,10 @@ export class TransportManager {
     peerId: string,
   ): Promise<WebRtcTransportInfo> {
     const transport = await router.createWebRtcTransport({
-      listenInfos: [
-        {
-          protocol: "udp",
-          ip: "0.0.0.0",
-          announcedAddress: this.announcedIpAddress,
-        },
-      ],
+      listenInfos: this.buildListenInfos(),
       enableUdp: true,
-      enableTcp: false, // UDP-only for lowest latency on local WiFi
-      preferUdp: true,
+      enableTcp: true, // ICE fallback when UDP fails (e.g. local hairpin)
+      preferUdp: true, // UDP still preferred for lowest latency
       initialAvailableOutgoingBitrate: INITIAL_AVAILABLE_OUTGOING_BITRATE,
       iceConsentTimeout: ICE_CONSENT_TIMEOUT_SECONDS,
     });
@@ -91,7 +98,8 @@ export class TransportManager {
     logger.info("WebRtcTransport created for listener", {
       peerId,
       transportId: transport.id,
-      announcedIp: this.announcedIpAddress,
+      announcedIps: [this.announcedIpAddress, LOOPBACK_IPV4],
+      iceCandidateCount: transport.iceCandidates.length,
     });
 
     return {
@@ -206,6 +214,49 @@ export class TransportManager {
    */
   getTransportCount(): number {
     return this.transports.size;
+  }
+
+  // -----------------------------------------------------------------------
+  // Internal: listen info construction
+  // -----------------------------------------------------------------------
+
+  /**
+   * Build the listenInfos array advertised by every WebRtcTransport.
+   *
+   * Each entry produces one ICE candidate per protocol (UDP + TCP). We
+   * announce the LAN IP for remote clients and the loopback IP for
+   * same-host desktop browsers, on both UDP and TCP. mediasoup auto-picks
+   * a port from the configured rtcMinPort..rtcMaxPort range.
+   *
+   * Skips the loopback announcement if the configured LAN IP is itself
+   * the loopback address (would create duplicate identical candidates).
+   */
+  private buildListenInfos(): mediasoupTypes.TransportListenInfo[] {
+    const protocols: ReadonlyArray<"udp" | "tcp"> = ["udp", "tcp"];
+    const announcedAddresses = this.uniqueAnnouncedAddresses();
+
+    const listenInfos: mediasoupTypes.TransportListenInfo[] = [];
+    for (const protocol of protocols) {
+      for (const announcedAddress of announcedAddresses) {
+        listenInfos.push({
+          protocol,
+          ip: "0.0.0.0",
+          announcedAddress,
+        });
+      }
+    }
+    return listenInfos;
+  }
+
+  /**
+   * Return the deduplicated list of announced addresses: the configured
+   * LAN IP plus the IPv4 loopback, in that order.
+   */
+  private uniqueAnnouncedAddresses(): readonly string[] {
+    if (this.announcedIpAddress === LOOPBACK_IPV4) {
+      return [LOOPBACK_IPV4];
+    }
+    return [this.announcedIpAddress, LOOPBACK_IPV4];
   }
 
   // -----------------------------------------------------------------------
