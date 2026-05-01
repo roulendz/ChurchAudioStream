@@ -12,6 +12,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "externalBin": ["binaries/server"],
     "resources": {
       "binaries/mediasoup-worker.exe": "binaries/mediasoup-worker.exe",
@@ -44,6 +45,15 @@
   "plugins": {
     "shell": {
       "open": false
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/roulendz/ChurchAudioStream/releases/latest/download/latest.json"
+      ],
+      "pubkey": "REPLACE_WITH_USER_GENERATED_PUBKEY",
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }
