@@ -100,19 +100,19 @@ mod tests {
 
     #[test]
     fn should_check_when_never_checked() {
-        assert_eq!(should_check_now(0, 1_000, 3_600), true);
+        assert!(should_check_now(0, 1_000, 3_600));
     }
 
     #[test]
     fn should_not_check_within_cooldown() {
         let now = 1_700_000_000;
-        assert_eq!(should_check_now(now - 100, now, 3_600), false);
+        assert!(!should_check_now(now - 100, now, 3_600));
     }
 
     #[test]
     fn should_check_after_cooldown_expires() {
         let now = 1_700_000_000;
-        assert_eq!(should_check_now(now - 7_200, now, 3_600), true);
+        assert!(should_check_now(now - 7_200, now, 3_600));
     }
 
     #[test]
@@ -120,7 +120,7 @@ mod tests {
         // Real backward-skew case: now < last (NTP correction or system clock reset).
         // Was previously gated by debug_assert!(now >= last) which made debug builds
         // panic on the exact case the function claims to handle. Assertion removed.
-        assert_eq!(should_check_now(1_700_000_000, 1_699_999_000, 3_600), true);
+        assert!(should_check_now(1_700_000_000, 1_699_999_000, 3_600));
     }
 
     #[test]

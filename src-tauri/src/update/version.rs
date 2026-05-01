@@ -176,17 +176,17 @@ mod tests {
 
     #[test]
     fn is_newer_handles_equal() {
-        assert_eq!(is_newer("0.1.2", "0.1.2").unwrap(), false);
+        assert!(!is_newer("0.1.2", "0.1.2").unwrap());
     }
 
     #[test]
     fn is_newer_handles_downgrade() {
-        assert_eq!(is_newer("0.2.0", "0.1.0").unwrap(), false);
+        assert!(!is_newer("0.2.0", "0.1.0").unwrap());
     }
 
     #[test]
     fn is_newer_handles_upgrade() {
-        assert_eq!(is_newer("0.1.2", "0.1.3").unwrap(), true);
+        assert!(is_newer("0.1.2", "0.1.3").unwrap());
     }
 
     #[test]
@@ -196,15 +196,15 @@ mod tests {
         // on (major, minor, patch). Neither is "newer" → both directions false.
         // This is intentionally laxer than semver.org §11; revisit if Phase 2/3
         // needs spec-strict pre-release ordering.
-        assert_eq!(is_newer("1.0.0", "1.0.0-alpha").unwrap(), false);
-        assert_eq!(is_newer("1.0.0-alpha", "1.0.0").unwrap(), false);
+        assert!(!is_newer("1.0.0", "1.0.0-alpha").unwrap());
+        assert!(!is_newer("1.0.0-alpha", "1.0.0").unwrap());
     }
 
     #[test]
     fn is_newer_treats_build_metadata_as_equal() {
         // Per semver.org §10 build metadata never affects ordering.
-        assert_eq!(is_newer("1.0.0", "1.0.0+build").unwrap(), false);
-        assert_eq!(is_newer("1.0.0+build1", "1.0.0+build2").unwrap(), false);
+        assert!(!is_newer("1.0.0", "1.0.0+build").unwrap());
+        assert!(!is_newer("1.0.0+build1", "1.0.0+build2").unwrap());
     }
 
     #[test]
