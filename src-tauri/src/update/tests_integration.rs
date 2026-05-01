@@ -1,6 +1,9 @@
-#![cfg(feature = "integration")]
+#![cfg(all(feature = "integration", test))]
 
-//! Integration tests gated by `--features integration`.
+//! Integration tests gated by `--features integration` AND `cargo test`.
+//! `tempfile` is a `[dev-dependencies]`-only crate, so this module must NOT
+//! compile under `cargo build --features integration` (non-test). The `test`
+//! cfg flag scopes the import to test builds where dev-deps are linked.
 //!
 //! These exercise UpdateState round-trip via real storage IO + evaluate_update
 //! against fixtures. Same pure-Rust pattern as Phase 2 inline tests; flag is the

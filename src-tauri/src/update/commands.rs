@@ -9,6 +9,7 @@
 //! new state out, drop the lock, THEN `await` IO via `spawn_blocking`. Never hold
 //! the std Mutex across an await — clippy::await_holding_lock would fire.
 
+use crate::update::current_unix;
 use crate::update::dispatcher::{
     UpdateAvailablePayload, UpdateDownloadProgressPayload, UpdateInstalledPayload,
 };
@@ -18,22 +19,14 @@ use crate::update::storage::{
     save, with_check_completed, with_dismissed_now, with_skipped_version, UpdateState,
 };
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::UpdaterExt;
-
-fn current_unix() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
 
 fn snapshot_state(guard: &UpdateStateGuard) -> Result<UpdateState, UpdateError> {
     let s = guard
         .state
         .lock()
-        .map_err(|_| UpdateError::AppDataPath("state poisoned".into()))?;
+        .map_err(|_| UpdateError::Mutex("state poisoned".into()))?;
     Ok(s.clone())
 }
 
@@ -41,7 +34,7 @@ fn replace_state(guard: &UpdateStateGuard, new_state: UpdateState) -> Result<(),
     let mut s = guard
         .state
         .lock()
-        .map_err(|_| UpdateError::AppDataPath("state poisoned".into()))?;
+        .map_err(|_| UpdateError::Mutex("state poisoned".into()))?;
     *s = new_state;
     Ok(())
 }
@@ -49,7 +42,7 @@ fn replace_state(guard: &UpdateStateGuard, new_state: UpdateState) -> Result<(),
 async fn persist_blocking(path: PathBuf, state: UpdateState) -> Result<(), UpdateError> {
     tokio::task::spawn_blocking(move || save(&path, &state))
         .await
-        .map_err(|e| UpdateError::AppDataPath(format!("spawn_blocking: {e}")))??;
+        .map_err(|e| UpdateError::Join(e.to_string()))??;
     Ok(())
 }
 
@@ -64,7 +57,7 @@ fn emit_update_available(
     };
     app_handle
         .emit("update:available", &payload)
-        .map_err(|e| UpdateError::AppDataPath(e.to_string()))?;
+        .map_err(|e| UpdateError::Emit(e.to_string()))?;
     Ok(())
 }
 
@@ -115,7 +108,19 @@ async fn install_impl(app_handle: &AppHandle) -> Result<(), UpdateError> {
             key: "no update available".into(),
         })?;
 
-    let version_for_event = update.version.clone();
+    // Emit `update:installed` BEFORE `download_and_install` because the plugin's
+    // Windows code path calls `std::process::exit(0)` inside that future, so
+    // anything after the await never runs on Windows. The event semantically
+    // means "install starting / installer launching" — frontend uses it to
+    // show the "installing..." spinner. macOS / Linux paths reach the post-await
+    // code, but emitting twice is harmless and frontend ignores duplicates.
+    let installed = UpdateInstalledPayload {
+        version: update.version.clone(),
+    };
+    app_handle
+        .emit("update:installed", &installed)
+        .map_err(|e| UpdateError::Emit(e.to_string()))?;
+
     let app_for_chunk = app_handle.clone();
     let mut downloaded: u64 = 0;
 
@@ -133,13 +138,6 @@ async fn install_impl(app_handle: &AppHandle) -> Result<(), UpdateError> {
         )
         .await
         .map_err(UpdateError::UpdaterPlugin)?;
-
-    let installed = UpdateInstalledPayload {
-        version: version_for_event,
-    };
-    app_handle
-        .emit("update:installed", &installed)
-        .map_err(|e| UpdateError::AppDataPath(e.to_string()))?;
     Ok(())
 }
 
@@ -188,11 +186,6 @@ mod tests {
     use super::*;
     use crate::update::storage::UpdateState;
     use std::sync::{Arc, Mutex};
-
-    #[test]
-    fn current_unix_returns_positive() {
-        assert!(current_unix() > 0);
-    }
 
     #[test]
     fn snapshot_state_returns_default_when_default() {

@@ -11,6 +11,7 @@
 //! log::warn! and skip the cycle without panicking the app.
 
 use crate::update::checker::{evaluate_update, should_check_now, UpdateDecision};
+use crate::update::current_unix;
 use crate::update::dispatcher::UpdateAvailablePayload;
 use crate::update::errors::UpdateError;
 use crate::update::manifest::{PlatformAsset, UpdateManifest};
@@ -18,7 +19,7 @@ use crate::update::state_guard::UpdateStateGuard;
 use crate::update::storage::{load, save, with_check_completed};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
@@ -30,7 +31,7 @@ pub fn start(app_handle: &AppHandle) -> Result<(), UpdateError> {
     let dir = app_handle
         .path()
         .app_data_dir()
-        .map_err(|e| UpdateError::AppDataPath(e.to_string()))?;
+        .map_err(|e| UpdateError::AppDataPath(e.to_string()))?; // legitimate AppDataPath use — the resolution itself failed
     std::fs::create_dir_all(&dir)?;
     let state_path = dir.join("update-state.json");
     let initial_state = load(&state_path)?;
@@ -72,7 +73,7 @@ async fn run_one_cycle(app_handle: &AppHandle) -> Result<(), UpdateError> {
         }
     };
 
-    persist_check_completed(app_handle, now)?;
+    persist_check_completed(app_handle, now).await?;
     let Some(update) = maybe_update else {
         log::info!("[update] no update available; sleeping");
         return Ok(());
@@ -96,21 +97,27 @@ fn read_last_check(app_handle: &AppHandle) -> Result<i64, UpdateError> {
     let s = state
         .state
         .lock()
-        .map_err(|_| UpdateError::AppDataPath("state poisoned".into()))?;
+        .map_err(|_| UpdateError::Mutex("state poisoned".into()))?;
     Ok(s.last_check_unix)
 }
 
-fn persist_check_completed(app_handle: &AppHandle, now: i64) -> Result<(), UpdateError> {
-    let state: tauri::State<'_, UpdateStateGuard> = app_handle.state::<UpdateStateGuard>();
-    let new_state = {
+async fn persist_check_completed(app_handle: &AppHandle, now: i64) -> Result<(), UpdateError> {
+    // MA-01 fix: storage.rs:7-13 module doc requires `spawn_blocking` for async
+    // callers. Snapshot the new state under the std::sync::Mutex (drop the lock
+    // before .await — never hold std locks across await), then run the IO on
+    // the blocking pool.
+    let (path, new_state) = {
+        let state: tauri::State<'_, UpdateStateGuard> = app_handle.state::<UpdateStateGuard>();
         let mut s = state
             .state
             .lock()
-            .map_err(|_| UpdateError::AppDataPath("state poisoned".into()))?;
+            .map_err(|_| UpdateError::Mutex("state poisoned".into()))?;
         *s = with_check_completed(s.clone(), now);
-        s.clone()
+        (state.state_path.clone(), s.clone())
     };
-    save(&state.state_path, &new_state)?;
+    tokio::task::spawn_blocking(move || save(&path, &new_state))
+        .await
+        .map_err(|e| UpdateError::Join(e.to_string()))??;
     Ok(())
 }
 
@@ -126,7 +133,7 @@ fn evaluate_against_state(
         let s = state
             .state
             .lock()
-            .map_err(|_| UpdateError::AppDataPath("state poisoned".into()))?;
+            .map_err(|_| UpdateError::Mutex("state poisoned".into()))?;
         (s.skipped_versions.clone(), s.last_dismissed_unix)
     };
     Ok(evaluate_update(
@@ -141,9 +148,17 @@ fn evaluate_against_state(
 }
 
 fn manifest_from_update(update: &tauri_plugin_updater::Update) -> UpdateManifest {
+    // BL-01 fix: key by `current_platform_key()`, NOT `update.target`.
+    // tauri_plugin_updater sets `update.target` to bare OS string ("windows" /
+    // "darwin" / "linux") when the builder has no explicit `.target()`. Our
+    // pure `evaluate_update` looks up `current_platform_key()` ("windows-x86_64"
+    // etc.) which would never match the bare-OS key — bg-task Notify path was
+    // dead. The plugin already matched the asset internally; this synthesized
+    // manifest only exists to feed `evaluate_update`'s skip + cooldown checks,
+    // so we use OUR canonical platform key.
     let mut platforms: HashMap<String, PlatformAsset> = HashMap::new();
     platforms.insert(
-        update.target.clone(),
+        current_platform_key().to_string(),
         PlatformAsset {
             signature: update.signature.clone(),
             url: update.download_url.to_string(),
@@ -171,7 +186,7 @@ fn handle_decision(app_handle: &AppHandle, decision: UpdateDecision) -> Result<(
             };
             app_handle
                 .emit("update:available", &payload)
-                .map_err(|e| UpdateError::AppDataPath(e.to_string()))?;
+                .map_err(|e| UpdateError::Emit(e.to_string()))?;
             Ok(())
         }
         UpdateDecision::SilentSkip(reason) => {
@@ -183,13 +198,6 @@ fn handle_decision(app_handle: &AppHandle, decision: UpdateDecision) -> Result<(
             Ok(())
         }
     }
-}
-
-fn current_unix() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
 }
 
 fn current_platform_key() -> &'static str {
@@ -211,11 +219,6 @@ fn current_platform_key() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn current_unix_returns_positive() {
-        assert!(current_unix() > 0);
-    }
 
     #[test]
     fn current_platform_key_is_known_target() {

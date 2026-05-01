@@ -18,6 +18,12 @@ pub enum UpdateError {
     Io(std::io::Error),
     AppDataPath(String),
     MissingPlatform { key: String },
+    /// Mutex was poisoned by a panicking task — `state.lock()` returned `Err`.
+    Mutex(String),
+    /// `app_handle.emit(...)` failed — Tauri runtime / window state issue.
+    Emit(String),
+    /// `tokio::task::spawn_blocking` join failure (panic on the blocking thread).
+    Join(String),
 }
 
 impl std::fmt::Display for UpdateError {
@@ -31,6 +37,9 @@ impl std::fmt::Display for UpdateError {
             UpdateError::Io(e) => write!(f, "io error: {e}"),
             UpdateError::AppDataPath(s) => write!(f, "app data path error: {s}"),
             UpdateError::MissingPlatform { key } => write!(f, "no asset for platform {key}"),
+            UpdateError::Mutex(s) => write!(f, "mutex error: {s}"),
+            UpdateError::Emit(s) => write!(f, "emit error: {s}"),
+            UpdateError::Join(s) => write!(f, "spawn_blocking join error: {s}"),
         }
     }
 }
