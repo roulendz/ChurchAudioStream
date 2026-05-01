@@ -1253,6 +1253,11 @@ body {
   margin-top: 1.5rem;
 }
 
+/* Settings: auto-updater card spacing */
+.settings-update-card {
+  margin-top: 1.5rem;
+}
+
 /* ============================
    Processing Controls (06-03)
    ============================ */

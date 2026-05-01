@@ -16,6 +16,8 @@ import { ChannelConfigPanel } from "./components/channels/ChannelConfigPanel";
 import { VuMeterBank } from "./components/monitoring/VuMeterBank";
 import { ServerStatus } from "./components/monitoring/ServerStatus";
 import { QrCodeDisplay } from "./components/settings/QrCodeDisplay";
+import { UpdateToast } from "./components/UpdateToast";
+import { CheckForUpdatesButton } from "./components/CheckForUpdatesButton";
 
 function App() {
   const [currentSection, setCurrentSection] = useState<DashboardSection>("overview");
@@ -54,6 +56,8 @@ function App() {
     : null;
 
   return (
+    <>
+    <UpdateToast />
     <DashboardShell
       currentSection={currentSection}
       onNavigate={setCurrentSection}
@@ -137,6 +141,9 @@ function App() {
             interfaces={interfaces}
             onSave={updateConfig}
           />
+          <div className="settings-update-card">
+            <CheckForUpdatesButton />
+          </div>
           <div className="settings-qr-code">
             <QrCodeDisplay config={config} />
           </div>
@@ -146,6 +153,7 @@ function App() {
         </>
       )}
     </DashboardShell>
+    </>
   );
 }
 
