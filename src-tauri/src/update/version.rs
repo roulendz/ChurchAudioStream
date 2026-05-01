@@ -8,10 +8,19 @@ use std::fmt;
 
 /// Parsed semver triple plus the original raw input string.
 ///
-/// Field ordering (`major`, `minor`, `patch` BEFORE `raw`) is load-bearing:
-/// `derive(Ord, PartialOrd)` walks fields in declaration order, so ordering is
-/// numeric (0.9.0 < 0.10.0) and never influenced by the lexicographic raw string.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+/// `Ord` / `PartialOrd` / `Eq` / `PartialEq` are implemented MANUALLY on
+/// `(major, minor, patch)` only. The `raw` field is excluded from comparison
+/// so it cannot influence ordering. Phase 1 contract: two values with the
+/// same numeric triple compare equal regardless of pre-release suffix or
+/// build metadata in the raw input.
+///
+/// Pre-release / build metadata semantics per semver.org §10-§11 are NOT
+/// modelled in Phase 1 (the parsed triple discards them). If Phase 2/3
+/// needs spec-strict pre-release ordering, swap this struct for a
+/// `semver::Version`-backed wrapper. Today: `is_newer("1.0.0", "1.0.0-alpha")`
+/// returns `false` (treated equal), not `true` (which the spec would call
+/// "newer release than the alpha").
+#[derive(Clone, Debug)]
 pub struct Semver {
     pub major: u64,
     pub minor: u64,
@@ -23,6 +32,30 @@ impl Semver {
     /// Returns the original input string the `Semver` was parsed from.
     pub fn raw(&self) -> &str {
         &self.raw
+    }
+
+    fn triple(&self) -> (u64, u64, u64) {
+        (self.major, self.minor, self.patch)
+    }
+}
+
+impl PartialEq for Semver {
+    fn eq(&self, other: &Self) -> bool {
+        self.triple() == other.triple()
+    }
+}
+
+impl Eq for Semver {}
+
+impl Ord for Semver {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.triple().cmp(&other.triple())
+    }
+}
+
+impl PartialOrd for Semver {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -154,6 +187,35 @@ mod tests {
     #[test]
     fn is_newer_handles_upgrade() {
         assert_eq!(is_newer("0.1.2", "0.1.3").unwrap(), true);
+    }
+
+    #[test]
+    fn is_newer_treats_pre_release_as_equal_in_phase_1() {
+        // Phase 1 contract (see Semver struct doc): pre-release suffix is
+        // discarded by parse_semver, so 1.0.0 and 1.0.0-alpha compare equal
+        // on (major, minor, patch). Neither is "newer" → both directions false.
+        // This is intentionally laxer than semver.org §11; revisit if Phase 2/3
+        // needs spec-strict pre-release ordering.
+        assert_eq!(is_newer("1.0.0", "1.0.0-alpha").unwrap(), false);
+        assert_eq!(is_newer("1.0.0-alpha", "1.0.0").unwrap(), false);
+    }
+
+    #[test]
+    fn is_newer_treats_build_metadata_as_equal() {
+        // Per semver.org §10 build metadata never affects ordering.
+        assert_eq!(is_newer("1.0.0", "1.0.0+build").unwrap(), false);
+        assert_eq!(is_newer("1.0.0+build1", "1.0.0+build2").unwrap(), false);
+    }
+
+    #[test]
+    fn compare_ignores_raw_string_tiebreaker() {
+        // Regression: derived `Ord` previously walked the `raw: String` field
+        // as a fourth tiebreaker, making "1.0.0" < "1.0.0+build" lexically.
+        // Manual Ord on (major, minor, patch) eliminates the lexical influence.
+        let plain = parse_semver("1.0.0").unwrap();
+        let with_build = parse_semver("1.0.0+build").unwrap();
+        assert_eq!(compare(&plain, &with_build), Ordering::Equal);
+        assert_eq!(plain, with_build);
     }
 
     #[test]
