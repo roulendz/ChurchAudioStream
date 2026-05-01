@@ -1,4 +1,5 @@
 pub mod checker;
+pub mod commands;
 pub mod dispatcher;
 pub mod errors;
 pub mod manifest;
