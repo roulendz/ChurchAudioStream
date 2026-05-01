@@ -1,6 +1,6 @@
 [package]
 name = "churchaudiostream"
-version = "0.1.1"
+version = "0.1.2"
 description = "Cross-platform church audio restreaming application"
 authors = ["ChurchAudioStream"]
 edition = "2021"
