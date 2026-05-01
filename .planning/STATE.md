@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 Phase: 6 of 10 (Admin Dashboard)
 Plan: 4 of 4 in current phase
 Status: Phase verified (26/26 must-haves)
-Last activity: 2026-05-01 -- Completed quick task 260501-t83: phase 2 auto-updater (orchestration: checker + storage + dispatcher)
+Last activity: 2026-05-01 -- Completed quick task 260501-uon: phase 3 auto-updater (Tauri plugin wiring + IPC commands + bg task)
 
 Progress: [████████████████████████████████████████] 100% (39/39 plans)
 
@@ -225,6 +225,7 @@ None.
 | 260429-hb3 | Multi-source audio mixing refactor — one gst-launch pipeline per channel via audiomixer | 2026-04-29 | a2e1480 | Needs Review (UAT) | [260429-hb3-multi-source-audio-mixing-refactor-one-g](./quick/260429-hb3-multi-source-audio-mixing-refactor-one-g/) |
 | 260501-qq5 | Phase 1 auto-updater — pure semver + manifest types (`src-tauri/src/update/`) | 2026-05-01 | ff79774 | Verified | [260501-qq5-phase-1-auto-updater-semver-and-manifest](./quick/260501-qq5-phase-1-auto-updater-semver-and-manifest/) |
 | 260501-t83 | Phase 2 auto-updater — orchestration (`checker.rs` + `storage.rs` + `dispatcher.rs`) | 2026-05-01 | 4494da3 | Verified | [260501-t83-phase-2-auto-updater-orchestration-check](./quick/260501-t83-phase-2-auto-updater-orchestration-check/) |
+| 260501-uon | Phase 3 auto-updater — Tauri plugin wiring + IPC commands + bg task (placeholder pubkey) | 2026-05-01 | 8836551 | Verified (signing key pending) | [260501-uon-phase-3-auto-updater-tauri-plugin-wiring](./quick/260501-uon-phase-3-auto-updater-tauri-plugin-wiring/) |
 
 ### Blockers/Concerns
 
