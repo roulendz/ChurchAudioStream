@@ -123,6 +123,72 @@ Either installer works. NSIS is smaller and more flexible; MSI is preferred for 
 
 ---
 
+## Building releases (signed for auto-updater)
+
+The app ships with a built-in auto-updater (Phase 1-3 of `.planning/plans/auto-updater-plan.md`). On every app launch, the Rust shell quietly checks `https://github.com/roulendz/ChurchAudioStream/releases/latest/download/latest.json`, compares semver against `tauri.conf.json::version`, and emits an event if a newer release is available. The frontend renders an opt-in toast.
+
+For the updater to install a downloaded `.exe` / `.msi`, every release artifact MUST be signed with the project's **minisign Ed25519 keypair**. The public key is embedded in `src-tauri/tauri.conf.json::plugins.updater.pubkey`. The private key lives ONLY on the release-builder's machine.
+
+### Signing keypair (one-time setup)
+
+```powershell
+# Generate keypair (this repo already did this once on the dev box)
+npx @tauri-apps/cli signer generate -w "$env:USERPROFILE\.tauri\cas-update.key" -p "" --ci
+# Output:
+#   Private: C:\Users\<you>\.tauri\cas-update.key   (KEEP SECRET)
+#   Public:  C:\Users\<you>\.tauri\cas-update.key.pub  (commit content into tauri.conf.json)
+```
+
+The `-p ""` flag sets an empty password (dev-box convention — single-machine release pipeline). For multi-machine / CI signing, pass a real password and store it via `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
+### Build-host configuration
+
+Tauri reads two env vars at build time. We set them in `.env` (gitignored):
+
+```
+TAURI_SIGNING_PRIVATE_KEY_PATH=C:\Users\rolan\.tauri\cas-update.key
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD=
+```
+
+`bundle.createUpdaterArtifacts: true` in `tauri.conf.json` causes `tauri build` to emit a `.sig` file alongside every installer artifact. The `.sig` file is what the updater plugin verifies on download.
+
+### Per-release publish flow
+
+```powershell
+# 1. Bump version in src-tauri/tauri.conf.json + Cargo.toml + package.json (3 places — keep in sync).
+# 2. Build:
+$env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+npm run tauri build
+# 3. Outputs (per platform target):
+#    src-tauri/target/release/bundle/nsis/ChurchAudioStream_<ver>_x64-setup.exe
+#    src-tauri/target/release/bundle/nsis/ChurchAudioStream_<ver>_x64-setup.exe.sig
+#    src-tauri/target/release/bundle/msi/ChurchAudioStream_<ver>_x64_en-US.msi
+#    src-tauri/target/release/bundle/msi/ChurchAudioStream_<ver>_x64_en-US.msi.sig
+# 4. Tag + push:
+git tag v<ver> && git push origin v<ver>
+# 5. Create the GitHub release. Upload BOTH .exe + .exe.sig (and .msi + .msi.sig if you ship MSI).
+# 6. Phase 5 (CI: .github/workflows/publish-update-manifest.yml) auto-generates latest.json from the
+#    release assets. Until Phase 5 lands, hand-write latest.json against the schema in
+#    src-tauri/src/update/manifest.rs::UpdateManifest and upload as a release asset.
+```
+
+### Disaster recovery (lost / compromised private key)
+
+The private key is the single point of failure. Lose it = can never sign updates the existing fleet trusts.
+
+| Scenario | Action |
+|---|---|
+| Key leaked publicly | Rotate. Generate new keypair. Cut a major version (e.g. 1.0 → 2.0) with the new pubkey embedded. Old fleet stops receiving updates and must be reinstalled manually (NSIS installer is fine — it doesn't need updater signature). |
+| Key lost (disk failure, no backup) | Same as leaked — rotate via major version bump. Document in CHANGELOG. |
+| Password lost but keyfile intact | Brute-force is not feasible. Treat as lost. |
+| Keyfile intact, no password (dev-box convention) | Backup `C:\Users\<you>\.tauri\cas-update.key` + `.pub` to a password manager / encrypted backup. Restore on new dev box, point `TAURI_SIGNING_PRIVATE_KEY_PATH` at the restored copy. |
+
+**Backup imperative:** copy `C:\Users\rolan\.tauri\cas-update.key` to an encrypted backup (1Password, LastPass file attachment, encrypted USB) immediately. The pubkey baked into shipped installers is committed to git, but the private key is NOT and never will be.
+
+If the public key in `tauri.conf.json::plugins.updater.pubkey` doesn't match the key used to sign the `.sig`, the updater silently rejects the download (signature verification failure inside `tauri-plugin-updater`). This is the intended security boundary.
+
+---
+
 ## Deploy on target Windows 10/11 PC
 
 1. **Install GStreamer 1.26 runtime** on target (see Prerequisites). Reboot.
