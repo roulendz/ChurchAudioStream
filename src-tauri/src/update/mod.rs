@@ -2,10 +2,14 @@ pub mod checker;
 pub mod commands;
 pub mod dispatcher;
 pub mod errors;
+pub mod lifecycle;
 pub mod manifest;
 pub mod state_guard;
 pub mod storage;
 pub mod version;
+
+#[cfg(feature = "integration")]
+pub mod tests_integration;
 
 pub use checker::{evaluate_update, is_version_skipped, should_check_now, UpdateDecision};
 pub use dispatcher::{

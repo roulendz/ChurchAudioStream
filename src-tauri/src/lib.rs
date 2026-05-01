@@ -182,12 +182,23 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(AppLogBuffer(Mutex::new(LogBuffer::new(LOG_BUFFER_CAPACITY))))
         .manage(SidecarChild(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![get_buffered_logs])
+        .invoke_handler(tauri::generate_handler![
+            get_buffered_logs,
+            crate::update::commands::update_check_now,
+            crate::update::commands::update_dismiss,
+            crate::update::commands::update_get_state,
+            crate::update::commands::update_install,
+            crate::update::commands::update_skip_version,
+        ])
         .setup({
             let sidecar_should_run = sidecar_should_run.clone();
             move |app| {
+                crate::update::lifecycle::start(app.handle())
+                    .map_err(|e| Box::<dyn std::error::Error>::from(e.to_string()))?;
                 spawn_sidecar(app.handle().clone(), sidecar_should_run);
                 Ok(())
             }
