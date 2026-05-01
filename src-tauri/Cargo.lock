@@ -301,6 +301,7 @@ dependencies = [
 name = "churchaudiostream"
 version = "0.1.2"
 dependencies = [
+ "semver",
  "serde",
  "serde_json",
  "tauri",
