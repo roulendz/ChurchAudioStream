@@ -12,7 +12,7 @@ pub enum UpdateDecision {
     Notify {
         version: String,
         notes: String,
-        platform_url: String,
+        download_url: String,
     },
     SilentSkip(String),
     NoUpdate,
@@ -23,16 +23,12 @@ pub fn should_check_now(
     now_unix: i64,
     min_interval_seconds: i64,
 ) -> bool {
-    debug_assert!(
-        now_unix >= last_check_unix,
-        "now_unix monotonic clock contract"
-    );
     debug_assert!(min_interval_seconds >= 0);
 
     if last_check_unix == 0 || now_unix < last_check_unix {
         return true;
     }
-    now_unix - last_check_unix >= min_interval_seconds
+    now_unix.saturating_sub(last_check_unix) >= min_interval_seconds
 }
 
 pub fn is_version_skipped(version: &str, skipped: &[String]) -> bool {
@@ -48,6 +44,9 @@ pub fn evaluate_update(
     now_unix: i64,
     dismiss_cooldown_seconds: i64,
 ) -> UpdateDecision {
+    debug_assert!(now_unix >= 0);
+    debug_assert!(dismiss_cooldown_seconds >= 0);
+
     let latest = match parse_semver(&manifest.version) {
         Err(error) => return UpdateDecision::SilentSkip(format!("bad manifest: {error}")),
         Ok(value) => value,
@@ -62,7 +61,7 @@ pub fn evaluate_update(
     if is_version_skipped(&manifest.version, skipped) {
         return UpdateDecision::SilentSkip("user skipped".to_string());
     }
-    if now_unix - last_dismissed_unix < dismiss_cooldown_seconds {
+    if now_unix.saturating_sub(last_dismissed_unix) < dismiss_cooldown_seconds {
         return UpdateDecision::SilentSkip("dismissed cooldown".to_string());
     }
     let asset = match asset_for_platform(manifest, platform_key) {
@@ -72,7 +71,7 @@ pub fn evaluate_update(
     UpdateDecision::Notify {
         version: manifest.version.clone(),
         notes: manifest.notes.clone(),
-        platform_url: asset.url.clone(),
+        download_url: asset.url.clone(),
     }
 }
 
@@ -118,7 +117,31 @@ mod tests {
 
     #[test]
     fn should_check_when_clock_went_backward() {
-        assert_eq!(should_check_now(1_700_000_000, 1_700_000_000, 0), true);
+        // Real backward-skew case: now < last (NTP correction or system clock reset).
+        // Was previously gated by debug_assert!(now >= last) which made debug builds
+        // panic on the exact case the function claims to handle. Assertion removed.
+        assert_eq!(should_check_now(1_700_000_000, 1_699_999_000, 3_600), true);
+    }
+
+    #[test]
+    fn evaluate_handles_backward_clock_dismiss_without_underflow() {
+        // Mirror of MA-01 / MI-02: now < last_dismissed must not panic in debug
+        // (no debug_assert) and must not silently false-pass in release
+        // (saturating_sub clamps to 0, so dismiss-cooldown check fires correctly).
+        let manifest = make_manifest("0.1.3", "windows-x86_64", "https://example.com/x.zip");
+        let now = 1_699_999_000_i64;
+        let dismissed_in_future = 1_700_000_000_i64;
+        let decision = evaluate_update(
+            "0.1.2",
+            &manifest,
+            "windows-x86_64",
+            &[],
+            dismissed_in_future,
+            now,
+            86_400,
+        );
+        // saturating_sub returns 0, 0 < 86_400, so cooldown check fires → SilentSkip.
+        assert_eq!(decision, UpdateDecision::SilentSkip("dismissed cooldown".to_string()));
     }
 
     #[test]
@@ -134,10 +157,10 @@ mod tests {
             86_400,
         );
         match decision {
-            UpdateDecision::Notify { version, notes, platform_url } => {
+            UpdateDecision::Notify { version, notes, download_url } => {
                 assert_eq!(version, "0.1.3");
                 assert_eq!(notes, "release notes");
-                assert_eq!(platform_url, "https://example.com/x.zip");
+                assert_eq!(download_url, "https://example.com/x.zip");
             }
             other => panic!("expected Notify, got {other:?}"),
         }
