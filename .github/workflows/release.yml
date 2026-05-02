@@ -42,14 +42,29 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       # Pitfall 15: locked deps + faster than `npm install`.
-      - name: Install dependencies
+      # Each sub-project (root admin UI, listener PWA, sidecar) has its own
+      # package.json + lockfile. tauri-action's beforeBuildCommand runs
+      # `npm run build:listener && npm run build:sidecar && npm run build` but
+      # those scripts assume node_modules already populated. CI must install
+      # all three trees BEFORE tauri-action invokes the build chain — otherwise
+      # listener/sidecar TS compile fails on Cannot-find-module errors.
+      - name: Install root dependencies
         run: npm ci
+
+      - name: Install listener PWA dependencies
+        run: npm ci
+        working-directory: listener
+
+      - name: Install sidecar dependencies
+        run: npm ci
+        working-directory: sidecar
 
       # tauri-action @v0 is the current production tag; do NOT use @v1/@v2
       # (older blog refs are stale — Pitfall 1). Auto-uploads .exe + .exe.sig
       # to the draft release because tauri.conf.json:15 createUpdaterArtifacts.
       # tauri.conf.json:9 beforeBuildCommand runs build:listener + build:sidecar
-      # + build automatically (Pitfall 12) — no explicit prep steps needed.
+      # + build automatically (Pitfall 12) — three install steps above ensure
+      # those nested commands have node_modules to resolve from.
       - name: Build, sign, draft release, upload .exe + .sig
         id: tauri
         uses: tauri-apps/tauri-action@v0
