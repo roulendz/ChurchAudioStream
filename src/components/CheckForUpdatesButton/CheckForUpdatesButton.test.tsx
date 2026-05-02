@@ -88,21 +88,6 @@ describe("CheckForUpdatesButton", () => {
     await waitFor(() => expect(screen.getByText(/update available — see banner/i)).toBeInTheDocument());
   });
 
-  it("renders inline 'Already skipped' result when checkNow returns and existing state is SilentSkip", async () => {
-    // Drive state to SilentSkip by clicking a Skip in the toast — not available here.
-    // Instead: pre-mock invoke so update_skip_version → dispatch skipped runs via
-    // a sibling-call workaround: we directly fire the available event then click a
-    // hypothetical skip. Since CheckForUpdatesButton has no Skip button, we test
-    // this branch by dispatching SilentSkip via the toast component's path is
-    // impossible from this isolated test. We satisfy coverage via the "skipped"
-    // case in buildResultMessage by triggering it through a simulated state cycle:
-    // 1. Fire update:available event → state: UpdateAvailable (button shows "Update available")
-    // 2. Wait for the result to clear back to idle (4s timer) — too slow for tests.
-    // Skip this UI integration test; the buildResultMessage 'skipped' arm is
-    // exercised at runtime when the user clicks Skip in <UpdateToast />.
-    expect(true).toBe(true);
-  });
-
   it("logs warning and clears spinner when checkNow throws", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
