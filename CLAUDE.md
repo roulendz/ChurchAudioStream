@@ -44,6 +44,19 @@ export PATH="$USERPROFILE/.cargo/bin:$PATH"
    `{ "id": "file:slug", "name": "Name", "filePath": "C:/forward/slash.mp3", "loop": true }`
 2. Kill tree + relaunch tauri dev. No rebuild.
 
+## Where logs live
+
+Persistent JSONL, one file per app launch. Filename = local-time `YYYY-MM-DD_HH-MM-SS.log`. Each file starts with a `=== SESSION START ===` banner. Pick newest = latest session.
+
+```
+%APPDATA%\com.churchaudiostream.app\logs\
+  sidecar\<session>.log    # Node sidecar (logger.* output, full lifecycle)
+  rust\<session>.log       # Tauri shell (sidecar spawn, stderr, terminate, restart, kill)
+  channels\<id>.jsonl      # per-channel structured events (start/stop/source-change)
+```
+
+Dev runs use the same path (Tauri passes `--config-path %APPDATA%\com.churchaudiostream.app` to sidecar). All entries are JSON; grep with `jq` or by raw substring.
+
 ## Talking to Agents
 
 **Always pass caveman mode instruction in agent prompts** to save tokens. Example:
