@@ -96,7 +96,7 @@ describe("UpdateToast", () => {
     await fireEvent(handlers.available, { version: "0.2.0", notes: "n", downloadUrl: "u" });
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /later/i }));
-    expect(vi.mocked(invoke)).toHaveBeenCalledWith("update_dismiss");
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("update_dismiss", undefined);
   });
 
   it("Skip button calls invoke('update_skip_version', { version }) one-click", async () => {

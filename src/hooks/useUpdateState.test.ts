@@ -172,7 +172,7 @@ describe("useUpdateState", () => {
   it("dismiss invokes update_dismiss and dispatches dismissed → Idle", async () => {
     const { result } = renderHook(() => useUpdateState());
     await act(async () => { await result.current.dismiss(); });
-    expect(vi.mocked(invoke)).toHaveBeenCalledWith("update_dismiss");
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("update_dismiss", undefined);
     expect(result.current.state).toEqual({ kind: "Idle" });
   });
 
@@ -235,5 +235,47 @@ describe("useUpdateState", () => {
 
     // Post-fix: reducer-local guard sees state.kind === "UpdateAvailable" → returns state unchanged.
     expect(result.current.state.kind).toBe("UpdateAvailable");
+  });
+
+  it("MA-02 regression: install warns and does NOT dispatch when invoke rejects", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "update_install") throw new Error("ipc closed");
+      return DEFAULT_STATE;
+    });
+    const { result } = renderHook(() => useUpdateState());
+    const stateBefore = result.current.state;
+    await act(async () => { await result.current.install(); });
+    expect(warnSpy).toHaveBeenCalledWith("update_install failed", expect.any(Error));
+    expect(result.current.state).toBe(stateBefore);
+    warnSpy.mockRestore();
+  });
+
+  it("MA-02 regression: dismiss warns and does NOT dispatch when invoke rejects", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "update_dismiss") throw new Error("ipc closed");
+      return DEFAULT_STATE;
+    });
+    const { result } = renderHook(() => useUpdateState());
+    const stateBefore = result.current.state;
+    await act(async () => { await result.current.dismiss(); });
+    expect(warnSpy).toHaveBeenCalledWith("update_dismiss failed", expect.any(Error));
+    expect(result.current.state).toBe(stateBefore);
+    warnSpy.mockRestore();
+  });
+
+  it("MA-02 regression: skip warns and does NOT dispatch when invoke rejects", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "update_skip_version") throw new Error("ipc closed");
+      return DEFAULT_STATE;
+    });
+    const { result } = renderHook(() => useUpdateState());
+    const stateBefore = result.current.state;
+    await act(async () => { await result.current.skip("0.2.0"); });
+    expect(warnSpy).toHaveBeenCalledWith("update_skip_version failed", expect.any(Error));
+    expect(result.current.state).toBe(stateBefore);
+    warnSpy.mockRestore();
   });
 });

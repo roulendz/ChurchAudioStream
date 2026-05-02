@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { updateReducer, type UpdateUiState } from "./updateStateMachine";
+import { updateReducer, type UpdateUiState, type UpdateAction } from "./updateStateMachine";
 import type { UpdateState } from "../lib/types";
 
 const INITIAL: UpdateUiState = { kind: "Idle" };
@@ -67,6 +67,30 @@ export function useUpdateState() {
       .catch((error) => console.warn("useUpdateState: update_get_state failed", error));
   }, []);
 
+  /**
+   * Invoke a Tauri command; on success dispatch `action`; on failure warn and
+   * skip the dispatch so state stays unchanged (preserves user's chance to
+   * retry). Defined inside the hook so it closes over `dispatch`. No
+   * useCallback — closure cost is sub-microsecond and React 19 compiler
+   * handles call-site memoization. Used by `dismiss` and `skip`. NOT used by
+   * `install` because install has no success dispatch (Phase 3 dispatcher
+   * emits `update:installed` → reducer transitions; per TW#1 no Restart
+   * button).
+   */
+  async function dispatchOnSuccess(
+    commandName: string,
+    args: Record<string, unknown> | undefined,
+    action: UpdateAction,
+  ): Promise<void> {
+    try {
+      await invoke<void>(commandName, args);
+    } catch (error) {
+      console.warn(`${commandName} failed`, error);
+      return;
+    }
+    dispatch(action);
+  }
+
   const checkNow = async (): Promise<UpdateState> => {
     const result = await invoke<UpdateState>("update_check_now");
     setPersisted(result);
@@ -75,17 +99,21 @@ export function useUpdateState() {
   };
 
   const install = async (): Promise<void> => {
-    await invoke<void>("update_install");
+    try {
+      await invoke<void>("update_install");
+    } catch (error) {
+      console.warn("update_install failed", error);
+    }
+    // No dispatch on success — Phase 3 dispatcher emits update:installed
+    // → reducer transitions to Installing. Per TW#1 (no Restart button).
   };
 
   const dismiss = async (): Promise<void> => {
-    await invoke<void>("update_dismiss");
-    dispatch({ type: "dismissed" });
+    await dispatchOnSuccess("update_dismiss", undefined, { type: "dismissed" });
   };
 
   const skip = async (version: string): Promise<void> => {
-    await invoke<void>("update_skip_version", { version });
-    dispatch({ type: "skipped", version });
+    await dispatchOnSuccess("update_skip_version", { version }, { type: "skipped", version });
   };
 
   return {
