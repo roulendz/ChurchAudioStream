@@ -8,7 +8,7 @@
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
+    "verbatimModuleSyntax": true,  // requires `import type` for type-only imports (e.g. UserConfig from vitest/config)
     "moduleDetection": "force",
     "noEmit": true,
     "strict": true,
