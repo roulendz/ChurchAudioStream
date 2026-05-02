@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 6 verified -- admin dashboard complete; auto-updater Phase 4 (React UI) verified, Phase 5 (CI workflow) next
+**Current focus:** Phase 6 verified -- admin dashboard complete; auto-updater complete end-to-end (Phases 1-5 shipped, signing-key setup runbook documented for first manual UAT)
 
 ## Current Position
 
 Phase: 6 of 10 (Admin Dashboard)
 Plan: 4 of 4 in current phase
 Status: Phase verified (26/26 must-haves)
-Last activity: 2026-05-02 -- Completed quick task 260502-epd: review-fix follow-up to 260501-wqg (2 MAJOR + 5 MINOR; sanitize-notes lib + reducer-local race guard + DRY hook IPC error helper)
+Last activity: 2026-05-02 -- Completed quick task 260502-lad: phase 5 auto-updater GitHub Actions CI (single end-to-end release.yml + tested Node manifest generator + signing-key runbook) — auto-updater pipeline now end-to-end
 
 Progress: [████████████████████████████████████████] 100% (39/39 plans)
 
@@ -228,6 +228,7 @@ None.
 | 260501-uon | Phase 3 auto-updater — Tauri plugin wiring + IPC commands + bg task (placeholder pubkey) | 2026-05-01 | 8836551 | Verified (signing key pending) | [260501-uon-phase-3-auto-updater-tauri-plugin-wiring](./quick/260501-uon-phase-3-auto-updater-tauri-plugin-wiring/) |
 | 260501-wqg | Phase 4 auto-updater — React UI (`UpdateToast` + `CheckForUpdatesButton` + `useUpdateState` hook + `relative-time` lib) | 2026-05-02 | 44692d3 | Verified (review findings fixed in 260502-epd) | [260501-wqg-phase-4-auto-updater-react-ui-components](./quick/260501-wqg-phase-4-auto-updater-react-ui-components/) |
 | 260502-epd | Review-fix follow-up to 260501-wqg — 2 MAJOR + 5 MINOR (sanitize-notes lib + reducer-local race guard + DRY hook IPC error helper) | 2026-05-02 | a628d13 | Verified | [260502-epd-fix-ma-01-stale-closure-race-ma-02-silen](./quick/260502-epd-fix-ma-01-stale-closure-race-ma-02-silen/) |
+| 260502-lad | Phase 5 auto-updater — single end-to-end GitHub Actions release.yml + tested Node manifest generator + signing-key runbook | 2026-05-02 | 8fa70d2 | Verified (1 MAJOR + 2 MINOR review findings fixed inline; manual UAT pending first signed release) | [260502-lad-phase-5-auto-updater-github-actions-publ](./quick/260502-lad-phase-5-auto-updater-github-actions-publ/) |
 
 ### Blockers/Concerns
 
