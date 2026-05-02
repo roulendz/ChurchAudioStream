@@ -18,6 +18,7 @@ export default defineConfig({
         "src/hooks/useUpdateState.ts": { lines: 100, functions: 100, branches: 100, statements: 100 },
         "src/hooks/updateStateMachine.ts": { lines: 100, functions: 100, branches: 100, statements: 100 },
         "src/lib/relative-time.ts": { lines: 100, functions: 100, branches: 100, statements: 100 },
+        "src/lib/sanitize-notes.ts": { lines: 100, functions: 100, branches: 100, statements: 100 },
         "src/components/UpdateToast/**": { lines: 90, functions: 90, branches: 90, statements: 90 },
         "src/components/CheckForUpdatesButton/**": { lines: 90, functions: 90, branches: 90, statements: 90 },
       },

@@ -6,6 +6,9 @@ dist/
 target/
 sidecar/public/
 
+# Test coverage output (vitest --coverage)
+coverage/
+
 # Tauri generated files
 src-tauri/gen/
 
