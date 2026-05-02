@@ -70,11 +70,7 @@ export function useUpdateState() {
   const checkNow = async (): Promise<UpdateState> => {
     const result = await invoke<UpdateState>("update_check_now");
     setPersisted(result);
-    dispatch({
-      type: "checkCompleted",
-      lastCheckUnix: result.last_check_unix,
-      updateOffered: state.kind === "UpdateAvailable",
-    });
+    dispatch({ type: "checkCompleted", lastCheckUnix: result.last_check_unix });
     return result;
   };
 

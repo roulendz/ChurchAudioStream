@@ -143,7 +143,7 @@ describe("useUpdateState", () => {
     expect(result.current.state).toEqual({ kind: "UpToDate", checkedAtUnix: 1700 });
   });
 
-  it("checkNow dispatches updateOffered=true when state is already UpdateAvailable (preserves UpdateAvailable)", async () => {
+  it("checkNow preserves UpdateAvailable when state is already UpdateAvailable (reducer-local guard)", async () => {
     let availableHandler: ((event: { payload: { version: string; notes: string; downloadUrl: string } }) => void) | null = null;
     vi.mocked(listen).mockImplementation(async (eventName: string, handler) => {
       if (eventName === "update:available") availableHandler = handler as typeof availableHandler;
@@ -200,5 +200,40 @@ describe("useUpdateState", () => {
     expect(() => renderHook(() => useUpdateState())).not.toThrow();
     await waitFor(() => expect(warnSpy).toHaveBeenCalled());
     warnSpy.mockRestore();
+  });
+
+  it("MA-01 regression: update:available arriving mid-checkNow does NOT overwrite UpdateAvailable", async () => {
+    let availableHandler: ((event: { payload: { version: string; notes: string; downloadUrl: string } }) => void) | null = null;
+    vi.mocked(listen).mockImplementation(async (eventName: string, handler) => {
+      if (eventName === "update:available") availableHandler = handler as typeof availableHandler;
+      return () => {};
+    });
+    let resolveCheck: (value: UpdateState) => void;
+    const checkPromise = new Promise<UpdateState>((res) => { resolveCheck = res; });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "update_check_now") return checkPromise;
+      return DEFAULT_STATE;
+    });
+
+    const { result } = renderHook(() => useUpdateState());
+    await waitFor(() => expect(availableHandler).not.toBeNull());
+
+    let checkNowDone: Promise<UpdateState>;
+    await act(async () => {
+      checkNowDone = result.current.checkNow();
+    });
+
+    await act(async () => {
+      availableHandler!({ payload: { version: "0.2.0", notes: "n", downloadUrl: "u" } });
+    });
+    expect(result.current.state.kind).toBe("UpdateAvailable");
+
+    await act(async () => {
+      resolveCheck!({ last_check_unix: 1700, last_dismissed_unix: 0, skipped_versions: [] });
+      await checkNowDone;
+    });
+
+    // Post-fix: reducer-local guard sees state.kind === "UpdateAvailable" → returns state unchanged.
+    expect(result.current.state.kind).toBe("UpdateAvailable");
   });
 });

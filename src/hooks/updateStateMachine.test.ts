@@ -51,13 +51,29 @@ describe("updateReducer", () => {
     const next = updateReducer(IDLE, { type: "installed", version: "0.2.0" });
     expect(next).toEqual({ kind: "Installing", version: "0.2.0" });
   });
-  it("checkCompleted updateOffered=true → unchanged", () => {
-    const next = updateReducer(AVAILABLE, { type: "checkCompleted", lastCheckUnix: 1, updateOffered: true });
+  it("checkCompleted on UpdateAvailable → unchanged (reducer-local guard)", () => {
+    const next = updateReducer(AVAILABLE, { type: "checkCompleted", lastCheckUnix: 1700 });
     expect(next).toBe(AVAILABLE);
   });
-  it("checkCompleted updateOffered=false → UpToDate", () => {
-    const next = updateReducer(IDLE, { type: "checkCompleted", lastCheckUnix: 1700000000, updateOffered: false });
+  it("checkCompleted on Downloading → unchanged (reducer-local guard)", () => {
+    const next = updateReducer(DOWNLOADING, { type: "checkCompleted", lastCheckUnix: 1700 });
+    expect(next).toBe(DOWNLOADING);
+  });
+  it("checkCompleted on Installing → unchanged (reducer-local guard)", () => {
+    const next = updateReducer(INSTALLING, { type: "checkCompleted", lastCheckUnix: 1700 });
+    expect(next).toBe(INSTALLING);
+  });
+  it("checkCompleted on Idle → UpToDate", () => {
+    const next = updateReducer(IDLE, { type: "checkCompleted", lastCheckUnix: 1700000000 });
     expect(next).toEqual({ kind: "UpToDate", checkedAtUnix: 1700000000 });
+  });
+  it("checkCompleted on UpToDate → UpToDate (refresh timestamp)", () => {
+    const next = updateReducer(UPTODATE, { type: "checkCompleted", lastCheckUnix: 1800 });
+    expect(next).toEqual({ kind: "UpToDate", checkedAtUnix: 1800 });
+  });
+  it("checkCompleted on SilentSkip → UpToDate (skip cleared by fresh check)", () => {
+    const next = updateReducer(SILENTSKIP, { type: "checkCompleted", lastCheckUnix: 1800 });
+    expect(next).toEqual({ kind: "UpToDate", checkedAtUnix: 1800 });
   });
   it("any + dismissed → Idle", () => {
     expect(updateReducer(AVAILABLE, { type: "dismissed" })).toEqual({ kind: "Idle" });
