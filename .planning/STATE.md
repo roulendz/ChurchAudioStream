@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 Phase: 6 of 10 (Admin Dashboard)
 Plan: 4 of 4 in current phase
 Status: Phase verified (26/26 must-haves)
-Last activity: 2026-05-02 -- Completed quick task 260501-wqg: phase 4 auto-updater React UI (UpdateToast + CheckForUpdatesButton + useUpdateState hook)
+Last activity: 2026-05-02 -- Completed quick task 260502-epd: review-fix follow-up to 260501-wqg (2 MAJOR + 5 MINOR; sanitize-notes lib + reducer-local race guard + DRY hook IPC error helper)
 
 Progress: [████████████████████████████████████████] 100% (39/39 plans)
 
@@ -226,7 +226,8 @@ None.
 | 260501-qq5 | Phase 1 auto-updater — pure semver + manifest types (`src-tauri/src/update/`) | 2026-05-01 | ff79774 | Verified | [260501-qq5-phase-1-auto-updater-semver-and-manifest](./quick/260501-qq5-phase-1-auto-updater-semver-and-manifest/) |
 | 260501-t83 | Phase 2 auto-updater — orchestration (`checker.rs` + `storage.rs` + `dispatcher.rs`) | 2026-05-01 | 4494da3 | Verified | [260501-t83-phase-2-auto-updater-orchestration-check](./quick/260501-t83-phase-2-auto-updater-orchestration-check/) |
 | 260501-uon | Phase 3 auto-updater — Tauri plugin wiring + IPC commands + bg task (placeholder pubkey) | 2026-05-01 | 8836551 | Verified (signing key pending) | [260501-uon-phase-3-auto-updater-tauri-plugin-wiring](./quick/260501-uon-phase-3-auto-updater-tauri-plugin-wiring/) |
-| 260501-wqg | Phase 4 auto-updater — React UI (`UpdateToast` + `CheckForUpdatesButton` + `useUpdateState` hook + `relative-time` lib) | 2026-05-02 | 44692d3 | Verified (2 review findings) | [260501-wqg-phase-4-auto-updater-react-ui-components](./quick/260501-wqg-phase-4-auto-updater-react-ui-components/) |
+| 260501-wqg | Phase 4 auto-updater — React UI (`UpdateToast` + `CheckForUpdatesButton` + `useUpdateState` hook + `relative-time` lib) | 2026-05-02 | 44692d3 | Verified (review findings fixed in 260502-epd) | [260501-wqg-phase-4-auto-updater-react-ui-components](./quick/260501-wqg-phase-4-auto-updater-react-ui-components/) |
+| 260502-epd | Review-fix follow-up to 260501-wqg — 2 MAJOR + 5 MINOR (sanitize-notes lib + reducer-local race guard + DRY hook IPC error helper) | 2026-05-02 | a628d13 | Verified | [260502-epd-fix-ma-01-stale-closure-race-ma-02-silen](./quick/260502-epd-fix-ma-01-stale-closure-race-ma-02-silen/) |
 
 ### Blockers/Concerns
 
