@@ -19,7 +19,11 @@
 
 [CmdletBinding()]
 param(
-  [switch]$Quiet
+  [switch]$Quiet,
+  # Install root passed by NSIS hook ($INSTDIR). Used to locate server.exe
+  # for the program-based firewall rule. Defaults to PSScriptRoot's parent
+  # so the script stays runnable manually post-install.
+  [string]$InstallDir = (Split-Path -Parent $PSScriptRoot)
 )
 
 Set-StrictMode -Version Latest
@@ -62,13 +66,15 @@ if ($added) {
 }
 Update-SessionPath
 
-# Step 2: Firewall rule
+# Step 2: Firewall rule (program-based — pre-registers server.exe identity
+# so Windows Defender does NOT pop the "first-time listener" prompt at runtime)
 Log ""
-Log "[2/2] Firewall rule for port 7777 (Private network)" Cyan
+Log "[2/2] Firewall rule for server.exe (TCP 7777, Private network)" Cyan
+$serverExe = Join-Path $InstallDir "server.exe"
 try {
-  $created = Add-CasFirewallRule
+  $created = Add-CasFirewallRule -ServerExePath $serverExe
   if ($created) {
-    Log "    Created inbound rule: TCP 7777, Private profile." Green
+    Log "    Created inbound rule: $serverExe, TCP 7777, Private." Green
   } else {
     Log "    Rule 'ChurchAudioStream' already exists." Green
   }

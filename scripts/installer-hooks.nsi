@@ -15,7 +15,9 @@
 
 !macro NSIS_HOOK_POSTINSTALL
   DetailPrint "Configuring GStreamer PATH and firewall rule..."
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\scripts\configure-host.ps1" -Quiet'
+  ; Pass -InstallDir so PS script can locate server.exe for the program-based
+  ; firewall rule (suppresses Windows Defender's first-time-listener popup).
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\scripts\configure-host.ps1" -Quiet -InstallDir "$INSTDIR"'
   Pop $0
   ${If} $0 == 2
     DetailPrint "GStreamer not found. Run install-prerequisites.ps1 from the GitHub release before launching the app."

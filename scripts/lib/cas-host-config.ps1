@@ -105,12 +105,23 @@ function Update-SessionPath {
 }
 
 function Add-CasFirewallRule {
+  param(
+    [Parameter(Mandatory = $true)][string]$ServerExePath
+  )
+  if (-not (Test-Path $ServerExePath)) {
+    throw "server.exe not found at $ServerExePath — firewall rule cannot be pre-registered"
+  }
   $existing = Get-NetFirewallRule -DisplayName $Script:CAS_FIREWALL_RULE_NAME -ErrorAction SilentlyContinue
   if ($existing) { return $false }
+  # Program-based rule (NOT port-based): pre-registers the exe identity with
+  # Windows Firewall so the "first-time listener" popup never fires. Port-based
+  # rules allow inbound traffic but don't suppress the program-identification
+  # prompt that Defender shows when an unrecognized exe first binds to a port.
   New-NetFirewallRule `
     -DisplayName $Script:CAS_FIREWALL_RULE_NAME `
     -Description "Allow phones on LAN to reach the listener PWA + WebRTC signaling" `
     -Direction Inbound `
+    -Program $ServerExePath `
     -LocalPort $Script:CAS_PWA_PORT `
     -Protocol TCP `
     -Action Allow `
