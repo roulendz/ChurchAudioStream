@@ -2,7 +2,7 @@ import { useRef } from "react";
 import styles from "./UpdateToast.module.css";
 import { useUpdateState } from "../../hooks/useUpdateState";
 import { useFocusTrap } from "../../lib/useFocusTrap";
-import { sanitizeReleaseNotes, stripBidiControls } from "../../lib/sanitize-notes";
+import { sanitizeReleaseNotes } from "../../lib/sanitize-notes";
 import type { UpdateUiState } from "../../hooks/updateStateMachine";
 
 interface AvailableProps {
@@ -12,9 +12,7 @@ interface AvailableProps {
   onSkip: () => void;
 }
 function AvailableContent({ state, onInstall, onLater, onSkip }: AvailableProps) {
-  const display = sanitizeReleaseNotes(state.notes);
-  const full = stripBidiControls(state.notes);
-  const truncated = display.endsWith("…");
+  const { display, full, truncated } = sanitizeReleaseNotes(state.notes);
   return (
     <div className={styles["toast-content"]}>
       <div className={styles["toast-headline"]}>Update available — v{state.version}</div>

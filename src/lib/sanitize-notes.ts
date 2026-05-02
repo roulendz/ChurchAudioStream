@@ -43,7 +43,31 @@ export function truncateNotesSafe(text: string, limit: number): string {
   return `${codepoints.slice(0, limit).join("")}…`;
 }
 
-/** Composed sanitizer: strip bidi controls then codepoint-safe truncate. */
-export function sanitizeReleaseNotes(raw: string): string {
-  return truncateNotesSafe(stripBidiControls(raw), NOTES_TRUNCATE_LIMIT);
+/**
+ * Result of composed sanitization. `truncated` is the authoritative
+ * "was this shortened?" flag — derived from the actual codepoint count
+ * comparison inside the composer, NOT inferred from `display.endsWith("…")`
+ * (which would mis-flag release notes that naturally end with U+2026).
+ */
+export interface SanitizedReleaseNotes {
+  /** Bidi-stripped, codepoint-truncated to NOTES_TRUNCATE_LIMIT, ellipsis appended when truncated. */
+  display: string;
+  /** Bidi-stripped only — full text for sr-only screen-reader announcement / aria-label. */
+  full: string;
+  /** True iff the bidi-stripped text exceeded NOTES_TRUNCATE_LIMIT codepoints. */
+  truncated: boolean;
+}
+
+/**
+ * Composed sanitizer: strip bidi controls, then codepoint-safe truncate.
+ * Returns both the truncated `display` form AND the full `full` form, plus
+ * an authoritative `truncated` boolean. Callers never need to invoke
+ * `stripBidiControls` separately — DRY: one pass through the input.
+ */
+export function sanitizeReleaseNotes(raw: string): SanitizedReleaseNotes {
+  const full = stripBidiControls(raw);
+  const codepointCount = Array.from(full).length;
+  const truncated = codepointCount > NOTES_TRUNCATE_LIMIT;
+  const display = truncated ? truncateNotesSafe(full, NOTES_TRUNCATE_LIMIT) : full;
+  return { display, full, truncated };
 }

@@ -52,19 +52,44 @@ describe("truncateNotesSafe", () => {
 });
 
 describe("sanitizeReleaseNotes (composition)", () => {
-  it("strips bidi then truncates", () => {
+  it("strips bidi then truncates; flags truncated=true", () => {
     const raw = `v1.0.0‮${"x".repeat(200)}`;
-    const out = sanitizeReleaseNotes(raw);
-    expect(out).not.toContain("‮");
-    expect(Array.from(out).length).toBeLessThanOrEqual(NOTES_TRUNCATE_LIMIT + 1); // +1 for ellipsis
+    const { display, full, truncated } = sanitizeReleaseNotes(raw);
+    expect(display).not.toContain("‮");
+    expect(full).not.toContain("‮");
+    expect(truncated).toBe(true);
+    expect(Array.from(display).length).toBeLessThanOrEqual(NOTES_TRUNCATE_LIMIT + 1); // +1 for ellipsis
   });
-  it("does not append ellipsis when sanitized length ≤ limit", () => {
+  it("does not append ellipsis when sanitized length ≤ limit; flags truncated=false", () => {
     // Bidi strip can shrink length below limit
     const raw = "short‮";
-    expect(sanitizeReleaseNotes(raw)).toBe("short");
+    const { display, full, truncated } = sanitizeReleaseNotes(raw);
+    expect(display).toBe("short");
+    expect(full).toBe("short");
+    expect(truncated).toBe(false);
   });
-  it("handles only-control-char input → empty string, no ellipsis", () => {
-    expect(sanitizeReleaseNotes("‮‭")).toBe("");
+  it("handles only-control-char input → empty display + full, truncated=false", () => {
+    const { display, full, truncated } = sanitizeReleaseNotes("‮‭");
+    expect(display).toBe("");
+    expect(full).toBe("");
+    expect(truncated).toBe(false);
+  });
+  it("MI-A regression: notes naturally ending with U+2026 ≤ limit are NOT mis-flagged truncated", () => {
+    // Pre-fix UpdateToast inferred truncation from `display.endsWith("…")` —
+    // a release note ending with a real ellipsis would be wrongly flagged.
+    // New design: composer returns authoritative `truncated` flag derived
+    // from codepoint count, not from output suffix.
+    const raw = "Hotfix released, more details soon…";
+    const { display, full, truncated } = sanitizeReleaseNotes(raw);
+    expect(display).toBe(raw);
+    expect(full).toBe(raw);
+    expect(truncated).toBe(false);
+  });
+  it("MI-A regression: notes naturally ending with U+2026 over limit ARE flagged truncated", () => {
+    const raw = `${"x".repeat(NOTES_TRUNCATE_LIMIT)}…`;
+    const { display, truncated } = sanitizeReleaseNotes(raw);
+    expect(truncated).toBe(true);
+    expect(display).toBe(`${"x".repeat(NOTES_TRUNCATE_LIMIT)}…`);
   });
   it("uses NOTES_TRUNCATE_LIMIT constant (regression-guards exported value)", () => {
     expect(NOTES_TRUNCATE_LIMIT).toBe(80);

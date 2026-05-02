@@ -11,6 +11,20 @@ interface ProgressPayload { downloadedBytes: number; totalBytes: number }
 interface InstalledPayload { version: string }
 
 /**
+ * Names of all Tauri commands the auto-updater frontend invokes. Keeping
+ * this as a literal-union (not bare `string`) catches typos at compile
+ * time — without it, `invoke("update_dismis")` would fail only at
+ * runtime via Tauri returning "command not found". Mirror in
+ * `src-tauri/src/update/commands.rs:67-181`.
+ */
+type UpdateCommandName =
+  | "update_check_now"
+  | "update_install"
+  | "update_dismiss"
+  | "update_skip_version"
+  | "update_get_state";
+
+/**
  * Subscribe to Phase 3 update:* events and expose typed UI state +
  * action creators that wrap Tauri `invoke()` calls.
  *
@@ -78,7 +92,7 @@ export function useUpdateState() {
    * button).
    */
   async function dispatchOnSuccess(
-    commandName: string,
+    commandName: UpdateCommandName,
     args: Record<string, unknown> | undefined,
     action: UpdateAction,
   ): Promise<void> {
