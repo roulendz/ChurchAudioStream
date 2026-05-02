@@ -34,3 +34,19 @@ Thumbs.db
 # Environment files
 .env
 .env.local
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Playwright / test runner artifacts
+test-results/
+playwright-report/
+
+# Runtime logs (dev fallback path; persistent logs live in %APPDATA%)
+src-tauri/logs/
+
+# Local test fixtures (large media files, often licensed)
+src-tauri/test-media/
+
+# Claude Code agent session state
+.claude/
