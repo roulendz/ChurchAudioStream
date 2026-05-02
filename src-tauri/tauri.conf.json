@@ -13,6 +13,10 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
+    "publisher": "Login Grupa",
+    "copyright": "Copyright © 2026 Login Grupa",
+    "shortDescription": "Church audio restreaming over local WiFi",
+    "longDescription": "Cross-platform church audio restreaming application — captures Dante/AES67 + local audio devices and streams to phones via WebRTC for multilingual sermon translation and hearing-aid assistance.",
     "externalBin": ["binaries/server"],
     "resources": {
       "binaries/mediasoup-worker.exe": "binaries/mediasoup-worker.exe",
