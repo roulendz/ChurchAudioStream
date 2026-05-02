@@ -41,6 +41,18 @@ export type ChannelMetadataResolver = (channelId: string) =>
       description: string;
       language: { code: string; label: string; flag: string };
       displayToggles: { showDescription: boolean; showListenerCount: boolean; showLiveBadge: boolean };
+      // Optional telemetry (populated by streaming-subsystem buildMetadataResolver)
+      processingMode?: "speech" | "music";
+      sourceLabel?: string;
+      pipelineRestartCount?: number;
+      codec?: {
+        mimeType: string;
+        sampleRateHz: number;
+        channels: number;
+        bitrateKbps: number;
+        fec: boolean;
+        frameSizeMs: number;
+      };
     }
   | undefined;
 
@@ -60,6 +72,9 @@ interface ChannelRouterEntry {
   readonly rtcpPort: number;
   /** SSRC used for this channel (needed for restart recovery). */
   readonly ssrc: number;
+  /** Wall-clock ms when the producer was first created — drives the
+   *  "Live for Xm" stream-uptime indicator on listener + admin UIs. */
+  readonly producerStartedAt: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +164,7 @@ export class RouterManager extends EventEmitter {
       rtpPort,
       rtcpPort,
       ssrc,
+      producerStartedAt: Date.now(),
     };
 
     this.channels.set(channelId, entry);
@@ -207,6 +223,14 @@ export class RouterManager extends EventEmitter {
     return this.channels.get(channelId)?.audioProducer;
   }
 
+  /** Wall-clock ms when the producer for this channel was created.
+   *  Returns null when channel has no active router. */
+  getProducerStartedAt(channelId: string): number | null {
+    const entry = this.channels.get(channelId);
+    if (!entry || entry.audioProducer.closed) return null;
+    return entry.producerStartedAt;
+  }
+
   /**
    * Return all channel IDs that have active producers.
    */
@@ -243,18 +267,24 @@ export class RouterManager extends EventEmitter {
         continue; // Channel config no longer exists
       }
 
+      const isLive = !entry.audioProducer.closed;
       channelList.push({
         id: channelId,
         name: metadata.name,
         outputFormat: metadata.outputFormat,
         defaultChannel: metadata.defaultChannel,
-        hasActiveProducer: !entry.audioProducer.closed,
+        hasActiveProducer: isLive,
         latencyMode: metadata.latencyMode,
         lossRecovery: metadata.lossRecovery,
         description: metadata.description,
         language: metadata.language,
         listenerCount: 0, // Populated by SignalingHandler.buildEnrichedChannelList()
         displayToggles: metadata.displayToggles,
+        producerStartedAt: isLive ? entry.producerStartedAt : null,
+        processingMode: metadata.processingMode,
+        sourceLabel: metadata.sourceLabel,
+        pipelineRestartCount: metadata.pipelineRestartCount,
+        codec: metadata.codec,
       });
     }
 

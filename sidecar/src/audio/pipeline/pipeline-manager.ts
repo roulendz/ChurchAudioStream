@@ -224,6 +224,13 @@ export class PipelineManager extends EventEmitter {
     return pipeline ? pipeline.pid : null;
   }
 
+  /** Cumulative restart attempts since service start (or since last
+   *  5s-stable streaming window, which resets the counter). Surfaces in
+   *  listener StatsPanel + admin diagnostics. */
+  getRestartCount(pipelineId: string): number {
+    return this.restartAttempts.get(pipelineId) ?? 0;
+  }
+
   /**
    * Stop all pipelines concurrently. Clears all restart timers first
    * to prevent zombie restarts during shutdown.

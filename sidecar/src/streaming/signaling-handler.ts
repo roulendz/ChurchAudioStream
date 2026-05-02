@@ -186,7 +186,10 @@ export class SignalingHandler extends EventEmitter {
    */
   async broadcastListenerCounts(): Promise<void> {
     const channels = this.buildEnrichedChannelList();
-    await this.notifyAllListeners("listenerCounts", { channels });
+    await this.notifyAllListeners("listenerCounts", {
+      channels,
+      serverNow: Date.now(),
+    });
   }
 
   // -----------------------------------------------------------------------
@@ -222,6 +225,7 @@ export class SignalingHandler extends EventEmitter {
       .notify("activeChannels", {
         channels: activeChannels,
         defaultChannelId,
+        serverNow: Date.now(),
       })
       .catch(() => {
         // Peer may have disconnected immediately

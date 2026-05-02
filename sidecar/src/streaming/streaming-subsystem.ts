@@ -91,6 +91,13 @@ export class StreamingSubsystem extends EventEmitter {
   private boundChannelStateHandler: ((channelId: string, status: string) => void) | null = null;
   private boundChannelRemovedHandler: ((channelId: string) => void) | null = null;
   private boundChannelCreatedHandler: ((channel: AppChannel) => void) | null = null;
+  private boundLevelHandler: ((levels: {
+    pipelineId: string;
+    rms: number[];
+    rmsDb: number[];
+    clipping: boolean;
+  }) => void) | null = null;
+  private listenerLevelInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(configStore: ConfigStore, audioSubsystem: AudioSubsystem) {
     super();
@@ -554,6 +561,64 @@ export class StreamingSubsystem extends EventEmitter {
       });
     };
     this.audioSubsystem.on("channel-created", this.boundChannelCreatedHandler);
+
+    // Audio level forward to listeners. The level monitor fires once per
+    // GStreamer level message (~50ms). We coalesce into a 250ms window
+    // and ship a single batched notification keyed by channelId so the
+    // listener PWA can drive a small VU meter without flooding the WS.
+    this.startListenerLevelBroadcast();
+  }
+
+  /** Throttled relay of audio levels to all listeners. Coalesces per-pipeline
+   *  bursts into one message every BROADCAST_INTERVAL_MS. */
+  private startListenerLevelBroadcast(): void {
+    // 4Hz overwhelmed iOS Safari's WebKit WebSocket — phone fell into a
+    // perpetual "reconnecting" state while Android Chromium handled the
+    // same rate fine. 500ms (2Hz) is still smooth enough for the canvas
+    // VU meter (decay/peak-hold do the visual smoothing) and stays
+    // within iOS WSS budget.
+    const BROADCAST_INTERVAL_MS = 500;
+    let buffer = new Map<
+      string,
+      { rms: number[]; rmsDb: number[]; clipping: boolean }
+    >();
+
+    const handler = (levels: {
+      pipelineId: string;
+      rms: number[];
+      rmsDb: number[];
+      clipping: boolean;
+    }): void => {
+      const channelId = this.audioSubsystem
+        .getPipelineToChannelMap()
+        .get(levels.pipelineId);
+      if (!channelId) return;
+      buffer.set(channelId, {
+        rms: levels.rms,
+        rmsDb: levels.rmsDb,
+        clipping: levels.clipping,
+      });
+    };
+
+    this.audioSubsystem.on("levels-updated", handler);
+    this.boundLevelHandler = handler;
+
+    this.listenerLevelInterval = setInterval(() => {
+      if (buffer.size === 0) return;
+      if (!this.signalingHandler) return;
+      const entries = Array.from(buffer.entries()).map(([channelId, value]) => ({
+        channelId,
+        rms: value.rms,
+        rmsDb: value.rmsDb,
+        clipping: value.clipping,
+      }));
+      buffer = new Map();
+      this.signalingHandler
+        .notifyAllListeners("audioLevels", { levels: entries })
+        .catch(() => {
+          // Ignore — best-effort broadcast.
+        });
+    }, BROADCAST_INTERVAL_MS);
   }
 
   /**
@@ -572,6 +637,14 @@ export class StreamingSubsystem extends EventEmitter {
     if (this.boundChannelCreatedHandler) {
       this.audioSubsystem.off("channel-created", this.boundChannelCreatedHandler);
       this.boundChannelCreatedHandler = null;
+    }
+    if (this.boundLevelHandler) {
+      this.audioSubsystem.off("levels-updated", this.boundLevelHandler);
+      this.boundLevelHandler = null;
+    }
+    if (this.listenerLevelInterval) {
+      clearInterval(this.listenerLevelInterval);
+      this.listenerLevelInterval = null;
     }
   }
 
@@ -674,6 +747,7 @@ export class StreamingSubsystem extends EventEmitter {
     const channels = this.buildFullChannelList();
     await this.signalingHandler.notifyAllListeners("activeChannels", {
       channels,
+      serverNow: Date.now(),
     });
   }
 
@@ -714,6 +788,13 @@ export class StreamingSubsystem extends EventEmitter {
         language: metadata.language,
         listenerCount: 0, // Populated by SignalingHandler.buildEnrichedChannelList()
         displayToggles: metadata.displayToggles,
+        producerStartedAt: hasActiveProducer
+          ? this.routerManager!.getProducerStartedAt(channel.id)
+          : null,
+        processingMode: metadata.processingMode,
+        sourceLabel: metadata.sourceLabel,
+        pipelineRestartCount: metadata.pipelineRestartCount,
+        codec: metadata.codec,
       });
     }
 
@@ -721,13 +802,46 @@ export class StreamingSubsystem extends EventEmitter {
     return channelList;
   }
 
-  /** Build a ChannelMetadataResolver using AudioSubsystem and config store. */
+  /** Build a ChannelMetadataResolver using AudioSubsystem and config store.
+   *  Also populates telemetry fields (processingMode / sourceLabel /
+   *  pipelineRestartCount / codec) so the listener PWA + admin can show
+   *  stream uptime, codec details, etc. */
   private buildMetadataResolver(): ChannelMetadataResolver {
     return (channelId: string) => {
       const channel = this.audioSubsystem.getChannel(channelId);
       if (!channel) return undefined;
       const channelConfig = this.resolveChannelConfig(channelId);
       const fullConfig = this.resolveFullChannelConfig(channelId);
+      const processing = this.audioSubsystem.getProcessingConfig(channelId);
+
+      // Pick the first source segment's label as a representative
+      // "what is feeding this channel" string. Multi-segment channels
+      // would need a richer surface, but listeners only need a hint.
+      const firstSource = channel.sources?.[0] as { label?: string } | undefined;
+      const sourceLabel = firstSource?.label;
+
+      // Fold cumulative restart counts across all pipelines belonging
+      // to this channel — handles the (rare) multi-pipeline case.
+      const pipelineIds = this.audioSubsystem.getChannelPipelineIds(channelId);
+      let pipelineRestartCount = 0;
+      for (const pipelineId of pipelineIds) {
+        pipelineRestartCount += this.audioSubsystem.getPipelineRestartCount(pipelineId);
+      }
+
+      // Codec info from the per-channel processing config — server truth
+      // (preferred over WebRTC stats which vary per consumer).
+      const opus = processing?.opus;
+      const codec = opus
+        ? {
+            mimeType: "audio/opus",
+            sampleRateHz: 48000,
+            channels: channel.outputFormat === "stereo" ? 2 : 1,
+            bitrateKbps: opus.bitrateKbps,
+            fec: opus.fec,
+            frameSizeMs: opus.frameSize,
+          }
+        : undefined;
+
       return {
         name: channel.name,
         outputFormat: channel.outputFormat,
@@ -737,6 +851,10 @@ export class StreamingSubsystem extends EventEmitter {
         description: fullConfig?.description ?? "",
         language: fullConfig?.language ?? { code: "", label: "", flag: "" },
         displayToggles: fullConfig?.displayToggles ?? { showDescription: false, showListenerCount: false, showLiveBadge: false },
+        processingMode: processing?.mode,
+        sourceLabel,
+        pipelineRestartCount,
+        codec,
       };
     };
   }

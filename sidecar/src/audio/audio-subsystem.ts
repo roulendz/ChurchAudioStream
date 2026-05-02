@@ -188,6 +188,12 @@ export class AudioSubsystem extends EventEmitter {
     return this.channelManager.getPipelineToChannelMap();
   }
 
+  /** Forward to PipelineManager: cumulative restarts for a pipeline.
+   *  (Companion to existing getChannelPipelineIds below.) */
+  getPipelineRestartCount(pipelineId: string): number {
+    return this.pipelineManager.getRestartCount(pipelineId);
+  }
+
   async startChannel(id: string): Promise<void> {
     return this.channelManager.startChannel(id);
   }

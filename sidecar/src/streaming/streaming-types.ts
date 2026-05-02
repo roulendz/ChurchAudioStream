@@ -154,6 +154,45 @@ export interface ListenerChannelInfo {
     readonly showListenerCount: boolean;
     readonly showLiveBadge: boolean;
   };
+
+  // -------------------------------------------------------------------------
+  // Telemetry (added so listener PWA + admin can show stream uptime,
+  // codec details, restart count etc. All optional so callers built
+  // before this round still validate.)
+  // -------------------------------------------------------------------------
+
+  /** Wall-clock ms when the mediasoup Producer for this channel started.
+   *  Null when the channel is offline. */
+  readonly producerStartedAt?: number | null;
+  /** Speech / Music / etc — drives AGC + Opus defaults. */
+  readonly processingMode?: "speech" | "music";
+  /** Real input device name (e.g. "USB: Wireless Mic") that backs the
+   *  channel right now. Differs from `name` which is admin-given. */
+  readonly sourceLabel?: string;
+  /** Cumulative GStreamer pipeline restarts since service start. */
+  readonly pipelineRestartCount?: number;
+  /** Server-truth codec parameters (preferred over WebRTC stats which
+   *  vary per consumer). */
+  readonly codec?: {
+    readonly mimeType: string;
+    readonly sampleRateHz: number;
+    readonly channels: number;
+    readonly bitrateKbps: number;
+    readonly fec: boolean;
+    readonly frameSizeMs: number;
+  };
+}
+
+/** Per-channel audio level snapshot broadcast to listeners + admin.
+ *  RMS in normalized 0..1; dB raw values for geek panel. */
+export interface ChannelAudioLevel {
+  readonly channelId: string;
+  /** Per-channel-of-output (1 mono, 2 stereo) normalized RMS 0..1. */
+  readonly rms: number[];
+  /** Per-channel raw RMS in dB (negative; -Infinity = silence). */
+  readonly rmsDb: number[];
+  /** True for the next ~250ms after a clipping sample. */
+  readonly clipping: boolean;
 }
 
 /** Worker resource snapshot for admin dashboard display. */
