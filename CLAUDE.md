@@ -57,6 +57,22 @@ Persistent JSONL, one file per app launch. Filename = local-time `YYYY-MM-DD_HH-
 
 Dev runs use the same path (Tauri passes `--config-path %APPDATA%\com.churchaudiostream.app` to sidecar). All entries are JSON; grep with `jq` or by raw substring.
 
+## Release version bump — bump ALL 5 sources together
+
+Canonical version = latest `git tag` (e.g. `v0.1.3`). When bumping, edit ALL of:
+
+1. `package.json` (root)
+2. `listener/package.json` + `listener/package-lock.json` (2 occurrences each)
+3. `sidecar/package.json` + `sidecar/package-lock.json` (2 occurrences each)
+4. `src-tauri/Cargo.toml`
+5. `src-tauri/tauri.conf.json`
+
+Past bug: commit `d93b8eb` shipped 0.1.3 but only touched root + tauri, leaving listener/sidecar at 0.1.1. If you see drift, align to the latest tag, not the lowest. Verify after edit:
+```bash
+grep -H '"version"' package.json listener/package.json sidecar/package.json src-tauri/tauri.conf.json
+grep -H '^version' src-tauri/Cargo.toml
+```
+
 ## Talking to Agents
 
 **Always pass caveman mode instruction in agent prompts** to save tokens. Example:
