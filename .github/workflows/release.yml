@@ -1,0 +1,103 @@
+# Single end-to-end release workflow.
+# Triggered on any pushed semver tag (v*).
+# Builds + signs Windows installer via tauri-action, generates latest.json
+# via Node ESM script, uploads + publishes via gh CLI.
+#
+# Schema contract: scripts/generate-update-manifest.mjs output is consumed by
+# Tauri client deserializer at src-tauri/src/update/manifest.rs (UpdateManifest).
+# Platform key 'windows-x86_64' matches src-tauri/src/update/lifecycle.rs:204
+# (current_platform_key()) — DO NOT change to 'x64' or 'x86_64-pc-windows-msvc'.
+#
+# One-time setup (signing key + repo secrets): scripts/setup-signing-key.md.
+# Manual UAT smoke recipe: scripts/setup-signing-key.md Section 6.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# Pitfall 10: GITHUB_TOKEN defaults to read-only on new repos. Without
+# contents:write, gh release create/edit/upload returns 403.
+permissions:
+  contents: write
+
+# Pitfall 11: never cancel a release-in-flight (mid-build cancel can leave a
+# half-uploaded asset). Different from CI checks which want cancel-in-progress.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Pitfall 15: locked deps + faster than `npm install`.
+      - name: Install dependencies
+        run: npm ci
+
+      # tauri-action @v0 is the current production tag; do NOT use @v1/@v2
+      # (older blog refs are stale — Pitfall 1). Auto-uploads .exe + .exe.sig
+      # to the draft release because tauri.conf.json:15 createUpdaterArtifacts.
+      # tauri.conf.json:9 beforeBuildCommand runs build:listener + build:sidecar
+      # + build automatically (Pitfall 12) — no explicit prep steps needed.
+      - name: Build, sign, draft release, upload .exe + .sig
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # TAURI_SIGNING_PRIVATE_KEY_PASSWORD must EXIST even if empty
+          # (Pitfall 2). See scripts/setup-signing-key.md.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'ChurchAudioStream ${{ github.ref_name }}'
+          releaseBody: 'See assets to download. The auto-updater will detect this release within 24h of users opening the app.'
+          releaseDraft: true
+          prerelease: false
+
+      # NSIS arch token = "x64" (filename); manifest platform key =
+      # "windows-x86_64" (lookup). NOT interchangeable. (Pitfall 4)
+      # Path is target/release/... (host-native, NO --target flag — Pitfall 3
+      # would shift path to target/<triple>/release/...).
+      - name: Generate latest.json
+        env:
+          TAG: ${{ github.ref_name }}
+          OWNER_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $exe = "ChurchAudioStream_${version}_x64-setup.exe"
+          $sigPath = "src-tauri/target/release/bundle/nsis/${exe}.sig"
+          $url = "https://github.com/${env:OWNER_REPO}/releases/download/${env:TAG}/${exe}"
+          node scripts/generate-update-manifest.mjs `
+            --tag "${env:TAG}" `
+            --notes "ChurchAudioStream ${env:TAG}" `
+            --asset-url "${url}" `
+            --sig-path "${sigPath}" `
+            --platform-key "windows-x86_64" `
+            > latest.json
+
+      # Publish must be LAST. Tauri endpoint resolves to most-recently-PUBLISHED
+      # non-draft release. Publishing before manifest upload = brief 404 window.
+      # (Pitfall 8). --clobber for idempotent re-runs on the same tag (Pitfall 9).
+      - name: Upload latest.json + publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          gh release upload "$env:TAG" latest.json --clobber
+          gh release edit "$env:TAG" --draft=false
+
+# Manual UAT smoke recipe: see scripts/setup-signing-key.md Section 6.
