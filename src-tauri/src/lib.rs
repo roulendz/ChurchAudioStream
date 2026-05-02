@@ -1,7 +1,9 @@
+pub mod log_file;
 pub mod update;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use serde_json::json;
 use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
@@ -67,7 +69,7 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
                 Err(error) => {
                     let error_message = format!("Failed to create sidecar command: {error}");
                     let _ = app_handle.emit("sidecar-crash", &error_message);
-                    eprintln!("{error_message}");
+                    log_file::log_event("error", &error_message, None);
                     // Wait before retry to avoid tight error loop
                     tokio::time::sleep(std::time::Duration::from_secs(RESTART_DELAY_SECONDS))
                         .await;
@@ -83,7 +85,7 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
                 Err(error) => {
                     let error_message = format!("Failed to resolve app data dir: {error}");
                     let _ = app_handle.emit("sidecar-crash", &error_message);
-                    eprintln!("{error_message}");
+                    log_file::log_event("error", &error_message, None);
                     tokio::time::sleep(std::time::Duration::from_secs(RESTART_DELAY_SECONDS))
                         .await;
                     continue;
@@ -96,7 +98,7 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
                     app_data_dir.display()
                 );
                 let _ = app_handle.emit("sidecar-crash", &error_message);
-                eprintln!("{error_message}");
+                log_file::log_event("error", &error_message, None);
                 tokio::time::sleep(std::time::Duration::from_secs(RESTART_DELAY_SECONDS)).await;
                 continue;
             }
@@ -105,12 +107,18 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
             let sidecar_command =
                 sidecar_command.args(["--config-path", &app_data_dir_argument]);
 
+            log_file::log_event(
+                "info",
+                "Spawning sidecar",
+                Some(json!({ "configPath": app_data_dir_argument })),
+            );
+
             let (mut event_receiver, child) = match sidecar_command.spawn() {
                 Ok(result) => result,
                 Err(error) => {
                     let error_message = format!("Failed to spawn sidecar: {error}");
                     let _ = app_handle.emit("sidecar-crash", &error_message);
-                    eprintln!("{error_message}");
+                    log_file::log_event("error", &error_message, None);
                     tokio::time::sleep(std::time::Duration::from_secs(RESTART_DELAY_SECONDS))
                         .await;
                     continue;
@@ -138,11 +146,19 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
                             buffer.push(error_line.clone());
                         }
                         let _ = app_handle.emit("sidecar-error", &error_line);
-                        eprintln!("[sidecar:stderr] {error_line}");
+                        log_file::log_event(
+                            "warn",
+                            "sidecar stderr",
+                            Some(json!({ "line": error_line.trim_end() })),
+                        );
                     }
                     CommandEvent::Error(error_description) => {
                         let _ = app_handle.emit("sidecar-crash", &error_description);
-                        eprintln!("[sidecar:error] {error_description}");
+                        log_file::log_event(
+                            "error",
+                            "sidecar command error",
+                            Some(json!({ "error": error_description })),
+                        );
                         break;
                     }
                     CommandEvent::Terminated(payload) => {
@@ -151,7 +167,14 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
                             payload.code, payload.signal
                         );
                         let _ = app_handle.emit("sidecar-crash", &exit_message);
-                        eprintln!("[sidecar:terminated] {exit_message}");
+                        log_file::log_event(
+                            "warn",
+                            "Sidecar terminated",
+                            Some(json!({
+                                "code": format!("{:?}", payload.code),
+                                "signal": format!("{:?}", payload.signal),
+                            })),
+                        );
                         break;
                     }
                     _ => {}
@@ -165,14 +188,16 @@ fn spawn_sidecar(app_handle: tauri::AppHandle, sidecar_should_run: Arc<AtomicBoo
 
             // Only restart if the app is still running
             if sidecar_should_run.load(Ordering::SeqCst) {
-                eprintln!(
-                    "[sidecar] Process exited, restarting in {RESTART_DELAY_SECONDS} seconds..."
+                log_file::log_event(
+                    "info",
+                    "Sidecar exited, scheduling restart",
+                    Some(json!({ "delaySeconds": RESTART_DELAY_SECONDS })),
                 );
                 tokio::time::sleep(std::time::Duration::from_secs(RESTART_DELAY_SECONDS)).await;
             }
         }
 
-        eprintln!("[sidecar] Lifecycle manager stopped");
+        log_file::log_event("info", "Sidecar lifecycle manager stopped", None);
     });
 }
 
@@ -197,6 +222,26 @@ pub fn run() {
         .setup({
             let sidecar_should_run = sidecar_should_run.clone();
             move |app| {
+                let app_data_dir = app
+                    .handle()
+                    .path()
+                    .app_data_dir()
+                    .map_err(|e| Box::<dyn std::error::Error>::from(e.to_string()))?;
+                let rust_log_dir = app_data_dir.join("logs").join("rust");
+                let log_file_path = log_file::init(&rust_log_dir)
+                    .map_err(|e| Box::<dyn std::error::Error>::from(e.to_string()))?;
+
+                log_file::log_event(
+                    "info",
+                    "=== SESSION START ===",
+                    Some(json!({
+                        "component": "rust-shell",
+                        "version": env!("CARGO_PKG_VERSION"),
+                        "appDataDir": app_data_dir.to_string_lossy(),
+                        "logFilePath": log_file_path.to_string_lossy(),
+                    })),
+                );
+
                 crate::update::lifecycle::start(app.handle())
                     .map_err(|e| Box::<dyn std::error::Error>::from(e.to_string()))?;
                 spawn_sidecar(app.handle().clone(), sidecar_should_run);
@@ -217,7 +262,11 @@ pub fn run() {
                         if let Ok(mut guard) = child_state.0.lock() {
                             if let Some(child) = guard.take() {
                                 let _ = child.kill();
-                                eprintln!("[sidecar] Explicitly killed on window close");
+                                log_file::log_event(
+                                    "info",
+                                    "Sidecar explicitly killed on window close",
+                                    None,
+                                );
                             }
                         }
                     }
