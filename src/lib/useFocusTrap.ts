@@ -11,6 +11,13 @@ const FOCUSABLE_SELECTOR =
  * Tiger-Style: descriptive names, no magic strings outside the constant
  * above, single-responsibility (DOES NOT manage open/close state — caller
  * passes `active` derived from feature state).
+ *
+ * @remarks
+ * Focusable elements snapshot at activation. Do NOT mount/unmount focusable
+ * children while the trap is active — Tab cycling will use the stale list.
+ * Phase 4 trap activates only during `Installing` (no buttons rendered) so
+ * this is harmless. If you need dynamic focusables, replace the snapshot
+ * with a `MutationObserver` query in the keydown handler.
  */
 export function useFocusTrap(active: boolean, containerRef: RefObject<HTMLElement | null>): void {
   useEffect(() => {

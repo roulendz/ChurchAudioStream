@@ -2,16 +2,8 @@ import { useRef } from "react";
 import styles from "./UpdateToast.module.css";
 import { useUpdateState } from "../../hooks/useUpdateState";
 import { useFocusTrap } from "../../lib/useFocusTrap";
+import { sanitizeReleaseNotes, stripBidiControls } from "../../lib/sanitize-notes";
 import type { UpdateUiState } from "../../hooks/updateStateMachine";
-
-const NOTES_TRUNCATE_LIMIT = 80;
-
-function truncateNotes(notes: string): { display: string; full: string; truncated: boolean } {
-  if (notes.length <= NOTES_TRUNCATE_LIMIT) {
-    return { display: notes, full: notes, truncated: false };
-  }
-  return { display: `${notes.slice(0, NOTES_TRUNCATE_LIMIT)}…`, full: notes, truncated: true };
-}
 
 interface AvailableProps {
   state: Extract<UpdateUiState, { kind: "UpdateAvailable" }>;
@@ -20,7 +12,9 @@ interface AvailableProps {
   onSkip: () => void;
 }
 function AvailableContent({ state, onInstall, onLater, onSkip }: AvailableProps) {
-  const { display, full, truncated } = truncateNotes(state.notes);
+  const display = sanitizeReleaseNotes(state.notes);
+  const full = stripBidiControls(state.notes);
+  const truncated = display.endsWith("…");
   return (
     <div className={styles["toast-content"]}>
       <div className={styles["toast-headline"]}>Update available — v{state.version}</div>

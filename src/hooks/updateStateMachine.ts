@@ -10,7 +10,7 @@ export type UpdateAction =
   | { type: "available"; version: string; notes: string; downloadUrl: string }
   | { type: "progress"; downloadedBytes: number; totalBytes: number }
   | { type: "installed"; version: string }
-  | { type: "checkCompleted"; lastCheckUnix: number; updateOffered: boolean }
+  | { type: "checkCompleted"; lastCheckUnix: number }
   | { type: "dismissed" }
   | { type: "skipped"; version: string }
   | { type: "reset" };
@@ -41,7 +41,9 @@ export function updateReducer(state: UpdateUiState, action: UpdateAction): Updat
     case "installed":
       return { kind: "Installing", version: action.version };
     case "checkCompleted":
-      if (action.updateOffered) return state;
+      if (state.kind === "UpdateAvailable") return state;
+      if (state.kind === "Downloading") return state;
+      if (state.kind === "Installing") return state;
       return { kind: "UpToDate", checkedAtUnix: action.lastCheckUnix };
     case "dismissed":
       return { kind: "Idle" };
