@@ -362,7 +362,7 @@ function buildFileSourceHead(config: FilePipelineConfig, nameSuffix: string = ""
   const channelSelect = buildChannelSelectionString(selectedChannels, 2, nameSuffix);
   return (
     `filesrc location="${gstSafePath}" ! decodebin ! audioconvert ! audioresample ! ` +
-    `audio/x-raw,rate=48000,channels=2 ! ${channelSelect}`
+    `audio/x-raw,rate=48000,channels=2 ! clocksync sync=true ! ${channelSelect}`
   );
 }
 
