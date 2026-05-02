@@ -38,6 +38,12 @@ export PATH="$USERPROFILE/.cargo/bin:$PATH"
 - Run `tauri dev` without sidecar built first → mediasoup-worker.exe ENOENT
 - `child.kill('SIGTERM')` on Windows = instant TerminateProcess (no GStreamer EOS) — use stdin close + force-kill
 
+## Add MP3/WAV test source
+
+1. Append entry to `%APPDATA%\com.churchaudiostream.app\config.json` → `audio.testSources`:
+   `{ "id": "file:slug", "name": "Name", "filePath": "C:/forward/slash.mp3", "loop": true }`
+2. Kill tree + relaunch tauri dev. No rebuild.
+
 ## Talking to Agents
 
 **Always pass caveman mode instruction in agent prompts** to save tokens. Example:
