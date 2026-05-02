@@ -1,23 +1,22 @@
 /**
- * Full-screen audio player view with complete playback controls.
+ * Full-screen player view.
  *
- * Layout (top to bottom):
- * - Header: Back chevron (left), channel name (center), ConnectionQuality (right)
- * - Channel info: Language (flag+label), description (if enabled), listener count (if enabled)
- * - Center: PulsingRing
- * - Elapsed time: "Listening for MM:SS" with 1s interval
- * - Volume area (lower third): VolumeSlider with mute toggle
+ * State machine: connecting -> ready -> playing | reconnecting | channel-offline | error.
  *
- * State machine:
- * 1. "connecting" -- Connecting... spinner
- * 2. "ready" -- Start Listening button (user gesture for AudioContext)
- * 3. "playing" -- Full player UI
- * 4. "reconnecting" -- Reconnecting... indicator
- * 5. "channel-offline" -- Channel offline message
- * 6. "error" -- Server unreachable with retry
+ * Reconnect plumbing (iOS lock-screen fix):
+ *   - reconnectTrigger prop bumps every time signaling re-establishes.
+ *     When that happens AND we have already started playback once, we
+ *     drop into "reconnecting" and re-run the full WebRTC handshake +
+ *     startPlayback. The original Start Listening tap unlocked the audio
+ *     context, so playback resumes without further user input.
+ *   - visibilitychange listener mirrors the same behaviour for the case
+ *     where the page becomes visible but the WS is still alive — handles
+ *     Android tab-sleep and iOS unlock when WS held.
  *
- * Volume control uses GainNode (not HTMLAudioElement.volume) for iOS Safari.
- * Volume always starts at 70% (0.7) -- does NOT persist across sessions.
+ * Wake Lock:
+ *   - Optional toggle. When active, the OS keeps the screen on while
+ *     listening. This prevents the iOS / Android lock-screen audio drop
+ *     entirely at the cost of battery.
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
@@ -27,16 +26,18 @@ import type { QualityLevel } from "../lib/connection-quality";
 import { assessConnectionQuality } from "../lib/connection-quality";
 import { useMediaSession } from "../hooks/useMediaSession";
 import type { MediaSessionConfig } from "../hooks/useMediaSession";
-import { PulsingRing } from "../components/PulsingRing";
+import { useWakeLock } from "../hooks/useWakeLock";
+import { AudioVisualizer } from "../components/AudioVisualizer";
 import { VolumeSlider } from "../components/VolumeSlider";
 import { ConnectionQuality } from "../components/ConnectionQuality";
+import { StatsPanel } from "../components/StatsPanel";
+import { StreamUptime } from "../components/StreamUptime";
+import type { ChannelAudioLevel } from "../lib/types";
 import "../styles/player.css";
 
-/** Default volume (70% per locked decision). */
 const DEFAULT_VOLUME = 0.7;
-
-/** Connection quality polling interval in ms. */
 const QUALITY_POLL_INTERVAL_MS = 5000;
+const ACCENT_COLOR = "#7c5cff";
 
 type PlayerState =
   | "connecting"
@@ -50,30 +51,25 @@ interface PlayerViewProps {
   readonly channel: ListenerChannelInfo;
   readonly peer: Peer;
   readonly onBack: () => void;
-  /** Runs the full signaling handshake, returns the audio track. */
   readonly connectToChannel: (
     channelId: string,
     peer: Peer,
   ) => Promise<MediaStreamTrack>;
-  /** Start audio playback through the GainNode pipeline. */
   readonly startPlayback: (track: MediaStreamTrack) => Promise<void>;
-  /** Disconnect transport and consumer. */
   readonly disconnectMediasoup: () => void;
-  /** Set volume (0.0 to 1.0) via GainNode. Optional -- wired by App.tsx. */
   readonly setVolume?: (value: number) => void;
-  /** Mute audio (preserves volume for unmute). Optional -- wired by App.tsx. */
   readonly mute?: () => void;
-  /** Restore volume after mute. Optional -- wired by App.tsx. */
   readonly unmute?: () => void;
-  /** Whether audio is currently muted. Optional -- wired by App.tsx. */
   readonly isMuted?: boolean;
-  /** Get the mediasoup consumer for stats polling. Optional. */
   readonly getConsumer?: () => import("mediasoup-client").types.Consumer | null;
+  readonly getAnalyser: () => AnalyserNode | null;
+  readonly isSoftwareVolumeSupported: boolean;
+  /** Bumped by App.tsx every time the signaling layer reconnects. */
+  readonly reconnectTrigger: number;
+  /** Latest server-side RMS for this channel (null until first frame). */
+  readonly serverLevel?: ChannelAudioLevel | null;
 }
 
-/**
- * Format elapsed seconds as "MM:SS".
- */
 function formatElapsedTime(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -92,38 +88,41 @@ export function PlayerView({
   unmute: unmuteExternal,
   isMuted: isMutedExternal,
   getConsumer,
+  getAnalyser,
+  isSoftwareVolumeSupported,
+  reconnectTrigger,
+  serverLevel,
 }: PlayerViewProps) {
   const [playerState, setPlayerState] = useState<PlayerState>("connecting");
   const [errorMessage, setErrorMessage] = useState("");
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const mountedRef = useRef(true);
+  /** True after the user has tapped Start Listening at least once. */
+  const playbackStartedRef = useRef(false);
 
-  // Volume state (local) -- always starts at 70%
   const [volume, setVolume] = useState(DEFAULT_VOLUME);
   const [localMuted, setLocalMuted] = useState(false);
   const volumeBeforeMuteRef = useRef(DEFAULT_VOLUME);
 
-  // Elapsed time state
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Connection quality state
   const [qualityLevel, setQualityLevel] = useState<QualityLevel>("good");
   const qualityTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Listener count state (updated via protoo notifications)
   const [listenerCount, setListenerCount] = useState(channel.listenerCount);
+  const [statsPanelOpen, setStatsPanelOpen] = useState(false);
 
-  // Use external muted state if provided, otherwise local
+  const wakeLock = useWakeLock();
+
   const isMuted = isMutedExternal ?? localMuted;
 
-  // ---- Media Session API (lock screen controls) ----
   const mediaSessionConfig = useMemo<MediaSessionConfig | null>(() => {
     if (playerState !== "playing" && playerState !== "reconnecting")
       return null;
     return {
       channelName: channel.name,
-      description: channel.description || "Church Audio Stream",
+      description: channel.description || "Live translation",
       onPlay: () => {
         if (unmuteExternal) {
           unmuteExternal();
@@ -138,7 +137,14 @@ export function PlayerView({
           setLocalMuted(true);
         }
       },
+      onStop: () => {
+        handleBack();
+      },
     };
+    // handleBack depends on disconnectMediasoup + onBack which are stable
+    // refs from App.tsx; not listed to avoid recreating the config every
+    // render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     playerState,
     channel.name,
@@ -149,7 +155,6 @@ export function PlayerView({
 
   const { updatePlaybackState } = useMediaSession(mediaSessionConfig);
 
-  // Sync playback state with Media Session API
   useEffect(() => {
     if (playerState === "playing") {
       updatePlaybackState(isMuted ? "paused" : "playing");
@@ -160,7 +165,6 @@ export function PlayerView({
     }
   }, [playerState, isMuted, updatePlaybackState]);
 
-  // ---- WebRTC Handshake on mount ----
   useEffect(() => {
     mountedRef.current = true;
     let aborted = false;
@@ -185,21 +189,6 @@ export function PlayerView({
     };
   }, [channel.id, peer, connectToChannel]);
 
-  // ---- Notification listeners ----
-  //
-  // Server -> client signalling that drives the auto-resume flow:
-  //
-  // - `channelStopped` (channelId === ours): admin removed the last source or
-  //   stopped the channel. Server has already torn down our consumer +
-  //   transport. Flip to "reconnecting" and arm a retry of the full
-  //   handshake; the next `activeChannels` notification with
-  //   hasActiveProducer === true wakes the retry.
-  // - `activeChannels` / `listenerCounts` while reconnecting: if our channel
-  //   is back live, run connectToChannel again and resume playback. The
-  //   AudioContext was already unlocked by the original "Start Listening"
-  //   gesture so playback can restart without further user interaction.
-  // - `consumerClosed` (no auto-resume signal): treat as terminal,
-  //   transition to "channel-offline" so the user can pick another channel.
   useEffect(() => {
     let cancelled = false;
 
@@ -228,8 +217,6 @@ export function PlayerView({
           | undefined;
         if (payload?.channelId !== channel.id) return;
 
-        // Server already closed our consumer + transport. Drop any cached
-        // track and arm the retry path.
         clearTimers();
         trackRef.current = null;
         disconnectMediasoup();
@@ -254,12 +241,6 @@ export function PlayerView({
         }
 
         if (notification.method === "listenerCounts" && ours) {
-          // Server includes per-channel listenerCount in the enriched list
-          // when the admin has toggled showListenerCount on. The previous
-          // implementation read notification.data as Record<string, number>
-          // which never matched the actual { channels: [...] } payload, so
-          // the count never updated. Reading from `ours.listenerCount` keeps
-          // the dependency on the new shape correct.
           const enriched = ours as unknown as { listenerCount?: number };
           if (typeof enriched.listenerCount === "number") {
             setListenerCount(enriched.listenerCount);
@@ -268,8 +249,6 @@ export function PlayerView({
       }
 
       if (notification.method === "consumerClosed") {
-        // No remainingChannels payload here -- server-initiated consumer
-        // close from a path that does not promise a comeback. Stay offline.
         clearTimers();
         setPlayerState("channel-offline");
       }
@@ -289,18 +268,108 @@ export function PlayerView({
     disconnectMediasoup,
   ]);
 
-  // ---- Elapsed time counter ----
+  // ---- iOS lock-screen / Android tab-sleep recovery ----
+  //
+  // Two triggers funnel into the same recovery path:
+  //   1. reconnectTrigger bumps when useSignaling fires "open" after a
+  //      drop. The WebSocket is back; the WebRTC consumer it referenced
+  //      is dead. We must re-run the full handshake.
+  //   2. visibilitychange visible — when the page comes back AND the
+  //      audio track has gone "ended" or the consumer is closed, force a
+  //      restart. (If everything is still alive the audio engine alone
+  //      handles the AudioContext resume.)
   useEffect(() => {
-    if (playerState === "playing") {
-      setElapsedSeconds(0);
+    if (!playbackStartedRef.current) return;
+    if (reconnectTrigger === 0) return;
+
+    clearTimers();
+    trackRef.current = null;
+    disconnectMediasoup();
+    setPlayerState("reconnecting");
+
+    let cancelled = false;
+    const attempt = async (): Promise<void> => {
+      try {
+        const track = await connectToChannel(channel.id, peer);
+        if (cancelled || !mountedRef.current) return;
+        trackRef.current = track;
+        await startPlayback(track);
+        if (cancelled || !mountedRef.current) return;
+        setPlayerState("playing");
+      } catch (error) {
+        if (cancelled || !mountedRef.current) return;
+        handleConnectionError(error);
+      }
+    };
+    void attempt();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    reconnectTrigger,
+    channel.id,
+    peer,
+    connectToChannel,
+    startPlayback,
+    disconnectMediasoup,
+  ]);
+
+  useEffect(() => {
+    const onVisibility = (): void => {
+      if (document.visibilityState !== "visible") return;
+      if (!playbackStartedRef.current) return;
+      const consumer = getConsumer?.();
+      const trackEnded =
+        trackRef.current?.readyState === "ended" || !trackRef.current;
+      const consumerDead = !consumer || consumer.closed;
+      if (!trackEnded && !consumerDead) return;
+
+      // Either the consumer or the track died while we were hidden — force
+      // the same restart path used for signaling reconnects.
+      clearTimers();
+      trackRef.current = null;
+      disconnectMediasoup();
+      setPlayerState("reconnecting");
+      void (async () => {
+        try {
+          const track = await connectToChannel(channel.id, peer);
+          if (!mountedRef.current) return;
+          trackRef.current = track;
+          await startPlayback(track);
+          if (!mountedRef.current) return;
+          setPlayerState("playing");
+        } catch (error) {
+          if (!mountedRef.current) return;
+          handleConnectionError(error);
+        }
+      })();
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [
+    channel.id,
+    peer,
+    connectToChannel,
+    startPlayback,
+    disconnectMediasoup,
+    getConsumer,
+  ]);
+
+  // Elapsed time only ticks while audibly playing — pauses when the user
+  // hits the in-app pause button (which mutes via mute()/unmute()) so the
+  // counter reflects "time you actually heard audio".
+  useEffect(() => {
+    if (playerState === "playing" && !isMuted) {
       elapsedTimerRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
-    } else {
-      if (elapsedTimerRef.current) {
-        clearInterval(elapsedTimerRef.current);
-        elapsedTimerRef.current = null;
-      }
+    } else if (elapsedTimerRef.current) {
+      clearInterval(elapsedTimerRef.current);
+      elapsedTimerRef.current = null;
     }
 
     return () => {
@@ -309,9 +378,21 @@ export function PlayerView({
         elapsedTimerRef.current = null;
       }
     };
+  }, [playerState, isMuted]);
+
+  // Reset elapsed time only on a fresh play session (entering "playing"
+  // from a non-playing state). Pausing/resuming preserves the count.
+  useEffect(() => {
+    if (playerState === "playing" && elapsedSeconds === 0) {
+      // Already zero — nothing to do.
+      return;
+    }
+    if (playerState !== "playing" && playerState !== "reconnecting") {
+      setElapsedSeconds(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerState]);
 
-  // ---- Connection quality polling ----
   useEffect(() => {
     if (playerState === "playing" && getConsumer) {
       const pollQuality = async () => {
@@ -322,16 +403,14 @@ export function PlayerView({
           setQualityLevel(result.level);
         }
       };
-
-      // Initial poll
       pollQuality();
-
-      qualityTimerRef.current = setInterval(pollQuality, QUALITY_POLL_INTERVAL_MS);
-    } else {
-      if (qualityTimerRef.current) {
-        clearInterval(qualityTimerRef.current);
-        qualityTimerRef.current = null;
-      }
+      qualityTimerRef.current = setInterval(
+        pollQuality,
+        QUALITY_POLL_INTERVAL_MS,
+      );
+    } else if (qualityTimerRef.current) {
+      clearInterval(qualityTimerRef.current);
+      qualityTimerRef.current = null;
     }
 
     return () => {
@@ -355,7 +434,6 @@ export function PlayerView({
 
   function handleConnectionError(error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-
     if (
       message.includes("not active") ||
       message.includes("404") ||
@@ -370,14 +448,12 @@ export function PlayerView({
     }
   }
 
-  // ---- Handlers ----
-
   const handleStartListening = useCallback(async () => {
     if (!trackRef.current) return;
     try {
       await startPlayback(trackRef.current);
-      // Apply default volume on start
       setVolumeExternal?.(DEFAULT_VOLUME);
+      playbackStartedRef.current = true;
       setPlayerState("playing");
     } catch {
       setErrorMessage(
@@ -389,9 +465,10 @@ export function PlayerView({
 
   const handleBack = useCallback(() => {
     clearTimers();
+    wakeLock.setEnabled(false);
     disconnectMediasoup();
     onBack();
-  }, [disconnectMediasoup, onBack]);
+  }, [disconnectMediasoup, onBack, wakeLock]);
 
   const handleRetry = useCallback(async () => {
     setPlayerState("connecting");
@@ -411,8 +488,6 @@ export function PlayerView({
     (value: number) => {
       setVolume(value);
       setVolumeExternal?.(value);
-
-      // If changing volume while muted, unmute
       if (isMuted && value > 0) {
         if (unmuteExternal) {
           unmuteExternal();
@@ -426,7 +501,6 @@ export function PlayerView({
 
   const handleMuteToggle = useCallback(() => {
     if (isMuted) {
-      // Unmute: restore previous volume
       const restoredVolume = volumeBeforeMuteRef.current;
       setVolume(restoredVolume);
       if (unmuteExternal) {
@@ -436,7 +510,6 @@ export function PlayerView({
       }
       setVolumeExternal?.(restoredVolume);
     } else {
-      // Mute: remember current volume
       volumeBeforeMuteRef.current = volume;
       if (muteExternal) {
         muteExternal();
@@ -446,102 +519,170 @@ export function PlayerView({
     }
   }, [isMuted, volume, muteExternal, unmuteExternal, setVolumeExternal]);
 
-  // ---- Render helpers ----
+  const handleWakeLockToggle = useCallback(() => {
+    wakeLock.setEnabled(!wakeLock.enabled);
+  }, [wakeLock]);
 
   const isPlaying = playerState === "playing";
-  const showVolumeSlider =
+  const isVisualizerActive = isPlaying && !isMuted;
+  const showVolumeArea =
     playerState === "playing" || playerState === "reconnecting";
 
   return (
     <div className="player-view">
-      {/* Header: back, channel name, connection quality */}
+      <div className="player-view__aurora" aria-hidden="true">
+        <span className="player-view__aurora-blob player-view__aurora-blob--a" />
+        <span className="player-view__aurora-blob player-view__aurora-blob--b" />
+        <span className="player-view__aurora-blob player-view__aurora-blob--c" />
+      </div>
+
       <header className="player-view__header">
-        <div className="player-view__header-left">
-          <button
-            className="player-view__back-btn"
-            onClick={handleBack}
-            aria-label="Back to channel list"
-            type="button"
+        <button
+          className="player-view__icon-btn"
+          onClick={handleBack}
+          aria-label="Back to channel list"
+          type="button"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+
+        <div className="player-view__header-meta">
+          <span className="player-view__eyebrow">Now listening</span>
+          <span className="player-view__live-dot" data-live={isPlaying} />
         </div>
 
-        <div className="player-view__header-center">{channel.name}</div>
-
-        <div className="player-view__header-right">
-          {isPlaying && <ConnectionQuality level={qualityLevel} />}
+        <div className="player-view__header-tools">
+          {wakeLock.isSupported && showVolumeArea && (
+            <button
+              className={`player-view__chip ${
+                wakeLock.enabled ? "player-view__chip--on" : ""
+              }`}
+              onClick={handleWakeLockToggle}
+              aria-pressed={wakeLock.enabled}
+              aria-label={
+                wakeLock.enabled
+                  ? "Disable keep screen on"
+                  : "Keep screen on"
+              }
+              type="button"
+              title={
+                wakeLock.enabled
+                  ? "Screen will stay on"
+                  : "Tap to keep screen on while listening"
+              }
+            >
+              <KeepAwakeIcon active={wakeLock.enabled} />
+              <span className="player-view__chip-label">Keep awake</span>
+            </button>
+          )}
+          {isPlaying && (
+            <button
+              type="button"
+              className="player-view__icon-btn"
+              onClick={() => setStatsPanelOpen(true)}
+              aria-label="Show connection stats"
+              title="Tap for stream stats"
+            >
+              <ConnectionQuality level={qualityLevel} />
+            </button>
+          )}
         </div>
       </header>
 
-      {/* Main content area */}
-      <div className="player-view__content">
-        {/* Channel info */}
-        <div className="player-view__channel-info">
-          <span className="player-view__flag">{channel.language.flag}</span>
-          <h2 className="player-view__channel-name">{channel.name}</h2>
-          <p className="player-view__language">{channel.language.label}</p>
-
-          {/* Optional metadata */}
-          <div className="player-view__channel-meta">
-            {channel.displayToggles.showListenerCount && (
-              <span className="player-view__listener-count">
-                {listenerCount} {listenerCount === 1 ? "listener" : "listeners"}
-              </span>
-            )}
+      <main className="player-view__stage">
+        <div className="player-view__viz-wrap">
+          <AudioVisualizer
+            getAnalyser={getAnalyser}
+            isActive={isVisualizerActive}
+            accentColor={ACCENT_COLOR}
+          />
+          <div className="player-view__viz-caption">
+            <span className="player-view__flag">{channel.language.flag}</span>
+            <h1 className="player-view__channel-name">{channel.name}</h1>
+            <p className="player-view__language">{channel.language.label}</p>
           </div>
         </div>
 
-        {/* Status area: state machine */}
         <div className="player-view__status">
           {playerState === "connecting" && (
-            <div className="player-view__connecting">
-              <div className="player-view__spinner" />
-              <p className="player-view__status-text">Connecting...</p>
+            <div className="player-view__pill player-view__pill--muted">
+              <span className="player-view__pulse-dot" />
+              Connecting
             </div>
           )}
 
           {playerState === "ready" && (
             <button
-              className="player-view__start-btn"
+              className="player-view__cta"
               onClick={handleStartListening}
               type="button"
             >
-              Start Listening
+              <PlayIcon />
+              <span>Start Listening</span>
             </button>
           )}
 
-          {playerState === "playing" && (
-            <div className="player-view__playing">
-              <PulsingRing isPlaying={true} isMuted={isMuted} />
-              <p className="player-view__elapsed">
-                Listening for {formatElapsedTime(elapsedSeconds)}
-              </p>
-            </div>
-          )}
+          {(playerState === "playing" || playerState === "reconnecting") && (
+            <>
+              <div
+                className={`player-view__pill ${
+                  playerState === "reconnecting" ? "player-view__pill--warn" : ""
+                }`}
+              >
+                <span
+                  className={`player-view__pulse-dot ${
+                    playerState === "reconnecting"
+                      ? "player-view__pulse-dot--warn"
+                      : "player-view__pulse-dot--live"
+                  }`}
+                />
+                {playerState === "reconnecting"
+                  ? "Reconnecting"
+                  : `Listening · ${formatElapsedTime(elapsedSeconds)}`}
+                {playerState === "playing" &&
+                  channel.displayToggles.showListenerCount && (
+                    <>
+                      <span className="player-view__pill-sep" />
+                      {listenerCount}
+                      {listenerCount === 1 ? " listener" : " listeners"}
+                    </>
+                  )}
+                {playerState === "playing" && channel.producerStartedAt && (
+                  <>
+                    <span className="player-view__pill-sep" />
+                    <StreamUptime startedAt={channel.producerStartedAt} />
+                  </>
+                )}
+              </div>
 
-          {playerState === "reconnecting" && (
-            <div className="player-view__reconnecting">
-              <PulsingRing isPlaying={false} isMuted={isMuted} />
-              <p className="player-view__reconnecting-text">Reconnecting...</p>
-            </div>
+              <button
+                type="button"
+                className={`player-view__playpause ${
+                  isMuted ? "player-view__playpause--paused" : ""
+                }`}
+                onClick={handleMuteToggle}
+                aria-label={isMuted ? "Resume audio" : "Pause audio"}
+                aria-pressed={isMuted}
+              >
+                {isMuted ? <PlayIcon size={28} /> : <PauseIcon size={28} />}
+              </button>
+            </>
           )}
 
           {playerState === "channel-offline" && (
-            <div className="player-view__offline">
-              <PulsingRing isPlaying={false} isMuted={true} />
-              <p className="player-view__offline-text">Channel offline</p>
+            <div className="player-view__pill player-view__pill--muted">
+              Channel offline
             </div>
           )}
 
@@ -549,7 +690,7 @@ export function PlayerView({
             <div className="player-view__error">
               <p className="player-view__error-text">{errorMessage}</p>
               <button
-                className="player-view__retry-btn"
+                className="player-view__cta player-view__cta--secondary"
                 onClick={handleRetry}
                 type="button"
               >
@@ -558,18 +699,134 @@ export function PlayerView({
             </div>
           )}
         </div>
-      </div>
+      </main>
 
-      {/* Volume area (lower third) */}
-      <div className="player-view__volume-area">
-        <VolumeSlider
-          volume={volume}
-          onVolumeChange={handleVolumeChange}
-          isMuted={isMuted}
-          onMuteToggle={handleMuteToggle}
-          disabled={!showVolumeSlider}
+      <footer className="player-view__footer">
+        {showVolumeArea && (
+          <>
+            {isSoftwareVolumeSupported ? (
+              <VolumeSlider
+                volume={volume}
+                onVolumeChange={handleVolumeChange}
+                isMuted={isMuted}
+                onMuteToggle={handleMuteToggle}
+                disabled={!showVolumeArea}
+              />
+            ) : (
+              <div className="player-view__ios-volume">
+                <button
+                  className={`player-view__icon-btn ${isMuted ? "player-view__icon-btn--on" : ""}`}
+                  onClick={handleMuteToggle}
+                  aria-label={isMuted ? "Unmute" : "Mute"}
+                  type="button"
+                >
+                  <MuteIcon muted={isMuted} />
+                </button>
+                <p className="player-view__ios-volume-hint">
+                  Use your phone's volume buttons
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </footer>
+
+      {getConsumer && (
+        <StatsPanel
+          open={statsPanelOpen}
+          onClose={() => setStatsPanelOpen(false)}
+          getConsumer={getConsumer}
+          serverCodec={channel.codec}
+          pipelineRestartCount={channel.pipelineRestartCount}
+          sourceLabel={channel.sourceLabel}
+          producerStartedAt={channel.producerStartedAt}
         />
-      </div>
+      )}
     </div>
+  );
+}
+
+function PlayIcon({ size = 20 }: { readonly size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M7 5.14v13.72c0 .79.87 1.27 1.54.84l10.78-6.86a1 1 0 0 0 0-1.68L8.54 4.3A1 1 0 0 0 7 5.14z" />
+    </svg>
+  );
+}
+
+function PauseIcon({ size = 20 }: { readonly size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <rect x="6" y="5" width="4" height="14" rx="1.4" />
+      <rect x="14" y="5" width="4" height="14" rx="1.4" />
+    </svg>
+  );
+}
+
+function MuteIcon({ muted }: { readonly muted: boolean }) {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+      {muted ? (
+        <>
+          <line x1="16" y1="9" x2="22" y2="15" />
+          <line x1="22" y1="9" x2="16" y2="15" />
+        </>
+      ) : (
+        <>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+          <path d="M19.07 5.93a9 9 0 0 1 0 12.14" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function KeepAwakeIcon({ active }: { readonly active: boolean }) {
+  // Phone outline + radiating arcs when active = "keep this device awake".
+  // Looks nothing like a sun, so no light/dark-mode confusion.
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="7" y="3" width="10" height="18" rx="2.4" />
+      <line x1="11" y1="18" x2="13" y2="18" />
+      {active && (
+        <>
+          <path d="M19.5 7.5c1.4 1.4 1.4 4.6 0 6" stroke="currentColor" />
+          <path d="M21.5 5.5c2.4 2.4 2.4 8.6 0 11" stroke="currentColor" opacity="0.6" />
+        </>
+      )}
+    </svg>
   );
 }

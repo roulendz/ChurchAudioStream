@@ -1,58 +1,60 @@
 /**
- * Custom hook wrapping the Web Audio API engine for playback control.
+ * React hook wrapping the audio engine.
  *
- * Creates the audio engine on mount, provides playback/volume/mute methods,
- * and cleans up on unmount. All audio flows through GainNode for iOS
- * Safari volume compatibility.
+ * Exposes playback control + the AnalyserNode for the visualizer + a
+ * platform flag (isSoftwareVolumeSupported) so the UI can hide the
+ * software volume slider on iOS where audio.volume is read-only.
  */
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { createAudioEngine, type AudioEngine } from "../lib/audio-engine";
 
 export interface UseAudioPlaybackResult {
-  /** Resume AudioContext (user gesture) then route track through GainNode. */
   startPlayback: (track: MediaStreamTrack) => Promise<void>;
-  /** Disconnect the current audio source. */
   stopPlayback: () => void;
-  /** Set volume (0.0 to 1.0). */
   setVolume: (value: number) => void;
-  /** Mute audio (preserves volume for unmute). */
   mute: () => void;
-  /** Restore volume after mute. */
   unmute: () => void;
-  /** Whether audio is currently muted. */
   isMuted: boolean;
+  /** Live AnalyserNode for the visualizer. Null until first playTrack. */
+  getAnalyser: () => AnalyserNode | null;
+  /** False on iOS WebKit where audio.volume cannot be set. */
+  isSoftwareVolumeSupported: boolean;
 }
 
 export function useAudioPlayback(): UseAudioPlaybackResult {
   const engineRef = useRef<AudioEngine | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSoftwareVolumeSupported, setIsSoftwareVolumeSupported] =
+    useState(true);
 
   useEffect(() => {
-    engineRef.current = createAudioEngine();
+    const engine = createAudioEngine();
+    engineRef.current = engine;
+    setIsSoftwareVolumeSupported(engine.isSoftwareVolumeSupported());
     return () => {
-      if (engineRef.current) {
-        engineRef.current.close();
-        engineRef.current = null;
-      }
+      engine.close();
+      engineRef.current = null;
     };
   }, []);
 
   const startPlayback = useCallback(
     async (track: MediaStreamTrack): Promise<void> => {
-      if (!engineRef.current) return;
-      await engineRef.current.resume();
-      engineRef.current.playTrack(track);
+      const engine = engineRef.current;
+      if (!engine) return;
+      await engine.resume();
+      await engine.playTrack(track);
     },
     [],
   );
 
   const stopPlayback = useCallback(() => {
-    // Close and recreate engine to fully disconnect source
-    if (engineRef.current) {
-      engineRef.current.close();
-    }
-    engineRef.current = createAudioEngine();
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.close();
+    const fresh = createAudioEngine();
+    engineRef.current = fresh;
+    setIsSoftwareVolumeSupported(fresh.isSoftwareVolumeSupported());
     setIsMuted(false);
   }, []);
 
@@ -66,10 +68,22 @@ export function useAudioPlayback(): UseAudioPlaybackResult {
   }, []);
 
   const unmute = useCallback(() => {
-    // Unmute at current stored volume (engine tracks it internally)
-    engineRef.current?.unmute(0.7);
+    engineRef.current?.unmute();
     setIsMuted(false);
   }, []);
 
-  return { startPlayback, stopPlayback, setVolume, mute, unmute, isMuted };
+  const getAnalyser = useCallback((): AnalyserNode | null => {
+    return engineRef.current?.getAnalyser() ?? null;
+  }, []);
+
+  return {
+    startPlayback,
+    stopPlayback,
+    setVolume,
+    mute,
+    unmute,
+    isMuted,
+    getAnalyser,
+    isSoftwareVolumeSupported,
+  };
 }

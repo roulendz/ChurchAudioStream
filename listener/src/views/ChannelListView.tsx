@@ -13,13 +13,15 @@
  */
 
 import { useState, useCallback } from "react";
-import type { ListenerChannelInfo } from "../lib/types";
+import type { ListenerChannelInfo, ChannelAudioLevel } from "../lib/types";
 import { ChannelCard } from "../components/ChannelCard";
 import { ShareButton } from "../components/ShareButton";
 import { Toast } from "../components/Toast";
 
 interface ChannelListViewProps {
   channels: ListenerChannelInfo[];
+  /** Live RMS / clipping snapshots per channel from sidecar telemetry. */
+  channelLevels: Map<string, ChannelAudioLevel>;
   onSelectChannel: (channelId: string) => void;
   /** Last-listened channel ID from preferences. */
   lastChannelId: string | null;
@@ -33,6 +35,7 @@ interface ChannelListViewProps {
 
 export function ChannelListView({
   channels,
+  channelLevels,
   onSelectChannel,
   lastChannelId,
   listenerUrl,
@@ -84,15 +87,18 @@ export function ChannelListView({
     <div className="channel-list-view">
       <header className="channel-list-view__header">
         <div className="channel-list-view__header-row">
-          <h1 className="channel-list-view__title">Select a channel to listen</h1>
+          <div className="channel-list-view__title-block">
+            <span className="channel-list-view__eyebrow">Live now</span>
+            <h1 className="channel-list-view__title">Choose a channel</h1>
+            {hasAnyListenerCountVisible && totalListeners > 0 && (
+              <span className="channel-list-view__listener-count">
+                {totalListeners} {totalListeners === 1 ? "person" : "people"}{" "}
+                listening
+              </span>
+            )}
+          </div>
           <ShareButton listenerUrl={listenerUrl} />
         </div>
-        {hasAnyListenerCountVisible && totalListeners > 0 && (
-          <p className="channel-list-view__listener-count">
-            {totalListeners} {totalListeners === 1 ? "person" : "people"}{" "}
-            listening
-          </p>
-        )}
       </header>
 
       {showInstallBanner && (
@@ -130,6 +136,7 @@ export function ChannelListView({
             <ChannelCard
               key={channel.id}
               channel={channel}
+              level={channelLevels.get(channel.id) ?? null}
               isLastListened={channel.id === lastChannelId}
               onTap={handleChannelTap}
             />

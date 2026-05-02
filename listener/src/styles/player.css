@@ -1,336 +1,704 @@
 /* ========================================================================
- * Player View - Full-screen mobile audio player layout
- *
- * Custom property: --accent-color used throughout player components.
- * Layout: flex column, centered content, full viewport height.
+ * Player view — modern editorial layout with aurora background +
+ * radial AnalyserNode visualizer.
  * ======================================================================== */
 
 :root {
-  --accent-color: #4a90d9;
+  --accent: #7c5cff;
+  --accent-soft: rgba(124, 92, 255, 0.18);
+  --accent-strong: #9d82ff;
+  --warn: #ffb547;
+  --surface-0: #0b0b18;
+  --surface-1: #14142a;
+  --surface-2: #1f1f3d;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.68);
+  --text-muted: rgba(255, 255, 255, 0.42);
+  --hairline: rgba(255, 255, 255, 0.08);
 }
 
 /* ========================================================================
- * Player Layout (overrides skeleton from App.css)
+ * Layout shell
  * ======================================================================== */
 
+/* Hard-locked single viewport. The grid `auto 1fr auto` rows let the
+   stage cell shrink (min-height: 0) so the visualizer + status + big
+   play/pause adapt to whatever vertical space is left after header +
+   footer. No page scroll on phones; on very short viewports the fallback
+   media query below converts the page into a scroll container with a
+   transparent sticky header. */
 .player-view {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+  height: 100dvh;
   width: 100%;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(124, 92, 255, 0.18), transparent 60%),
+    linear-gradient(180deg, #0b0b18 0%, #050510 100%);
+  color: var(--text-primary);
+  overflow: hidden;
+  isolation: isolate;
+  overscroll-behavior: none;
+  touch-action: pan-x;
 }
+
+/* ========================================================================
+ * Aurora background blobs (depth without skeuomorphism)
+ * ======================================================================== */
+
+.player-view__aurora {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.player-view__aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.55;
+  mix-blend-mode: screen;
+}
+
+.player-view__aurora-blob--a {
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, #6c5cff 0%, transparent 70%);
+  top: -80px;
+  left: -60px;
+  animation: aurora-drift-a 22s ease-in-out infinite;
+}
+
+.player-view__aurora-blob--b {
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, #2af2c8 0%, transparent 70%);
+  bottom: -120px;
+  right: -100px;
+  opacity: 0.35;
+  animation: aurora-drift-b 26s ease-in-out infinite;
+}
+
+.player-view__aurora-blob--c {
+  width: 260px;
+  height: 260px;
+  background: radial-gradient(circle, #ff7ad9 0%, transparent 70%);
+  top: 40%;
+  right: -60px;
+  opacity: 0.3;
+  animation: aurora-drift-c 30s ease-in-out infinite;
+}
+
+@keyframes aurora-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(60px, 80px) scale(1.1); }
+}
+
+@keyframes aurora-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-80px, -40px) scale(1.15); }
+}
+
+@keyframes aurora-drift-c {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-40px, 60px) scale(0.9); }
+}
+
+/* ========================================================================
+ * Header
+ * ======================================================================== */
 
 .player-view__header {
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-
-.player-view__header-left {
-  display: flex;
-  align-items: center;
-}
-
-.player-view__header-center {
-  flex: 1;
-  text-align: center;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #ffffff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 12px;
-}
-
-.player-view__header-right {
-  display: flex;
-  align-items: center;
-  min-width: 40px;
-  justify-content: flex-end;
-}
-
-.player-view__back-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  background: none;
-  border: none;
-  color: #e0e0e0;
-  cursor: pointer;
-  border-radius: 50%;
-  transition: background-color 150ms ease;
-}
-
-.player-view__back-btn:active {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-/* ========================================================================
- * Player Content (center area)
- * ======================================================================== */
-
-.player-view__content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 24px 0;
-  gap: 32px;
-}
-
-/* Channel info above the ring */
-.player-view__channel-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 6px;
-}
-
-.player-view__flag {
-  font-size: 2.5rem;
-  line-height: 1;
-}
-
-.player-view__channel-name {
-  font-size: 1.375rem;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.player-view__language {
-  font-size: 0.875rem;
-  color: #a0a0b0;
-}
-
-.player-view__channel-meta {
-  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 12px;
-  font-size: 0.8125rem;
-  color: #8a8a9a;
-  margin-top: 4px;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 18px 8px;
+  background: linear-gradient(180deg, rgba(11, 11, 24, 0.55) 0%, rgba(11, 11, 24, 0) 100%);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 
-.player-view__listener-count {
+.player-view__header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-muted);
+}
+
+.player-view__eyebrow {
+  font-weight: 600;
+}
+
+.player-view__live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.player-view__live-dot[data-live="true"] {
+  background: #2af2c8;
+  box-shadow: 0 0 14px rgba(42, 242, 200, 0.7);
+}
+
+.player-view__header-tools {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-/* ========================================================================
- * Elapsed time (below ring)
- * ======================================================================== */
+.player-view__icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hairline);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 14px;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease,
+    transform 100ms ease;
+}
 
-.player-view__elapsed {
-  font-size: 0.875rem;
-  color: #8a8a9a;
-  font-variant-numeric: tabular-nums;
+.player-view__icon-btn:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.player-view__icon-btn:active {
+  transform: scale(0.94);
+}
+
+.player-view__icon-btn--on {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: rgba(124, 92, 255, 0.45);
+}
+
+/* Pill-shaped chip with icon + label, used for "Keep awake" toggle so
+   users can read what it does instead of guessing the icon. */
+.player-view__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hairline);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease,
+    transform 100ms ease;
+}
+
+.player-view__chip:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.player-view__chip:active {
+  transform: scale(0.96);
+}
+
+.player-view__chip--on {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: rgba(124, 92, 255, 0.45);
+}
+
+.player-view__chip-label {
+  white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .player-view__chip-label {
+    display: none;
+  }
+  .player-view__chip {
+    padding: 0;
+    width: 40px;
+    justify-content: center;
+  }
 }
 
 /* ========================================================================
- * Status states (connecting, ready, playing, reconnecting, offline, error)
+ * Stage (visualizer + caption + status pill)
+ * ======================================================================== */
+
+.player-view__stage {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 3vh, 28px);
+  padding: clamp(8px, 2vh, 16px) 20px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Visualizer scales with the SHORTER of viewport width/height so it
+   never pushes the play/pause button or footer off-screen on shallow
+   viewports (landscape phones, short browser windows). */
+.player-view__viz-wrap {
+  position: relative;
+  width: min(56vw, 36vh, 280px);
+  height: min(56vw, 36vh, 280px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.audio-visualizer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audio-visualizer__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.player-view__viz-caption {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: none;
+  text-align: center;
+  padding: 0 12%;
+}
+
+.player-view__flag {
+  font-size: 1.875rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.5));
+  margin-bottom: 4px;
+}
+
+.player-view__channel-name {
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: var(--text-primary);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+  word-break: break-word;
+}
+
+.player-view__language {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-secondary);
+}
+
+/* ========================================================================
+ * Status area (pills, CTA, error)
  * ======================================================================== */
 
 .player-view__status {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 200px;
-  justify-content: center;
-  gap: 16px;
+  gap: clamp(10px, 2vh, 14px);
+  min-height: 0;
 }
 
-.player-view__connecting,
-.player-view__reconnecting {
-  display: flex;
-  flex-direction: column;
+.player-view__pill {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--hairline);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-.player-view__status-text {
+.player-view__pill--muted {
+  color: var(--text-secondary);
+}
+
+.player-view__pill--warn {
+  color: var(--warn);
+  border-color: rgba(255, 181, 71, 0.4);
+  background: rgba(255, 181, 71, 0.08);
+}
+
+.player-view__pill-sep {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.player-view__pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+
+.player-view__pulse-dot--live {
+  background: #2af2c8;
+  box-shadow: 0 0 12px rgba(42, 242, 200, 0.6);
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+.player-view__pulse-dot--warn {
+  background: var(--warn);
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
+
+/* ========================================================================
+ * Processing-mode chip (Speech / Music) shown next to the language label
+ * ======================================================================== */
+
+.player-view__mode {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.player-view__mode--speech {
+  background: rgba(42, 242, 200, 0.14);
+  color: #2af2c8;
+  border: 1px solid rgba(42, 242, 200, 0.35);
+}
+
+.player-view__mode--music {
+  background: rgba(255, 122, 217, 0.14);
+  color: #ff7ad9;
+  border: 1px solid rgba(255, 122, 217, 0.35);
+}
+
+/* ========================================================================
+ * Big play/pause flanked by source-side level meters
+ * ======================================================================== */
+
+.player-view__playpause-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2.5vw, 18px);
+}
+
+.player-view__source-meter {
+  /* Clamps to small enough on phone, generous on tablet. */
+  height: clamp(40px, 7vh, 56px);
+}
+
+/* ========================================================================
+ * Level Meter (vertical + horizontal variants)
+ * ======================================================================== */
+
+.level-meter {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.level-meter--horizontal {
+  flex-direction: row;
+  height: 14px;
+}
+
+/* Real VU-meter look: bars stack bottom-up (column-reverse so the
+   first bar in DOM order is the lowest one — matches "lit from
+   bottom" intuition). */
+.level-meter--vertical {
+  flex-direction: column-reverse;
+  align-items: stretch;
+  justify-content: flex-start;
+  height: 100%;
+  width: clamp(10px, 2.5vw, 16px);
+  padding: 2px 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+.level-meter__bar {
+  display: block;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 1.5px;
+  transition: background-color 80ms linear, opacity 80ms linear,
+    box-shadow 80ms linear;
+  opacity: 0.35;
+}
+
+.level-meter--horizontal .level-meter__bar {
+  width: 4px;
+  height: 100%;
+}
+
+.level-meter--vertical .level-meter__bar {
+  flex: 1;
+  width: 100%;
+  min-height: 3px;
+  margin: 0 2px;
+}
+
+.level-meter__bar--lit {
+  opacity: 1;
+}
+
+.level-meter__bar--lit.level-meter__bar--green {
+  background: #2af2c8;
+  box-shadow: 0 0 6px rgba(42, 242, 200, 0.55);
+}
+
+.level-meter__bar--lit.level-meter__bar--yellow {
+  background: #ffd23f;
+  box-shadow: 0 0 6px rgba(255, 210, 63, 0.55);
+}
+
+.level-meter__bar--lit.level-meter__bar--red {
+  background: #ff5b6f;
+  box-shadow: 0 0 8px rgba(255, 91, 111, 0.7);
+}
+
+.level-meter--clipping {
+  border-color: rgba(255, 91, 111, 0.7);
+}
+
+.level-meter--clipping .level-meter__bar {
+  animation: level-clip-flash 220ms ease-in-out;
+}
+
+@keyframes level-clip-flash {
+  0% { box-shadow: 0 0 14px rgba(255, 91, 111, 0.9); }
+  100% { box-shadow: none; }
+}
+
+.player-view__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 32px;
   font-size: 1rem;
-  color: #a0a0b0;
-}
-
-/* Start Listening button */
-.player-view__start-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px 48px;
-  font-size: 1.125rem;
   font-weight: 600;
-  color: #ffffff;
-  background-color: var(--accent-color);
+  letter-spacing: 0.01em;
+  color: #0b0b18;
+  background: linear-gradient(135deg, #b29eff 0%, #7c5cff 100%);
   border: none;
-  border-radius: 50px;
+  border-radius: 999px;
   cursor: pointer;
   transition:
-    background-color 150ms ease,
-    transform 100ms ease;
+    transform 100ms ease,
+    box-shadow 200ms ease;
   min-height: 56px;
+  box-shadow:
+    0 12px 32px rgba(124, 92, 255, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.4) inset;
 }
 
-.player-view__start-btn:active {
-  background-color: #3a7bc8;
+.player-view__cta:active {
   transform: scale(0.97);
+  box-shadow:
+    0 6px 18px rgba(124, 92, 255, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.3) inset;
 }
 
-/* Playing state */
-.player-view__playing {
+.player-view__cta--secondary {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--hairline);
+  box-shadow: none;
+}
+
+.player-view__cta--secondary:active {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Big circular play/pause button — primary in-app control for users on
+   browsers without lock-screen integration. */
+.player-view__playpause {
+  width: clamp(56px, 9vh, 72px);
+  height: clamp(56px, 9vh, 72px);
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #b29eff 0%, #7c5cff 100%);
+  color: #0b0b18;
+  cursor: pointer;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 16px;
+  justify-content: center;
+  transition:
+    transform 100ms ease,
+    box-shadow 200ms ease,
+    background 200ms ease;
+  box-shadow:
+    0 14px 36px rgba(124, 92, 255, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.4) inset;
 }
 
-/* Error state */
+.player-view__playpause:hover {
+  box-shadow:
+    0 18px 44px rgba(124, 92, 255, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.5) inset;
+}
+
+.player-view__playpause:active {
+  transform: scale(0.94);
+}
+
+.player-view__playpause--paused {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(220, 220, 240, 0.85) 100%);
+  color: #1a1a2e;
+}
+
 .player-view__error {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
   max-width: 280px;
+  text-align: center;
 }
 
 .player-view__error-text {
-  font-size: 1rem;
-  color: #a0a0b0;
-  text-align: center;
-  line-height: 1.6;
-}
-
-.player-view__retry-btn {
-  padding: 10px 32px;
   font-size: 0.9375rem;
-  font-weight: 600;
-  color: #ffffff;
-  background-color: var(--accent-color);
-  border: none;
-  border-radius: 50px;
-  cursor: pointer;
-  transition:
-    background-color 150ms ease,
-    transform 100ms ease;
-  min-height: 44px;
+  color: var(--text-secondary);
+  line-height: 1.55;
 }
 
-.player-view__retry-btn:active {
-  background-color: #3a7bc8;
-  transform: scale(0.97);
-}
+/* ========================================================================
+ * Footer (volume area)
+ * ======================================================================== */
 
-/* Channel offline state */
-.player-view__offline {
+.player-view__footer {
+  position: relative;
+  z-index: 2;
+  padding: clamp(8px, 2vh, 16px) 20px
+    calc(clamp(12px, 3vh, 28px) + env(safe-area-inset-bottom, 0px));
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Footer row holds the volume slider + a single source level meter on
+   the right (mirrors the Tauri admin VuMeter style — peak hold,
+   gradient fill, smooth decay). */
+.player-view__volume-row {
+  display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.player-view__offline-text {
-  font-size: 1rem;
-  color: #a0a0b0;
-  text-align: center;
-}
-
-/* Reconnecting state */
-.player-view__reconnecting-text {
-  font-size: 1rem;
-  color: #e67e22;
-}
-
-/* ========================================================================
- * Volume area (lower third)
- * ======================================================================== */
-
-.player-view__volume-area {
-  flex-shrink: 0;
   width: 100%;
   max-width: 360px;
-  padding: 24px 16px 48px;
-  margin: 0 auto;
+  padding: 14px 14px 14px 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hairline);
+  border-radius: 24px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-/* ========================================================================
- * Pulsing Ring
- * ======================================================================== */
+.player-view__volume-row .volume-slider,
+.player-view__volume-row .player-view__ios-volume {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 
-.pulsing-ring {
-  position: relative;
-  width: 120px;
-  height: 120px;
+.player-view__footer-meter {
+  flex-shrink: 0;
+  border-radius: 5px;
+  background: rgba(11, 11, 24, 0.55);
+  padding: 0;
+}
+
+.player-view__footer .volume-slider {
+  max-width: 360px;
+  width: 100%;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hairline);
+  border-radius: 24px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.player-view__ios-volume {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hairline);
+  border-radius: 24px;
+  max-width: 360px;
+  width: 100%;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.pulsing-ring__outer {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 3px solid var(--accent-color);
-}
-
-.pulsing-ring__outer--active {
-  animation: pulseRingOuter 2s ease-in-out infinite;
-}
-
-.pulsing-ring__outer--paused {
-  opacity: 0.3;
-}
-
-.pulsing-ring__inner {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background-color: var(--accent-color);
-  opacity: 0.15;
-}
-
-.pulsing-ring__inner--active {
-  animation: pulseRingInner 2s ease-in-out infinite;
-}
-
-.pulsing-ring__inner--paused {
-  opacity: 0.08;
-}
-
-@keyframes pulseRingOuter {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.6;
-  }
-  50% {
-    transform: scale(1.08);
-    opacity: 1;
-  }
-}
-
-@keyframes pulseRingInner {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.15;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.25;
-  }
+.player-view__ios-volume-hint {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
 }
 
 /* ========================================================================
- * Volume Slider
+ * Volume slider (override the generic look)
  * ======================================================================== */
 
 .volume-slider {
@@ -349,82 +717,81 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   background: none;
   border: none;
-  color: #e0e0e0;
+  color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 50%;
+  border-radius: 12px;
   flex-shrink: 0;
-  transition: background-color 150ms ease;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.volume-slider__mute-btn:hover {
+  color: var(--text-primary);
 }
 
 .volume-slider__mute-btn:active {
-  background-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
 }
 
-/* Range input custom styling */
 .volume-slider__range {
   flex: 1;
   -webkit-appearance: none;
   appearance: none;
-  height: 8px;
-  border-radius: 4px;
+  height: 6px;
+  border-radius: 3px;
   outline: none;
   cursor: pointer;
   background: linear-gradient(
     to right,
-    var(--accent-color) 0%,
-    var(--accent-color) var(--volume-fill, 70%),
-    rgba(255, 255, 255, 0.15) var(--volume-fill, 70%),
-    rgba(255, 255, 255, 0.15) 100%
+    var(--accent-strong) 0%,
+    var(--accent) var(--volume-fill, 70%),
+    rgba(255, 255, 255, 0.12) var(--volume-fill, 70%),
+    rgba(255, 255, 255, 0.12) 100%
   );
 }
 
-/* Webkit thumb */
 .volume-slider__range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background-color: #ffffff;
+  background: #ffffff;
   border: none;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 2px 12px rgba(124, 92, 255, 0.55),
+    0 0 0 4px rgba(255, 255, 255, 0.06);
   cursor: pointer;
+  transition: transform 100ms ease;
 }
 
 .volume-slider__range::-webkit-slider-thumb:active {
   transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-/* Firefox thumb */
 .volume-slider__range::-moz-range-thumb {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background-color: #ffffff;
+  background: #ffffff;
   border: none;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 2px 12px rgba(124, 92, 255, 0.55),
+    0 0 0 4px rgba(255, 255, 255, 0.06);
   cursor: pointer;
 }
 
-.volume-slider__range::-moz-range-thumb:active {
-  transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-}
-
-/* Firefox track */
 .volume-slider__range::-moz-range-track {
-  height: 8px;
-  border-radius: 4px;
+  height: 6px;
+  border-radius: 3px;
   background: transparent;
 }
 
 /* ========================================================================
- * Connection Quality Icon
+ * Connection quality icon (header)
  * ======================================================================== */
 
 .connection-quality {
@@ -436,14 +803,305 @@
 }
 
 .connection-quality__icon {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 
 /* ========================================================================
- * Spinner override for player (accent color)
+ * Stats Panel (geek mode modal)
  * ======================================================================== */
 
-.player-view .player-view__spinner {
-  border-top-color: var(--accent-color);
+.stats-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(5, 5, 16, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: stats-fade-in 180ms ease-out;
+}
+
+@keyframes stats-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.stats-panel__sheet {
+  width: 100%;
+  max-width: 520px;
+  /* Cap height so the X button stays visible. Scroll inside the sheet
+     when the stats grid overflows on short viewports. */
+  max-height: 92vh;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #1f1f3d 0%, #14142a 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top-left-radius: 28px;
+  border-top-right-radius: 28px;
+  padding: 22px 22px calc(28px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -24px 64px rgba(0, 0, 0, 0.5);
+  animation: stats-slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow: hidden;
+}
+
+/* Header pinned at top, grid scrolls under it. */
+.stats-panel__header {
+  flex-shrink: 0;
+}
+
+.stats-panel__grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Soft fade at the bottom so it's clear there's more to scroll. */
+  -webkit-mask-image: linear-gradient(180deg, #000 0 calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0 calc(100% - 16px), transparent 100%);
+}
+
+.stats-panel__footer {
+  flex-shrink: 0;
+}
+
+@media (min-width: 600px) {
+  .stats-panel {
+    align-items: center;
+  }
+  .stats-panel__sheet {
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
+@keyframes stats-slide-up {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.stats-panel__header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto auto;
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 2px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.stats-panel__refresh-note {
+  grid-column: 1;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+
+.stats-panel__eyebrow {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-muted);
+  font-weight: 700;
+  display: block;
+}
+
+.stats-panel__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+  margin-top: 4px;
+}
+
+.stats-panel__close {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 150ms ease, transform 100ms ease, color 150ms ease;
+}
+
+.stats-panel__close:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.stats-panel__close:active {
+  transform: scale(0.94);
+}
+
+.stats-panel__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stats-panel__cell {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 10px 14px;
+}
+
+.stats-panel__label {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.stats-panel__value {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.stats-panel__value--mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.stats-panel__value--warn {
+  color: var(--warn);
+}
+
+.stats-panel__footer {
+  margin-top: 14px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ========================================================================
+ * Short-viewport fallback
+ *
+ * Below 540px tall (landscape phones, tiny browser windows) we give up
+ * the no-scroll guarantee and let the page scroll. The header stays
+ * pinned at the top and goes more opaque as content slides under it.
+ * Hide the aurora blobs to save GPU on already-cramped screens.
+ * ======================================================================== */
+
+/* ========================================================================
+ * Landscape phones (orientation:landscape AND short viewport)
+ *
+ * Two-column layout: stage left, controls right. Lets the play/pause
+ * button + volume slider stay visible without scrolling on phones held
+ * sideways. Header stays sticky at the top of the right column too via
+ * the grid spanning trick.
+ * ======================================================================== */
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .player-view {
+    height: 100dvh;
+    overflow: hidden;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .player-view__aurora {
+    display: none;
+  }
+
+  .player-view__header {
+    background: linear-gradient(180deg, rgba(11, 11, 24, 0.85) 0%, rgba(11, 11, 24, 0.4) 100%);
+    padding-top: max(8px, env(safe-area-inset-top, 0px));
+    padding-bottom: 4px;
+  }
+
+  /* Stage becomes a 2-column flex row — viz left, status (pill +
+     play/pause) right. Footer (volume) sits below the row spanning
+     full width. */
+  .player-view__stage {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(12px, 3vw, 24px);
+    padding: 6px 12px 0;
+  }
+
+  .player-view__viz-wrap {
+    width: min(38vw, 60vh, 240px);
+    height: min(38vw, 60vh, 240px);
+    flex-shrink: 0;
+  }
+
+  .player-view__status {
+    flex: 1;
+    max-width: 320px;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+  }
+
+  /* Big play/pause stays prominent but fits the column. */
+  .player-view__playpause {
+    width: clamp(52px, 13vh, 64px);
+    height: clamp(52px, 13vh, 64px);
+  }
+
+  .player-view__footer {
+    padding: 4px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .player-view__footer .volume-slider,
+  .player-view__ios-volume {
+    padding: 8px 14px;
+    border-radius: 16px;
+  }
+}
+
+/* ========================================================================
+ * Very short portrait fallback (narrow desktop tabs, etc.) — no
+ * 2-column split, just allow scroll.
+ * ======================================================================== */
+
+@media (orientation: portrait) and (max-height: 540px) {
+  .player-view {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    touch-action: pan-y;
+  }
+
+  .player-view__aurora {
+    display: none;
+  }
+
+  .player-view__header {
+    background: linear-gradient(180deg, rgba(11, 11, 24, 0.85) 0%, rgba(11, 11, 24, 0.4) 100%);
+  }
+
+  .player-view__viz-wrap {
+    width: min(60vw, 38vh, 280px);
+    height: min(60vw, 38vh, 280px);
+  }
+}
+
+/* When the listener is on the player view, also lock body scrolling so
+   the page never bounces under the player on iOS. The view sets its own
+   overflow. */
+body:has(.player-view) {
+  overflow: hidden;
 }

@@ -18,6 +18,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSignaling } from "./hooks/useSignaling";
 import { useChannelList } from "./hooks/useChannelList";
+import { useChannelLevels } from "./hooks/useChannelLevels";
 import { useMediasoup } from "./hooks/useMediasoup";
 import { useAudioPlayback } from "./hooks/useAudioPlayback";
 import { usePreferences } from "./hooks/usePreferences";
@@ -41,10 +42,19 @@ function App() {
   const { peer, connectionState, isReconnect, clearReconnect } =
     useSignaling();
   const { channels } = useChannelList(peer);
+  const channelLevels = useChannelLevels(peer);
   const { connectToChannel, disconnect, handleReconnect, getConsumer } =
     useMediasoup();
-  const { startPlayback, stopPlayback, setVolume, mute, unmute, isMuted } =
-    useAudioPlayback();
+  const {
+    startPlayback,
+    stopPlayback,
+    setVolume,
+    mute,
+    unmute,
+    isMuted,
+    getAnalyser,
+    isSoftwareVolumeSupported,
+  } = useAudioPlayback();
   const { preferences, setLastChannel, isReturningListener } = usePreferences();
   const { canInstall, promptInstall } = usePwaInstall(isReturningListener);
 
@@ -52,11 +62,19 @@ function App() {
   const scrollPositionRef = useRef(0);
   const channelListContainerRef = useRef<HTMLDivElement>(null);
 
-  // Handle peer reconnection: reset mediasoup state
+  /**
+   * Monotonic counter that bumps every time the signaling layer reconnects.
+   * PlayerView watches it and re-runs the WebRTC handshake when the value
+   * changes — fixes iOS lock-screen audio drop where the RTCPeerConnection
+   * dies but the WebSocket comes back.
+   */
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
+
   useEffect(() => {
     if (isReconnect) {
       handleReconnect();
       clearReconnect();
+      setReconnectTrigger((prev) => prev + 1);
     }
   }, [isReconnect, handleReconnect, clearReconnect]);
 
@@ -131,6 +149,7 @@ function App() {
       >
         <ChannelListView
           channels={channels}
+          channelLevels={channelLevels}
           onSelectChannel={handleSelectChannel}
           lastChannelId={preferences.lastChannelId}
           listenerUrl={LISTENER_URL}
@@ -139,23 +158,34 @@ function App() {
         />
       </div>
 
-      {currentView === "player" && selectedChannel && peer && (
-        <div className="app-view app-view--visible">
-          <PlayerView
-            channel={selectedChannel}
-            peer={peer}
-            onBack={handleBack}
-            connectToChannel={connectToChannel}
-            startPlayback={startPlayback}
-            disconnectMediasoup={disconnect}
-            setVolume={setVolume}
-            mute={mute}
-            unmute={unmute}
-            isMuted={isMuted}
-            getConsumer={getConsumer}
-          />
-        </div>
-      )}
+      {currentView === "player" && selectedChannel && peer && (() => {
+        // Re-resolve from the live channels[] so processingMode / uptime
+        // / sourceLabel etc. update on telemetry pushes after the user
+        // entered the player. Falls back to the snapshot taken at tap.
+        const liveChannel =
+          channels.find((ch) => ch.id === selectedChannel.id) ?? selectedChannel;
+        return (
+          <div className="app-view app-view--visible">
+            <PlayerView
+              channel={liveChannel}
+              peer={peer}
+              onBack={handleBack}
+              connectToChannel={connectToChannel}
+              startPlayback={startPlayback}
+              disconnectMediasoup={disconnect}
+              setVolume={setVolume}
+              mute={mute}
+              unmute={unmute}
+              isMuted={isMuted}
+              getConsumer={getConsumer}
+              getAnalyser={getAnalyser}
+              isSoftwareVolumeSupported={isSoftwareVolumeSupported}
+              reconnectTrigger={reconnectTrigger}
+              serverLevel={channelLevels.get(liveChannel.id) ?? null}
+            />
+          </div>
+        );
+      })()}
     </div>
   );
 }

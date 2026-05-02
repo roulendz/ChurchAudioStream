@@ -1,86 +1,103 @@
 /**
- * Web Audio API engine with GainNode volume control.
+ * Audio engine for WebRTC stream playback + visualizer tap.
  *
- * Audio output flows through AudioContext -> MediaStreamSourceNode -> GainNode
- * -> destination. GainNode controls volume because HTMLAudioElement.volume is
- * read-only on iOS Safari (Apple docs confirm).
+ * Architecture:
+ *   MediaStream -> HTMLAudioElement (audible sink, unmuted, autoplay)
+ *                \-> MediaStreamSourceNode -> AnalyserNode (silent tap, no destination)
  *
- * In parallel, the MediaStream is also attached to a hidden, MUTED
- * HTMLAudioElement. This is required on Chromium desktop: a MediaStream from
- * a WebRTC RTCPeerConnection produces SILENT samples in MediaStreamSourceNode
- * unless the stream is also being consumed by an HTMLMediaElement that has
- * been started with .play() (Chromium bug #121673; mobile Chrome / iOS Safari
- * decode without it). The element is muted at the HTMLMediaElement level so
- * audio output comes exclusively from the GainNode path -- iOS Safari's
- * read-only volume property has no effect on what the user hears.
+ * Why HTMLAudioElement is the sole audible path:
+ *   - MediaSession lock-screen / notification controls require an actively
+ *     playing, NON-MUTED HTMLMediaElement on Chromium (Edge mobile, Chrome
+ *     Android, Chrome desktop) and on iOS WebKit. The previous design used
+ *     a muted hidden element + GainNode->destination for volume, but
+ *     muted=true disqualifies the element from MediaSession, so lock-screen
+ *     controls never appeared on Edge/Chromium phones.
+ *   - HTMLAudioElement.volume is read-only on iOS (Apple docs), so iOS
+ *     listeners use the device's hardware volume buttons. The on-screen
+ *     slider becomes informational on iOS; on Android/desktop it controls
+ *     audio.volume directly.
  *
- * Pattern: Research Pattern 2 (iOS Safari volume fix) + Chromium WebRTC
- * keep-alive workaround.
+ * Why AnalyserNode is parallel and unconnected:
+ *   - AnalyserNode is a non-audible tap. We don't connect it to
+ *     audioContext.destination, so it produces NO audio output. The
+ *     HTMLAudioElement already plays the stream; the AudioContext tap only
+ *     reads frequency/time-domain data for the visualizer.
+ *   - Chromium decodes WebRTC RTP into the MediaStreamSourceNode normally
+ *     because the HTMLAudioElement is consuming the same MediaStream
+ *     (resolves the historical "silent buffer" bug differently than the
+ *     old hidden-muted-element trick).
  */
 
-/** Default volume level (70% per locked decision). */
 const DEFAULT_VOLUME = 0.7;
+const ANALYSER_FFT_SIZE = 256;
+const ANALYSER_SMOOTHING = 0.8;
 
 export interface AudioEngine {
-  /** Route a MediaStreamTrack through the GainNode pipeline. */
-  playTrack(track: MediaStreamTrack): void;
-  /** Set volume (0.0 to 1.0) via GainNode for glitch-free updates. */
+  /** Attach the WebRTC track and start playback through the audio element. */
+  playTrack(track: MediaStreamTrack): Promise<void>;
+  /** Set software volume (0.0-1.0). No-op on iOS where audio.volume is read-only. */
   setVolume(value: number): void;
-  /** Mute audio by setting gain to 0 (preserves volume for unmute). */
+  /** Mute the audio element (preserves volume). */
   mute(): void;
-  /** Restore audio to the given volume level. */
-  unmute(volume: number): void;
-  /** Whether audio is currently muted. */
+  /** Unmute the audio element. */
+  unmute(): void;
   isMuted(): boolean;
-  /** Resume AudioContext -- MUST be called from a user gesture handler. */
+  /** Resume the AudioContext for the analyser. MUST be called inside a user gesture. */
   resume(): Promise<void>;
-  /** Get the underlying AudioContext (for state checks). */
-  getContext(): AudioContext;
-  /** Close the AudioContext and release all resources. */
+  /** AnalyserNode for the visualizer to read frequency / waveform data. */
+  getAnalyser(): AnalyserNode | null;
+  /** True if audio.volume mutates the audible level (false on iOS WebKit). */
+  isSoftwareVolumeSupported(): boolean;
   close(): void;
 }
 
-/**
- * Create a Web Audio API engine with GainNode volume control.
- *
- * AudioContext is created suspended -- call resume() inside a user gesture
- * (the "Start Listening" button tap) for autoplay policy compliance.
- */
+function detectIosWebKit(): boolean {
+  const ua = navigator.userAgent;
+  const isIosDevice = /iPad|iPhone|iPod/.test(ua);
+  const isIpadOs = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return isIosDevice || isIpadOs;
+}
+
 export function createAudioEngine(): AudioEngine {
-  let audioContext: AudioContext | null = new AudioContext();
-  const gainNode = audioContext.createGain();
-  gainNode.gain.value = DEFAULT_VOLUME;
-  gainNode.connect(audioContext.destination);
+  const audioContext: AudioContext = new AudioContext();
+  const analyser: AnalyserNode = audioContext.createAnalyser();
+  analyser.fftSize = ANALYSER_FFT_SIZE;
+  analyser.smoothingTimeConstant = ANALYSER_SMOOTHING;
 
-  // Hidden, muted HTMLAudioElement that holds a parallel reference to the
-  // active MediaStream. Required on Chromium desktop for the WebRTC pipeline
-  // to actually decode received RTP frames into the MediaStreamSourceNode --
-  // without an HTMLMediaElement consuming the stream the source node receives
-  // silent buffers. element.muted=true makes the element produce no audio
-  // output of its own, so all audible output flows through the GainNode.
-  const sinkElement: HTMLAudioElement = new Audio();
-  sinkElement.muted = true;
-  sinkElement.autoplay = true;
-  // playsinline is harmless on desktop and prevents iOS from forcing
-  // fullscreen video player chrome on the (silent) element.
-  sinkElement.setAttribute("playsinline", "true");
+  // The audio element MUST be attached to the DOM for Chromium MediaSession
+  // to surface lock-screen / notification controls. A detached `new Audio()`
+  // node plays sound but never registers with the platform media controller
+  // on Android Chrome / Edge / Chrome OS. Hide it visually but keep it in
+  // the document body.
+  const audioElement: HTMLAudioElement = document.createElement("audio");
+  audioElement.autoplay = true;
+  audioElement.controls = false;
+  audioElement.setAttribute("playsinline", "true");
+  audioElement.volume = DEFAULT_VOLUME;
+  audioElement.style.position = "fixed";
+  audioElement.style.width = "0";
+  audioElement.style.height = "0";
+  audioElement.style.opacity = "0";
+  audioElement.style.pointerEvents = "none";
+  audioElement.setAttribute("aria-hidden", "true");
+  document.body.appendChild(audioElement);
 
+  const isIos = detectIosWebKit();
   let currentSource: MediaStreamAudioSourceNode | null = null;
-  let muted = false;
-  let volumeBeforeMute = DEFAULT_VOLUME;
+  let lastVolume = DEFAULT_VOLUME;
 
-  /**
-   * Handle visibilitychange: resume AudioContext when page becomes visible
-   * again after mobile browser power saving suspends it (research pitfall 5).
-   */
   const handleVisibilityChange = (): void => {
-    if (
-      document.visibilityState === "visible" &&
-      audioContext &&
-      audioContext.state === "suspended"
-    ) {
+    if (document.visibilityState !== "visible") return;
+    if (audioContext.state === "suspended") {
       audioContext.resume().catch(() => {
-        // Ignore -- may not have user gesture yet
+        // No-op: may not have a fresh user gesture yet.
+      });
+    }
+    // The HTMLAudioElement auto-resumes on visibility, but iOS sometimes
+    // pauses it silently after a long screen-lock. Nudge it explicitly.
+    if (audioElement.srcObject && audioElement.paused) {
+      audioElement.play().catch(() => {
+        // Ignore — the upstream reconnect flow will rebuild the track.
       });
     }
   };
@@ -88,89 +105,76 @@ export function createAudioEngine(): AudioEngine {
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   return {
-    playTrack(track: MediaStreamTrack): void {
-      if (!audioContext) return;
-
-      // Disconnect previous source (channel switch case)
+    async playTrack(track: MediaStreamTrack): Promise<void> {
       if (currentSource) {
         currentSource.disconnect();
         currentSource = null;
       }
 
       const stream = new MediaStream([track]);
-      currentSource = audioContext.createMediaStreamSource(stream);
-      currentSource.connect(gainNode);
 
-      // Pin the stream to the hidden sink element so Chromium decodes the
-      // WebRTC RTP frames. Without this, MediaStreamSourceNode delivers
-      // silent buffers on Chrome desktop. play() may reject if called outside
-      // a user gesture stack on some browsers; ignore -- autoplay=true and
-      // muted=true make Chromium allow it on the gesture that already
-      // triggered audioContext.resume() upstream.
-      sinkElement.srcObject = stream;
-      sinkElement.play().catch(() => {
-        // Safe to ignore: stream is still attached, decoder pipeline is
-        // active even without an explicit play() promise resolution on
-        // browsers that already auto-started the muted element.
-      });
+      // Audible path: HTMLAudioElement plays the stream.
+      audioElement.srcObject = stream;
+      try {
+        await audioElement.play();
+      } catch {
+        // Ignored: autoplay=true + a recent user gesture (Start Listening
+        // tap) usually starts playback. If it threw, the caller's user
+        // gesture has already unlocked audio context, so subsequent calls
+        // recover on their own.
+      }
+
+      // Visualizer tap: same stream into the analyser, no destination.
+      currentSource = audioContext.createMediaStreamSource(stream);
+      currentSource.connect(analyser);
     },
 
     setVolume(value: number): void {
-      if (!audioContext) return;
-      gainNode.gain.setValueAtTime(value, audioContext.currentTime);
-      if (!muted) {
-        volumeBeforeMute = value;
-      }
+      lastVolume = value;
+      audioElement.volume = value;
     },
 
     mute(): void {
-      if (!audioContext || muted) return;
-      volumeBeforeMute = gainNode.gain.value;
-      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-      muted = true;
+      audioElement.muted = true;
     },
 
-    unmute(volume: number): void {
-      if (!audioContext || !muted) return;
-      gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
-      muted = false;
+    unmute(): void {
+      audioElement.muted = false;
+      audioElement.volume = lastVolume;
     },
 
     isMuted(): boolean {
-      return muted;
+      return audioElement.muted;
     },
 
     async resume(): Promise<void> {
-      if (!audioContext) return;
-      await audioContext.resume();
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
     },
 
-    getContext(): AudioContext {
-      if (!audioContext) {
-        throw new Error("AudioEngine has been closed");
-      }
-      return audioContext;
+    getAnalyser(): AnalyserNode | null {
+      return analyser;
+    },
+
+    isSoftwareVolumeSupported(): boolean {
+      return !isIos;
     },
 
     close(): void {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-
       if (currentSource) {
         currentSource.disconnect();
         currentSource = null;
       }
-
-      // Detach the hidden sink so the MediaStream can be garbage-collected
-      // and the underlying RTCPeerConnection consumer can close cleanly.
-      sinkElement.pause();
-      sinkElement.srcObject = null;
-
-      if (audioContext) {
-        audioContext.close().catch(() => {
-          // Ignore close errors
-        });
-        audioContext = null;
+      audioElement.pause();
+      audioElement.srcObject = null;
+      if (audioElement.parentNode) {
+        audioElement.parentNode.removeChild(audioElement);
       }
+      audioContext.close().catch(() => {
+        // Ignore close errors.
+      });
     },
   };
 }

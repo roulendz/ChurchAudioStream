@@ -27,8 +27,10 @@ const QUALITY_LABELS: Record<QualityLevel, string> = {
   poor: "Poor connection",
 };
 
-/** Inactive bar color (dimmed). */
-const INACTIVE_BAR_COLOR = "rgba(255, 255, 255, 0.15)";
+/** Inactive bar color — visible against the dark glass header but
+ *  clearly de-emphasized vs the active bars. Was 0.15 which read as
+ *  "stuck at position 1" since inactive bars blended into the bg. */
+const INACTIVE_BAR_COLOR = "rgba(255, 255, 255, 0.32)";
 
 export function ConnectionQuality({ level }: ConnectionQualityProps) {
   const activeColor = QUALITY_COLORS[level];
