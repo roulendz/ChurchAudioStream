@@ -1,6 +1,6 @@
 import path from "node:path";
 import { EventEmitter } from "node:events";
-import { logger, stderrLog } from "./utils/logger";
+import { logger, stderrLog, setLogDirectory, getLogFilePath } from "./utils/logger";
 import { toErrorMessage } from "./utils/error-message";
 import { ConfigStore } from "./config/store";
 import { AudioSubsystem } from "./audio/audio-subsystem";
@@ -178,11 +178,15 @@ function setupRestartListener(
 async function main(): Promise<void> {
   const basePath = resolveBasePath();
 
-  logger.info("ChurchAudioStream sidecar starting", {
+  setLogDirectory(path.join(basePath, "logs", "sidecar"));
+
+  logger.info("=== SESSION START ===", {
+    component: "sidecar",
     version: "0.1.0",
     nodeVersion: process.version,
     pid: process.pid,
     basePath,
+    logFilePath: getLogFilePath(),
   });
 
   setupOrphanPrevention();
