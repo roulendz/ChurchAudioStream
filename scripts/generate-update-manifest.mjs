@@ -14,6 +14,7 @@
 // Output: writes Tauri latest.json to stdout. Errors -> stderr + exit 1.
 
 import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 
 // Named constants — no magic numbers/strings.
 const SEMVER_REGEX = /^(\d+)\.(\d+)\.(\d+)(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?$/;
@@ -22,7 +23,6 @@ const KNOWN_FLAGS = [...REQUIRED_FLAGS, "--platform-key"];
 const DEFAULT_PLATFORM_KEY = "windows-x86_64";
 const HTTPS_PREFIX = "https://";
 const TAG_PREFIX = "v";
-const FLAG_STRIP_LENGTH = 2; // length of "--" prefix on every CLI flag
 
 const FLAG_TO_KEY = {
   "--tag": "tag",
@@ -138,10 +138,13 @@ async function main(argv) {
 }
 
 // Top-level invocation guard — only runs when invoked as CLI, not when
-// imported by tests. Windows uses backslashes in process.argv[1]; the
-// .replace normalises them so the URL comparison works on both platforms
-// (Pitfall 19 — without it, `npm test` on Windows triggers main()).
-const invokedDirectly = import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}`;
+// imported by tests. Use Node's pathToFileURL to convert process.argv[1]
+// (a filesystem path with platform-native separators + bare drive letter on
+// Windows) into a comparable file:// URL with leading triple slash. Hand-
+// rolled string concatenation is off-by-one on Windows (file:///C:/x vs
+// file://C:/x — Pitfall 19 expanded).
+const invokedDirectly = process.argv[1] !== undefined
+  && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (invokedDirectly) {
   main(process.argv.slice(2)).catch((err) => {
     process.stderr.write(`error: ${err.message}\n`);
