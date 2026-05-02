@@ -54,7 +54,10 @@ export function parseArgs(argv) {
   }
   for (const required of REQUIRED_FLAGS) {
     const key = FLAG_TO_KEY[required];
-    if (!out[key]) {
+    // Distinguish ABSENT (undefined) from EMPTY-STRING (legitimate, e.g.
+    // --notes ""). Falsy `!out[key]` would conflate the two and reject
+    // empty release notes — over-strict per MI-01 review.
+    if (out[key] === undefined) {
       throw new Error(`missing required flag: ${required}`);
     }
   }
@@ -85,7 +88,7 @@ export function normalizeTag(tag) {
  */
 export function buildManifest({ version, notes, pubDate, platformKey, assetUrl, signature }) {
   if (typeof assetUrl !== "string" || !assetUrl.startsWith(HTTPS_PREFIX)) {
-    throw new Error(`asset url must be https: ${assetUrl}`);
+    throw new Error(`--asset-url must start with ${HTTPS_PREFIX}: ${assetUrl}`);
   }
   return {
     version,

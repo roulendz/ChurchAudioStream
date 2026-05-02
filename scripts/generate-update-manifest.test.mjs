@@ -78,6 +78,18 @@ describe("parseArgs", () => {
   it("rejects flag with no value (odd-length argv)", () => {
     expect(() => parseArgs(["--tag"])).toThrow(/flag missing value/);
   });
+
+  it("MI-01 regression: accepts empty --notes \"\" (legitimate empty release notes)", () => {
+    // Pre-fix `if (!out[key])` rejected empty string as "missing required".
+    // Distinguish absent (undefined) from empty (legitimate).
+    const r = parseArgs([
+      "--tag", "v0.1.2",
+      "--notes", "",
+      "--asset-url", "https://example.com/x.exe",
+      "--sig-path", "/tmp/s",
+    ]);
+    expect(r.notes).toBe("");
+  });
 });
 
 describe("buildManifest", () => {
@@ -108,7 +120,7 @@ describe("buildManifest", () => {
       platformKey: "windows-x86_64",
       assetUrl: "http://insecure/x.exe",
       signature: "s",
-    })).toThrow(/must be https/);
+    })).toThrow(/must start with https:\/\//);
   });
 });
 

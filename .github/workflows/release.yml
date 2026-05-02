@@ -76,7 +76,10 @@ jobs:
           OWNER_REPO: ${{ github.repository }}
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".TrimStart("v")
+          # Use $env:TAG (env-block) NOT ${{ github.ref_name }} interpolation —
+          # ${{ }} substitutes BEFORE pwsh parses, so a tag containing
+          # quotes/semicolons would inject. Env-block is parsed safely.
+          $version = "${env:TAG}".TrimStart("v")
           $exe = "ChurchAudioStream_${version}_x64-setup.exe"
           $sigPath = "src-tauri/target/release/bundle/nsis/${exe}.sig"
           $url = "https://github.com/${env:OWNER_REPO}/releases/download/${env:TAG}/${exe}"
