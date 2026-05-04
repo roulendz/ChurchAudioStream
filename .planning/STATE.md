@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 07-04-PLAN.md (mix balance + processing toggle client hooks + UI)
-last_updated: "2026-05-05T01:57:57Z"
-last_activity: 2026-05-05 -- Phase 07 Plan 04 complete (useMixBalance, useProcessingToggle, MixBalanceSlider, MixChannelPicker)
+stopped_at: Completed 07-05-PLAN.md (feature wiring - settings + mix + theme integration)
+last_updated: "2026-05-05T00:08:00Z"
+last_activity: 2026-05-05 -- Phase 07 Plan 05 complete (SettingsPanel, ThemeToggle, LanguagePicker, ProcessingToggle wired into app)
 progress:
   total_phases: 10
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 44
-  completed_plans: 42
-  percent: 95
+  completed_plans: 43
+  percent: 97
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 ## Current Position
 
-Phase: 07 (listener-advanced-features) — EXECUTING
-Plan: 5 of 5
-Status: Executing Phase 07
-Last activity: 2026-05-05 -- Phase 07 Plan 04 complete (useMixBalance, useProcessingToggle, MixBalanceSlider, MixChannelPicker)
+Phase: 07 (listener-advanced-features) — COMPLETE
+Plan: 5 of 5 (all complete)
+Status: Phase 07 complete
+Last activity: 2026-05-05 -- Phase 07 Plan 05 complete (SettingsPanel, ThemeToggle, LanguagePicker, ProcessingToggle wired into app)
 
-Progress: [██████████████████████���███████████████░░] 95% (42/44 plans)
+Progress: [████████████████████████████████████████░] 97% (43/44 plans)
 
 ## Performance Metrics
 
@@ -50,12 +50,12 @@ Progress: [██████████████████████�
 | 04 | 9/9 | 61 min | 7 min |
 | 05 | 5/5 | 34 min | 7 min |
 | 06 | 4/4 | 20 min | 5 min |
-| 07 | 4/5 | 23 min | 6 min |
+| 07 | 5/5 | 30 min | 6 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 06-04 (5m), 07-01 (10m), 07-02 (5m), 07-03 (4m), 07-04 (4m)
-- Trend: Phase 7 nearing completion. Plan 04 (client mix hooks + UI) done.
+- Last 5 plans: 07-01 (10m), 07-02 (5m), 07-03 (4m), 07-04 (4m), 07-05 (7m)
+- Trend: Phase 7 COMPLETE. All listener advanced features wired and functional.
 
 *Updated after each plan completion*
 
@@ -230,6 +230,9 @@ Recent decisions affecting current work:
 - [06-03]: Pipeline levels merged per-channel (component-wise max peak/rms, OR clipping)
 - [06-03]: ProcessingControls 300ms debounced slider, immediate send on mouseup/touchend
 - [06-03]: sendMessage optional prop on ChannelConfigPanel for backward compatibility
+- [07-05]: Single SettingsPanel at App level (not duplicated per view) avoids multiple modal instances
+- [07-05]: Settings gear in both ChannelListView and PlayerView for universal access
+- [07-05]: Volume change propagates to mixBalance.setMasterVolume when mixing is active
 
 ### Pending Todos
 
@@ -259,6 +262,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-05-05
-Stopped at: Completed 07-04-PLAN.md (mix balance + processing toggle client hooks + UI)
+Stopped at: Completed 07-05-PLAN.md (feature wiring - settings + mix + theme integration)
 Resume file: None
 User feedback: HTTP->HTTPS redirect and standard ports (80/443) requested as future enhancement.

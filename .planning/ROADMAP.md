@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: WebRTC Streaming Core** - mediasoup SFU distributing Opus audio to browser listeners with sub-100ms latency
 - [x] **Phase 5: Listener Web UI** - Mobile-first PWA with channel selection, volume control, and QR code access
 - [x] **Phase 6: Admin Dashboard** - Channel configuration, real-time VU meters, listener counts, and server status monitoring
-- [ ] **Phase 7: Listener Advanced Features** - Mix balance slider, processing toggles, localization, and light/dark theme
+- [x] **Phase 7: Listener Advanced Features** - Mix balance slider, processing toggles, localization, and light/dark theme
 - [ ] **Phase 8: Reliability & Self-Healing** - Auto-reconnection, pipeline crash recovery, worker rotation, and network diagnostics
 - [ ] **Phase 9: Monitoring & Admin Polish** - Stream health graphs, engagement statistics, admin theming, and settings import/export
 - [ ] **Phase 10: Distribution & Deployment** - Cross-platform installers, portable builds, auto-start, and update notifications
@@ -161,7 +161,7 @@ Plans:
 - [x] 07-02-PLAN.md -- i18n framework (i18next) + 3 locale files (en/es/lv) + wrap all existing components with t()
 - [x] 07-03-PLAN.md -- Server-side protoo handlers: consumeSecondary, toggleProcessing, secondary transport lifecycle
 - [x] 07-04-PLAN.md -- Client mix balance hook (Web Audio crossfade) + processing toggle hook + slider/picker components
-- [ ] 07-05-PLAN.md -- SettingsPanel + ThemeToggle + LanguagePicker + ProcessingToggle + PlayerView/App integration
+- [x] 07-05-PLAN.md -- SettingsPanel + ThemeToggle + LanguagePicker + ProcessingToggle + PlayerView/App integration
 
 ### Phase 8: Reliability & Self-Healing
 **Goal**: The system recovers automatically from WiFi drops, pipeline crashes, worker memory leaks, and network issues -- a Sunday service runs unattended without intervention
@@ -228,7 +228,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 4. WebRTC Streaming Core | 9/9 | Verified (UAT v3: 6/6) | 2026-02-10 |
 | 5. Listener Web UI | 5/5 | Verified (7/7 must-haves, gaps closed) | 2026-02-10 |
 | 6. Admin Dashboard | 4/4 | Verified (26/26 must-haves) | 2026-02-10 |
-| 7. Listener Advanced Features | 0/5 | Not started | - |
+| 7. Listener Advanced Features | 5/5 | Complete | 30 min |
 | 8. Reliability & Self-Healing | 0/5 | Not started | - |
 | 9. Monitoring & Admin Polish | 0/3 | Not started | - |
 | 10. Distribution & Deployment | 0/3 | Not started | - |
