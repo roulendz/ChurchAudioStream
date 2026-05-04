@@ -1,0 +1,72 @@
+/* ========================================================================
+ * Theme tokens — CSS Custom Properties for dark (default) and light themes.
+ * Import BEFORE any component CSS so tokens are defined before consumption.
+ * ======================================================================== */
+
+:root {
+  --surface-0: #0b0b18;
+  --surface-1: #14142a;
+  --surface-2: #1f1f3d;
+  --surface-glass: rgba(255, 255, 255, 0.04);
+  --surface-glass-border: rgba(255, 255, 255, 0.08);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.68);
+  --text-muted: rgba(255, 255, 255, 0.42);
+  --accent: #7c5cff;
+  --accent-strong: #9d82ff;
+  --accent-soft: rgba(124, 92, 255, 0.18);
+  --accent-glow: rgba(124, 92, 255, 0.45);
+  --success: #2af2c8;
+  --success-glow: rgba(42, 242, 200, 0.6);
+  --warn: #ffb547;
+  --destructive: #ff5b6f;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --gradient-cta: linear-gradient(135deg, #b29eff 0%, #7c5cff 100%);
+  --gradient-surface: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-1) 100%);
+}
+
+[data-theme="light"] {
+  --surface-0: #f8f9fc;
+  --surface-1: #ffffff;
+  --surface-2: #f0f1f5;
+  --surface-glass: rgba(26, 26, 46, 0.03);
+  --surface-glass-border: rgba(26, 26, 46, 0.10);
+  --text-primary: #1a1a2e;
+  --text-secondary: rgba(26, 26, 46, 0.68);
+  --text-muted: rgba(26, 26, 46, 0.42);
+  --accent: #6c4edb;
+  --accent-strong: #5a3cc8;
+  --accent-soft: rgba(108, 78, 219, 0.12);
+  --accent-glow: rgba(108, 78, 219, 0.35);
+  --success: #0d9b7a;
+  --success-glow: rgba(13, 155, 122, 0.4);
+  --warn: #d4860a;
+  --destructive: #dc2626;
+  --hairline: rgba(26, 26, 46, 0.10);
+  --gradient-cta: linear-gradient(135deg, #8b6cff 0%, #6c4edb 100%);
+  --gradient-surface: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-1) 100%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --surface-0: #f8f9fc;
+    --surface-1: #ffffff;
+    --surface-2: #f0f1f5;
+    --surface-glass: rgba(26, 26, 46, 0.03);
+    --surface-glass-border: rgba(26, 26, 46, 0.10);
+    --text-primary: #1a1a2e;
+    --text-secondary: rgba(26, 26, 46, 0.68);
+    --text-muted: rgba(26, 26, 46, 0.42);
+    --accent: #6c4edb;
+    --accent-strong: #5a3cc8;
+    --accent-soft: rgba(108, 78, 219, 0.12);
+    --accent-glow: rgba(108, 78, 219, 0.35);
+    --success: #0d9b7a;
+    --success-glow: rgba(13, 155, 122, 0.4);
+    --warn: #d4860a;
+    --destructive: #dc2626;
+    --hairline: rgba(26, 26, 46, 0.10);
+    --gradient-cta: linear-gradient(135deg, #8b6cff 0%, #6c4edb 100%);
+    --gradient-surface: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-1) 100%);
+  }
+}
