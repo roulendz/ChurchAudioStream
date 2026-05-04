@@ -1092,3 +1092,212 @@
 body:has(.player-view) {
   overflow: hidden;
 }
+
+/* ========================================================================
+ * Mix Balance Slider
+ * ======================================================================== */
+
+.mix-balance {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.mix-balance--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.mix-balance__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mix-balance__label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.mix-balance__close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.mix-balance__close-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface-glass);
+}
+
+.mix-balance__slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mix-balance__channel-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: 44px;
+  text-align: center;
+}
+
+.mix-balance__range {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right,
+    var(--accent-strong) 0%,
+    var(--accent) var(--mix-fill, 50%),
+    var(--hairline) var(--mix-fill, 50%),
+    var(--hairline) 100%
+  );
+  outline: none;
+  cursor: pointer;
+}
+
+.mix-balance__range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 3px var(--accent-glow);
+  cursor: pointer;
+}
+
+.mix-balance__range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 3px var(--accent-glow);
+  border: none;
+  cursor: pointer;
+}
+
+/* ========================================================================
+ * Mix Channel Picker (bottom sheet)
+ * ======================================================================== */
+
+.mix-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(5, 5, 16, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: stats-fade-in 180ms ease-out;
+}
+
+.mix-picker__sheet {
+  width: 100%;
+  max-width: 520px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--gradient-surface);
+  border-top: 1px solid var(--surface-glass-border);
+  border-top-left-radius: 28px;
+  border-top-right-radius: 28px;
+  padding: 22px 22px calc(28px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -24px 64px rgba(0, 0, 0, 0.5);
+  animation: stats-slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mix-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.mix-picker__title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.mix-picker__close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--surface-glass);
+  border: 1px solid var(--surface-glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 150ms ease;
+}
+
+.mix-picker__close-btn:hover {
+  color: var(--text-primary);
+}
+
+.mix-picker__empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.mix-picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.mix-picker__channel-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface-glass);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, transform 100ms ease;
+  text-align: left;
+}
+
+.mix-picker__channel-btn:hover {
+  border-color: var(--accent-soft);
+  background: var(--accent-soft);
+}
+
+.mix-picker__channel-btn:active {
+  transform: scale(0.97);
+}
+
+.mix-picker__channel-flag {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.mix-picker__channel-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
