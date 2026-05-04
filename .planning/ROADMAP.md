@@ -160,7 +160,7 @@ Plans:
 - [x] 07-01-PLAN.md -- Vitest setup + CSS custom property refactoring + themes.css + useTheme hook + FOUC prevention
 - [x] 07-02-PLAN.md -- i18n framework (i18next) + 3 locale files (en/es/lv) + wrap all existing components with t()
 - [x] 07-03-PLAN.md -- Server-side protoo handlers: consumeSecondary, toggleProcessing, secondary transport lifecycle
-- [ ] 07-04-PLAN.md -- Client mix balance hook (Web Audio crossfade) + processing toggle hook + slider/picker components
+- [x] 07-04-PLAN.md -- Client mix balance hook (Web Audio crossfade) + processing toggle hook + slider/picker components
 - [ ] 07-05-PLAN.md -- SettingsPanel + ThemeToggle + LanguagePicker + ProcessingToggle + PlayerView/App integration
 
 ### Phase 8: Reliability & Self-Healing
