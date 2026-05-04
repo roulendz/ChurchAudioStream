@@ -161,6 +161,12 @@ export class StreamingSubsystem extends EventEmitter {
       channelConfigResolver,
       config.streaming.heartbeatIntervalMs,
       () => this.buildFullChannelList(),
+      // Processing toggle callback: delegates to audio subsystem AGC toggle
+      (channelId: string, enabled: boolean) => {
+        this.audioSubsystem.updateProcessingConfig(channelId, {
+          agc: { enabled },
+        });
+      },
     );
 
     // 7. Create ListenerWebSocketHandler (uses dummy server internally, not httpsServer)

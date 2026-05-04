@@ -48,6 +48,15 @@ export type ChannelStreamingConfigResolver = (channelId: string) =>
     }
   | undefined;
 
+/**
+ * Callback that toggles AGC processing for a channel.
+ * Keeps SignalingHandler decoupled from AudioSubsystem.
+ */
+export type ProcessingToggleHandler = (
+  channelId: string,
+  enabled: boolean,
+) => void;
+
 // ---------------------------------------------------------------------------
 // PeerHeartbeatTracker (private helper -- SRP)
 // ---------------------------------------------------------------------------
@@ -132,6 +141,7 @@ export class SignalingHandler extends EventEmitter {
   private readonly metadataResolver: ChannelMetadataResolver;
   private readonly channelConfigResolver: ChannelStreamingConfigResolver;
   private readonly channelListProvider: () => ListenerChannelInfo[];
+  private readonly processingToggleHandler: ProcessingToggleHandler | null;
   private readonly heartbeatTracker: PeerHeartbeatTracker;
   private readonly peers: Map<string, ProtooPeer> = new Map();
 
@@ -142,6 +152,7 @@ export class SignalingHandler extends EventEmitter {
     channelConfigResolver: ChannelStreamingConfigResolver,
     heartbeatIntervalMs: number,
     channelListProvider?: () => ListenerChannelInfo[],
+    processingToggleHandler?: ProcessingToggleHandler,
   ) {
     super();
     this.routerManager = routerManager;
@@ -150,6 +161,7 @@ export class SignalingHandler extends EventEmitter {
     this.channelConfigResolver = channelConfigResolver;
     this.channelListProvider = channelListProvider
       ?? (() => this.routerManager.getActiveChannelList(this.metadataResolver));
+    this.processingToggleHandler = processingToggleHandler ?? null;
     this.heartbeatTracker = new PeerHeartbeatTracker(
       heartbeatIntervalMs,
       (peerId: string) => this.peers.get(peerId),
@@ -479,6 +491,10 @@ export class SignalingHandler extends EventEmitter {
 
       case "resumeSecondaryConsumer":
         await this.handleResumeSecondaryConsumer(peer, accept, reject);
+        break;
+
+      case "toggleProcessing":
+        this.handleToggleProcessing(peer, request, accept, reject);
         break;
 
       default:
@@ -1141,6 +1157,59 @@ export class SignalingHandler extends EventEmitter {
       peerData.secondaryWebRtcTransport = null;
     }
     peerData.secondaryChannelId = null;
+  }
+
+  // -----------------------------------------------------------------------
+  // Internal: processing toggle
+  // -----------------------------------------------------------------------
+
+  /**
+   * Toggle AGC processing for a channel. Validates inputs, delegates to
+   * the processingToggleHandler callback (wired to AudioSubsystem).
+   */
+  private handleToggleProcessing(
+    peer: ProtooPeer,
+    request: ProtooRequest,
+    accept: ProtooAcceptFn,
+    reject: ProtooRejectFn,
+  ): void {
+    if (!this.processingToggleHandler) {
+      reject(500, "Processing toggle not available");
+      return;
+    }
+
+    const channelId = request.data?.channelId as string | undefined;
+    const enabled = request.data?.enabled;
+
+    if (!channelId) {
+      reject(400, "Missing channelId");
+      return;
+    }
+
+    if (typeof enabled !== "boolean") {
+      reject(400, "Missing or invalid 'enabled' (boolean required)");
+      return;
+    }
+
+    // Validate channel exists via router manager
+    const router = this.routerManager.getRouterForChannel(channelId);
+    if (!router) {
+      reject(404, "Channel not active");
+      return;
+    }
+
+    try {
+      this.processingToggleHandler(channelId, enabled);
+      accept({ channelId, processingEnabled: enabled });
+
+      logger.info("Processing toggled by listener", {
+        peerId: peer.id,
+        channelId,
+        enabled,
+      });
+    } catch (error) {
+      reject(500, `Failed to toggle processing: ${toErrorMessage(error)}`);
+    }
   }
 
   // -----------------------------------------------------------------------
