@@ -335,22 +335,25 @@ function useTheme() {
 | A3 | Listener toggle of processing affects ALL listeners on that channel (per-channel toggle, not per-listener) | Architecture Patterns | High -- if per-listener processing is needed, architecture is fundamentally different (would need per-consumer pipelines). REQUIREMENTS say "toggle server-side audio processing" which implies channel-level. |
 | A4 | Secondary channel for mixing is selected from the existing channel list (not a hardcoded "original" channel) | Architecture Patterns | Low -- UI will show channel picker for secondary |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Per-listener vs per-channel processing toggle**
    - What we know: STRM-04 says "listener can toggle audio processing on/off from their phone." The admin currently controls AGC per-channel. The GStreamer pipeline is shared for all listeners.
    - What's unclear: Does toggling processing affect just this listener's perception (impossible without per-listener pipeline) or ALL listeners on the channel?
    - Recommendation: Implement as per-channel toggle (same as admin functionality) since GStreamer pipeline is shared. Document limitation clearly: "You are changing the experience for all listeners on this channel."
+   - RESOLVED: Per-channel toggle. GStreamer pipeline is shared; toggling affects all listeners. Plan 03 implements server handler forwarding to existing `audioSubsystem.updateProcessingConfig()`.
 
 2. **How many locales for v1?**
    - What we know: Project is for churches. User is Latvian. Common church translation scenarios: English, Spanish, Latvian.
    - What's unclear: Exact locale list needed.
    - Recommendation: Ship with English (en) as base + 2-3 additional (es, lv). Structure allows trivial additions.
+   - RESOLVED: en/es/lv. Plan 02 ships all three locale JSON files with full key coverage.
 
 3. **Mix balance UI location**
    - What we know: PlayerView is already complex with volume slider, mute, wake lock, stats panel.
    - What's unclear: Where does the mix balance slider go? Footer alongside volume? Separate expandable panel?
    - Recommendation: Place in an expandable "Mix" section below the current volume slider in the player footer. Hidden by default; appears only when user enables mixing from a settings/channel picker within the player.
+   - RESOLVED: Footer slider below volume. MixBalanceSlider appears inline when mixing active; MixChannelPicker opens as bottom sheet from a "Mix" button. Plan 04/05 implement this.
 
 ## Validation Architecture
 
