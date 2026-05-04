@@ -33,29 +33,28 @@ Declared values (multiples of 4, extracted from existing codebase):
 |-------|-------|-------|
 | xs | 4px | Icon gaps, inline padding, bar gaps |
 | sm | 8px | Compact element spacing, chip padding |
-| md | 12px | Card gaps, component internal spacing |
+| md | 12px | Card gaps, intra-component padding, component internal spacing |
 | lg | 16px | Section padding, standard gap |
 | xl | 20px | View horizontal padding |
-| 2xl | 24px | Major section padding, modal padding |
+| 2xl | 24px | Major section padding, modal padding, SettingsPanel horizontal padding |
 | 3xl | 32px | Page-level spacing, modal outer padding |
 
-Exceptions: 44px minimum touch targets on all interactive controls (existing pattern: icon buttons, share button). Mix balance slider thumb: 28px diameter (matches volume slider). 14px used for intra-component padding (existing card/row padding).
+Exceptions: 44px minimum touch targets on all interactive controls (existing pattern: icon buttons, share button). Mix balance slider thumb: 28px diameter (matches volume slider).
 
 ---
 
 ## Typography
 
-| Role | Size | Weight | Line Height |
-|------|------|--------|-------------|
-| Body | 16px (1rem) | 400 | 1.5 |
-| Label | 13px (0.8125rem) | 500 | 1.4 |
-| Eyebrow | 11px (0.6875rem) | 600-700 | 1.15 |
-| Heading | 22px (1.375rem) | 700 | 1.15 |
+| Role | Size | Weight | Line Height | Usage |
+|------|------|--------|-------------|-------|
+| Eyebrow | 11px (0.6875rem) | 700 | 1.15 | Eyebrow labels, chips, badges; uppercase + letter-spacing 0.12em for chip variant |
+| Label | 13px (0.8125rem) | 400 | 1.4 | Form labels, hint text, secondary captions |
+| Body | 16px (1rem) | 400 | 1.5 | Body text, card names, descriptions |
+| Heading | 22px (1.375rem) | 700 | 1.15 | Section headings, page titles |
 
-Additional (from existing codebase):
-- Card name: 17px (1.0625rem) weight 700
-- Page title: 26px (1.625rem) weight 700
-- Chip/badge: 9-10px (0.5625-0.625rem) weight 700, uppercase, letter-spacing 0.12-0.18em
+Two weights only: **400** (regular) for body/label text, **700** (bold) for headings/eyebrows/chips.
+
+Eyebrow differentiation from body achieved via: smaller size (11px) + `text-transform: uppercase` + `letter-spacing: 0.12em` + weight 700. No intermediate weights needed.
 
 ---
 
@@ -196,6 +195,25 @@ All components MUST reference these variables (refactored from hardcoded values)
 
 ---
 
+## Visual Hierarchy
+
+### PlayerView Focal Point
+
+**Primary focal point:** Play/pause button centered vertically in viewport. Largest interactive element (64px), accent gradient fill, pulsing ring animation when live. Eye lands here first.
+
+**Visual reading order (top to bottom):**
+1. Header: channel name (22px heading) + live badge (accent dot + eyebrow) — establishes context
+2. Center: play/pause CTA — primary action, anchors attention
+3. Footer stack: volume slider > mix balance slider (when active) — secondary controls, diminishing prominence via position
+4. Settings gear (top-right, 24px, text-muted color) — tertiary, discovered not demanded
+
+**Hierarchy enforcement:**
+- Only ONE accent-colored element dominates at a time (play button OR active slider thumb, never competing)
+- Footer controls use `text-secondary` / `hairline` colors until actively manipulated
+- Mix balance slider fades in below volume (same glass card, 8px gap) — spatial grouping signals relatedness without visual competition
+
+---
+
 ## Interaction Contracts
 
 ### Mix Balance Slider (STRM-03)
@@ -279,7 +297,7 @@ Track height: 6px. Thumb: 22px white circle with accent glow shadow. Same CSS as
 **Visual:**
 - Background: `var(--gradient-surface)` with `var(--surface-glass-border)` top border
 - Border radius: 28px top-left/right (matches StatsPanel)
-- Padding: 22px horizontal, 28px + safe-area bottom
+- Padding: 24px horizontal, 28px + safe-area bottom
 - Close button: 36px circle, top-right (matches StatsPanel pattern)
 - z-index: 600 (same as StatsPanel)
 
