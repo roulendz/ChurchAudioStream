@@ -154,13 +154,14 @@ Plans:
   2. Listener can toggle server-side audio processing (normalization) on or off from their phone, and the change is audible immediately
   3. Listener can switch the Web UI language (e.g., English, Spanish) and all interface text updates without reloading
   4. Web UI adapts to the phone's system light/dark preference automatically, and listener can manually override the theme
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 07-01: Dual-channel mix balance with Web Audio API
-- [ ] 07-02: Listener-side processing toggle
-- [ ] 07-03: Web UI localization framework and language switching
-- [ ] 07-04: Light/dark theme with system detection and manual override
+- [ ] 07-01-PLAN.md -- Vitest setup + CSS custom property refactoring + themes.css + useTheme hook + FOUC prevention
+- [ ] 07-02-PLAN.md -- i18n framework (i18next) + 3 locale files (en/es/lv) + wrap all existing components with t()
+- [ ] 07-03-PLAN.md -- Server-side protoo handlers: consumeSecondary, toggleProcessing, secondary transport lifecycle
+- [ ] 07-04-PLAN.md -- Client mix balance hook (Web Audio crossfade) + processing toggle hook + slider/picker components
+- [ ] 07-05-PLAN.md -- SettingsPanel + ThemeToggle + LanguagePicker + ProcessingToggle + PlayerView/App integration
 
 ### Phase 8: Reliability & Self-Healing
 **Goal**: The system recovers automatically from WiFi drops, pipeline crashes, worker memory leaks, and network issues -- a Sunday service runs unattended without intervention
@@ -227,7 +228,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 4. WebRTC Streaming Core | 9/9 | Verified (UAT v3: 6/6) | 2026-02-10 |
 | 5. Listener Web UI | 5/5 | Verified (7/7 must-haves, gaps closed) | 2026-02-10 |
 | 6. Admin Dashboard | 4/4 | Verified (26/26 must-haves) | 2026-02-10 |
-| 7. Listener Advanced Features | 0/4 | Not started | - |
+| 7. Listener Advanced Features | 0/5 | Not started | - |
 | 8. Reliability & Self-Healing | 0/5 | Not started | - |
 | 9. Monitoring & Admin Polish | 0/3 | Not started | - |
 | 10. Distribution & Deployment | 0/3 | Not started | - |
