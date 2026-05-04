@@ -32,6 +32,8 @@ interface ChannelListViewProps {
   canInstall: boolean;
   /** Trigger the browser's native PWA install prompt. */
   promptInstall: () => Promise<void>;
+  /** Open the global settings panel. */
+  onOpenSettings: () => void;
 }
 
 export function ChannelListView({
@@ -42,6 +44,7 @@ export function ChannelListView({
   listenerUrl,
   canInstall,
   promptInstall,
+  onOpenSettings,
 }: ChannelListViewProps) {
   const { t } = useTranslation();
   const [toastVisible, setToastVisible] = useState(false);
@@ -98,7 +101,20 @@ export function ChannelListView({
               </span>
             )}
           </div>
-          <ShareButton listenerUrl={listenerUrl} />
+          <div className="channel-list-view__header-actions">
+            <button
+              className="player-view__tool-btn"
+              onClick={onOpenSettings}
+              aria-label={t("settings.title")}
+              type="button"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M16.2 12.8l-.9-.5a5 5 0 000-4.6l.9-.5a1 1 0 00.4-1.4l-1-1.7a1 1 0 00-1.4-.4l-.9.5a5 5 0 00-4 0l-.9-.5a1 1 0 00-1.4.4l-1 1.7a1 1 0 00.4 1.4l.9.5a5 5 0 000 4.6l-.9.5a1 1 0 00-.4 1.4l1 1.7a1 1 0 001.4.4l.9-.5a5 5 0 004 0l.9.5a1 1 0 001.4-.4l1-1.7a1 1 0 00-.4-1.4z" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </button>
+            <ShareButton listenerUrl={listenerUrl} />
+          </div>
         </div>
       </header>
 

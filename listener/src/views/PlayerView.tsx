@@ -33,12 +33,16 @@ import { VolumeSlider } from "../components/VolumeSlider";
 import { ConnectionQuality } from "../components/ConnectionQuality";
 import { StatsPanel } from "../components/StatsPanel";
 import { StreamUptime } from "../components/StreamUptime";
+import { MixBalanceSlider } from "../components/MixBalanceSlider";
+import { MixChannelPicker } from "../components/MixChannelPicker";
+import type { UseMixBalanceResult } from "../hooks/useMixBalance";
+import type { UseProcessingToggleResult } from "../hooks/useProcessingToggle";
+import type { AudioEngine } from "../lib/audio-engine";
 import type { ChannelAudioLevel } from "../lib/types";
 import "../styles/player.css";
 
 const DEFAULT_VOLUME = 0.7;
 const QUALITY_POLL_INTERVAL_MS = 5000;
-const ACCENT_COLOR = "#7c5cff";
 
 type PlayerState =
   | "connecting"
@@ -69,6 +73,16 @@ interface PlayerViewProps {
   readonly reconnectTrigger: number;
   /** Latest server-side RMS for this channel (null until first frame). */
   readonly serverLevel?: ChannelAudioLevel | null;
+  /** All available channels (for mix picker). */
+  readonly channels: readonly ListenerChannelInfo[];
+  /** Mix balance hook result. */
+  readonly mixBalance: UseMixBalanceResult;
+  /** Processing toggle hook result. */
+  readonly processingToggle: UseProcessingToggleResult;
+  /** Get AudioEngine instance for mix graph. */
+  readonly getEngine: () => AudioEngine | null;
+  /** Open settings panel (managed at App level). */
+  readonly onOpenSettings: () => void;
 }
 
 function formatElapsedTime(totalSeconds: number): string {
@@ -93,6 +107,10 @@ export function PlayerView({
   isSoftwareVolumeSupported,
   reconnectTrigger,
   serverLevel,
+  channels,
+  mixBalance,
+  getEngine,
+  onOpenSettings,
 }: PlayerViewProps) {
   const { t } = useTranslation();
   const [playerState, setPlayerState] = useState<PlayerState>("connecting");
@@ -116,6 +134,8 @@ export function PlayerView({
   const [statsPanelOpen, setStatsPanelOpen] = useState(false);
 
   const wakeLock = useWakeLock();
+
+  const [mixPickerOpen, setMixPickerOpen] = useState(false);
 
   const isMuted = isMutedExternal ?? localMuted;
 
@@ -486,6 +506,9 @@ export function PlayerView({
     (value: number) => {
       setVolume(value);
       setVolumeExternal?.(value);
+      if (mixBalance.isMixing) {
+        mixBalance.setMasterVolume(value);
+      }
       if (isMuted && value > 0) {
         if (unmuteExternal) {
           unmuteExternal();
@@ -494,7 +517,7 @@ export function PlayerView({
         }
       }
     },
-    [isMuted, setVolumeExternal, unmuteExternal],
+    [isMuted, setVolumeExternal, unmuteExternal, mixBalance],
   );
 
   const handleMuteToggle = useCallback(() => {
@@ -520,6 +543,21 @@ export function PlayerView({
   const handleWakeLockToggle = useCallback(() => {
     wakeLock.setEnabled(!wakeLock.enabled);
   }, [wakeLock]);
+
+  const handleMixChannelSelect = useCallback(
+    async (channelId: string) => {
+      const engine = getEngine();
+      if (!engine || !peer || !trackRef.current) return;
+      await mixBalance.connectSecondary(channelId, peer, engine, trackRef.current);
+    },
+    [getEngine, peer, mixBalance],
+  );
+
+  const handleMixDisconnect = useCallback(() => {
+    const engine = getEngine();
+    if (!engine || !peer) return;
+    mixBalance.disconnectSecondary(peer, engine);
+  }, [getEngine, peer, mixBalance]);
 
   const isPlaying = playerState === "playing";
   const isVisualizerActive = isPlaying && !isMuted;
@@ -584,6 +622,32 @@ export function PlayerView({
               <span className="player-view__chip-label">{t("player.keepAwake")}</span>
             </button>
           )}
+          {isPlaying && channels.length > 1 && (
+            <button
+              className="player-view__tool-btn"
+              onClick={() => setMixPickerOpen(true)}
+              aria-label={t("player.mix")}
+              type="button"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <circle cx="7" cy="5" r="2" fill="currentColor" />
+                <circle cx="13" cy="10" r="2" fill="currentColor" />
+                <circle cx="9" cy="15" r="2" fill="currentColor" />
+              </svg>
+            </button>
+          )}
+          <button
+            className="player-view__tool-btn"
+            onClick={onOpenSettings}
+            aria-label={t("settings.title")}
+            type="button"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M16.2 12.8l-.9-.5a5 5 0 000-4.6l.9-.5a1 1 0 00.4-1.4l-1-1.7a1 1 0 00-1.4-.4l-.9.5a5 5 0 00-4 0l-.9-.5a1 1 0 00-1.4.4l-1 1.7a1 1 0 00.4 1.4l.9.5a5 5 0 000 4.6l-.9.5a1 1 0 00-.4 1.4l1 1.7a1 1 0 001.4.4l.9-.5a5 5 0 004 0l.9.5a1 1 0 001.4-.4l1-1.7a1 1 0 00-.4-1.4z" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+          </button>
           {isPlaying && (
             <button
               type="button"
@@ -603,7 +667,7 @@ export function PlayerView({
           <AudioVisualizer
             getAnalyser={getAnalyser}
             isActive={isVisualizerActive}
-            accentColor={ACCENT_COLOR}
+            accentColor="#7c5cff"
           />
           <div className="player-view__viz-caption">
             <span className="player-view__flag">{channel.language.flag}</span>
@@ -726,6 +790,18 @@ export function PlayerView({
             )}
           </>
         )}
+        {mixBalance.isMixing && (
+          <MixBalanceSlider
+            balance={mixBalance.balance}
+            onBalanceChange={mixBalance.setBalance}
+            primaryLabel={channel.name}
+            secondaryLabel={
+              channels.find((ch) => ch.id === mixBalance.secondaryChannelId)?.name ?? t("mix.secondary")
+            }
+            onDisconnect={handleMixDisconnect}
+            disabled={playerState !== "playing"}
+          />
+        )}
       </footer>
 
       {getConsumer && (
@@ -739,6 +815,14 @@ export function PlayerView({
           producerStartedAt={channel.producerStartedAt}
         />
       )}
+
+      <MixChannelPicker
+        open={mixPickerOpen}
+        onClose={() => setMixPickerOpen(false)}
+        onSelectChannel={handleMixChannelSelect}
+        channels={channels}
+        primaryChannelId={channel.id}
+      />
     </div>
   );
 }

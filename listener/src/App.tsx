@@ -24,9 +24,13 @@ import { useMediasoup } from "./hooks/useMediasoup";
 import { useAudioPlayback } from "./hooks/useAudioPlayback";
 import { usePreferences } from "./hooks/usePreferences";
 import { usePwaInstall } from "./hooks/usePwaInstall";
+import { useTheme } from "./hooks/useTheme";
+import { useMixBalance } from "./hooks/useMixBalance";
+import { useProcessingToggle } from "./hooks/useProcessingToggle";
 import { ChannelListView } from "./views/ChannelListView";
 import { PlayerView } from "./views/PlayerView";
 import { OfflineScreen } from "./components/OfflineScreen";
+import { SettingsPanel } from "./components/SettingsPanel";
 import type { ListenerChannelInfo } from "./lib/types";
 import "./App.css";
 
@@ -56,9 +60,14 @@ function App() {
     isMuted,
     getAnalyser,
     isSoftwareVolumeSupported,
+    getEngine,
   } = useAudioPlayback();
   const { preferences, setLastChannel, isReturningListener } = usePreferences();
   const { canInstall, promptInstall } = usePwaInstall(isReturningListener);
+  const { mode: themeMode, setMode: setThemeMode } = useTheme();
+  const mixBalance = useMixBalance();
+  const processingToggle = useProcessingToggle();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   /** Saved scroll position for the channel list view. */
   const scrollPositionRef = useRef(0);
@@ -155,6 +164,7 @@ function App() {
           listenerUrl={LISTENER_URL}
           canInstall={canInstall}
           promptInstall={promptInstall}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
       </div>
 
@@ -182,10 +192,29 @@ function App() {
               isSoftwareVolumeSupported={isSoftwareVolumeSupported}
               reconnectTrigger={reconnectTrigger}
               serverLevel={channelLevels.get(liveChannel.id) ?? null}
+              channels={channels}
+              mixBalance={mixBalance}
+              processingToggle={processingToggle}
+              getEngine={getEngine}
+              onOpenSettings={() => setSettingsOpen(true)}
             />
           </div>
         );
       })()}
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        themeMode={themeMode}
+        onThemeModeChange={setThemeMode}
+        processingEnabled={processingToggle.processingEnabled}
+        onProcessingToggle={() => {
+          if (peer && selectedChannel) {
+            processingToggle.toggle(selectedChannel.id, peer);
+          }
+        }}
+        isPlaying={currentView === "player" && !!selectedChannel}
+      />
     </div>
   );
 }

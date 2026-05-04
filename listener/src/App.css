@@ -135,6 +135,12 @@
   gap: 12px;
 }
 
+.channel-list-view__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .channel-list-view__title {
   font-size: 1.625rem;
   font-weight: 700;
