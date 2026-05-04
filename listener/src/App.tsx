@@ -16,6 +16,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useSignaling } from "./hooks/useSignaling";
 import { useChannelList } from "./hooks/useChannelList";
 import { useChannelLevels } from "./hooks/useChannelLevels";
@@ -35,6 +36,7 @@ type CurrentView = "channels" | "player";
 const LISTENER_URL = window.location.origin;
 
 function App() {
+  const { t } = useTranslation();
   const [currentView, setCurrentView] = useState<CurrentView>("channels");
   const [selectedChannel, setSelectedChannel] =
     useState<ListenerChannelInfo | null>(null);
@@ -117,7 +119,7 @@ function App() {
       <div className="app-container app-container--centered">
         <OfflineScreen connectionState={connectionState} />
         <div className="app-spinner" />
-        <p className="app-status">Connecting...</p>
+        <p className="app-status">{t("status.connecting")}</p>
       </div>
     );
   }
@@ -126,9 +128,7 @@ function App() {
     return (
       <div className="app-container app-container--centered">
         <OfflineScreen connectionState={connectionState} />
-        <p className="app-status">
-          Can't reach the audio server. Make sure you're on the church WiFi.
-        </p>
+        <p className="app-status">{t("status.disconnected")}</p>
       </div>
     );
   }
@@ -139,7 +139,7 @@ function App() {
 
       {connectionState === "reconnecting" && (
         <div className="app-reconnecting-banner" role="alert">
-          Reconnecting...
+          {t("status.reconnecting")}
         </div>
       )}
 

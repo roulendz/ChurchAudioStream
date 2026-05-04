@@ -20,6 +20,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { Peer } from "../lib/signaling-client";
 import type { ListenerChannelInfo } from "../lib/types";
 import type { QualityLevel } from "../lib/connection-quality";
@@ -93,6 +94,7 @@ export function PlayerView({
   reconnectTrigger,
   serverLevel,
 }: PlayerViewProps) {
+  const { t } = useTranslation();
   const [playerState, setPlayerState] = useState<PlayerState>("connecting");
   const [errorMessage, setErrorMessage] = useState("");
   const trackRef = useRef<MediaStreamTrack | null>(null);
@@ -441,9 +443,7 @@ export function PlayerView({
     ) {
       setPlayerState("channel-offline");
     } else {
-      setErrorMessage(
-        "Can't reach the audio server. Make sure you're on the church WiFi.",
-      );
+      setErrorMessage(t("status.disconnected"));
       setPlayerState("error");
     }
   }
@@ -456,12 +456,10 @@ export function PlayerView({
       playbackStartedRef.current = true;
       setPlayerState("playing");
     } catch {
-      setErrorMessage(
-        "Can't reach the audio server. Make sure you're on the church WiFi.",
-      );
+      setErrorMessage(t("status.disconnected"));
       setPlayerState("error");
     }
-  }, [startPlayback, setVolumeExternal]);
+  }, [startPlayback, setVolumeExternal, t]);
 
   const handleBack = useCallback(() => {
     clearTimers();
@@ -583,7 +581,7 @@ export function PlayerView({
               }
             >
               <KeepAwakeIcon active={wakeLock.enabled} />
-              <span className="player-view__chip-label">Keep awake</span>
+              <span className="player-view__chip-label">{t("player.keepAwake")}</span>
             </button>
           )}
           {isPlaying && (
@@ -618,7 +616,7 @@ export function PlayerView({
           {playerState === "connecting" && (
             <div className="player-view__pill player-view__pill--muted">
               <span className="player-view__pulse-dot" />
-              Connecting
+              {t("status.connecting")}
             </div>
           )}
 
@@ -629,7 +627,7 @@ export function PlayerView({
               type="button"
             >
               <PlayIcon />
-              <span>Start Listening</span>
+              <span>{t("player.startListening")}</span>
             </button>
           )}
 
@@ -648,14 +646,13 @@ export function PlayerView({
                   }`}
                 />
                 {playerState === "reconnecting"
-                  ? "Reconnecting"
+                  ? t("status.reconnecting")
                   : `Listening · ${formatElapsedTime(elapsedSeconds)}`}
                 {playerState === "playing" &&
                   channel.displayToggles.showListenerCount && (
                     <>
                       <span className="player-view__pill-sep" />
-                      {listenerCount}
-                      {listenerCount === 1 ? " listener" : " listeners"}
+                      {t("channel.listeningCount", { count: listenerCount })}
                     </>
                   )}
                 {playerState === "playing" && channel.producerStartedAt && (
@@ -682,7 +679,7 @@ export function PlayerView({
 
           {playerState === "channel-offline" && (
             <div className="player-view__pill player-view__pill--muted">
-              Channel offline
+              {t("player.channelOffline")}
             </div>
           )}
 
@@ -694,7 +691,7 @@ export function PlayerView({
                 onClick={handleRetry}
                 type="button"
               >
-                Retry
+                {t("offline.retry")}
               </button>
             </div>
           )}
@@ -717,7 +714,7 @@ export function PlayerView({
                 <button
                   className={`player-view__icon-btn ${isMuted ? "player-view__icon-btn--on" : ""}`}
                   onClick={handleMuteToggle}
-                  aria-label={isMuted ? "Unmute" : "Mute"}
+                  aria-label={isMuted ? t("player.unmute") : t("player.mute")}
                   type="button"
                 >
                   <MuteIcon muted={isMuted} />

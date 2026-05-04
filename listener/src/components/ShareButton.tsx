@@ -9,6 +9,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import QRCode from "qrcode";
 
 interface ShareButtonProps {
@@ -16,6 +17,7 @@ interface ShareButtonProps {
 }
 
 export function ShareButton({ listenerUrl }: ShareButtonProps) {
+  const { t } = useTranslation();
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -114,7 +116,7 @@ export function ShareButton({ listenerUrl }: ShareButtonProps) {
           aria-label="Share QR Code"
         >
           <div className="share-modal__content">
-            <h2 className="share-modal__title">Scan to listen</h2>
+            <h2 className="share-modal__title">{t("share.title")}</h2>
             <img
               className="share-modal__qr"
               src={qrDataUrl}
@@ -124,7 +126,7 @@ export function ShareButton({ listenerUrl }: ShareButtonProps) {
             />
             <p className="share-modal__url">{listenerUrl}</p>
             <button className="share-modal__close-btn" onClick={closeModal}>
-              Close
+              {t("share.close")}
             </button>
           </div>
         </div>

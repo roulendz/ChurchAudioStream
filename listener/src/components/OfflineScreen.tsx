@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import type { ConnectionState } from "../hooks/useSignaling";
 
 interface OfflineScreenProps {
@@ -18,6 +19,7 @@ interface OfflineScreenProps {
 }
 
 export function OfflineScreen({ connectionState }: OfflineScreenProps) {
+  const { t } = useTranslation();
   const [isNetworkOffline, setIsNetworkOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
@@ -69,13 +71,13 @@ export function OfflineScreen({ connectionState }: OfflineScreenProps) {
           <line x1="2" y1="2" x2="22" y2="22" strokeWidth="2" />
         </svg>
 
-        <h1 className="offline-screen__title">No connection</h1>
+        <h1 className="offline-screen__title">{t("offline.title")}</h1>
         <p className="offline-screen__message">
-          Connect to the church WiFi to listen to live translations
+          {t("offline.message")}
         </p>
 
         <button className="offline-screen__retry-btn" onClick={handleTryAgain}>
-          Try Again
+          {t("offline.retry")}
         </button>
       </div>
     </div>

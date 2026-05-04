@@ -13,6 +13,7 @@
  */
 
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import type { ListenerChannelInfo, ChannelAudioLevel } from "../lib/types";
 import { ChannelCard } from "../components/ChannelCard";
 import { ShareButton } from "../components/ShareButton";
@@ -42,6 +43,7 @@ export function ChannelListView({
   canInstall,
   promptInstall,
 }: ChannelListViewProps) {
+  const { t } = useTranslation();
   const [toastVisible, setToastVisible] = useState(false);
   const [installBannerDismissed, setInstallBannerDismissed] = useState(false);
 
@@ -88,12 +90,11 @@ export function ChannelListView({
       <header className="channel-list-view__header">
         <div className="channel-list-view__header-row">
           <div className="channel-list-view__title-block">
-            <span className="channel-list-view__eyebrow">Live now</span>
-            <h1 className="channel-list-view__title">Choose a channel</h1>
+            <span className="channel-list-view__eyebrow">{t("channelList.eyebrow")}</span>
+            <h1 className="channel-list-view__title">{t("channelList.title")}</h1>
             {hasAnyListenerCountVisible && totalListeners > 0 && (
               <span className="channel-list-view__listener-count">
-                {totalListeners} {totalListeners === 1 ? "person" : "people"}{" "}
-                listening
+                {t("channel.listeningCount", { count: totalListeners })}
               </span>
             )}
           </div>
@@ -104,21 +105,21 @@ export function ChannelListView({
       {showInstallBanner && (
         <div className="install-banner">
           <p className="install-banner__text">
-            Add to Home Screen for quick access
+            {t("install.bannerText")}
           </p>
           <div className="install-banner__actions">
             <button
               className="install-banner__install-btn"
               onClick={handleInstall}
             >
-              Install
+              {t("install.button")}
             </button>
             <button
               className="install-banner__dismiss-btn"
               onClick={dismissInstallBanner}
-              aria-label="Dismiss install banner"
+              aria-label={t("install.dismiss")}
             >
-              Not now
+              {t("install.dismiss")}
             </button>
           </div>
         </div>
@@ -126,8 +127,9 @@ export function ChannelListView({
 
       {channels.length === 0 ? (
         <div className="channel-list-view__empty">
+          <h2 className="channel-list-view__empty-title">{t("channelList.emptyTitle")}</h2>
           <p className="channel-list-view__empty-text">
-            Please be patient while we connect translators
+            {t("channelList.emptyBody")}
           </p>
         </div>
       ) : (
@@ -145,7 +147,7 @@ export function ChannelListView({
       )}
 
       <Toast
-        message="This channel is not live right now"
+        message={t("channel.offline")}
         visible={toastVisible}
         onHide={hideToast}
       />
