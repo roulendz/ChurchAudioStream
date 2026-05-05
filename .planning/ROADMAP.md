@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ### v1.1 Admin Panel Improvements
 
 - [x] **Phase 11: Foundation** - Full Tailwind CSS v4 + shadcn/ui migration: all components converted, App.css deleted, OKLCH tokens, tests
-- [ ] **Phase 12: Sidebar & Header** - Navigation with Lucide icons, active indicators, breadcrumb, connection status, listener badge
+- [x] **Phase 12: Sidebar & Header** - Navigation with Lucide icons, active indicators, breadcrumb, connection status, listener badge
 - [ ] **Phase 13: Channel Cards** - Card components with status badges, inline VU previews, tooltips, and scroll handling
 - [ ] **Phase 14: Drag-to-Reorder** - dnd-kit drag-and-drop channel reordering with visual feedback and persistence
 
@@ -94,7 +94,12 @@ Plans:
   3. Hovering action buttons shows tooltip text describing the action (accessibility)
   4. Each card shows inline VU meter preview reflecting live audio level
   5. Channel list scrolls smoothly via ScrollArea component when content exceeds viewport
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+**Wave 1**
+- [ ] 13-01-PLAN.md — Install Card + ScrollArea, create ChannelStatusBadge and ChannelCard components
+**Wave 2**
+- [ ] 13-02-PLAN.md — Refactor ChannelList (ScrollArea + ChannelCard delegation), wire App.tsx getLevels, test suite
 **UI hint**: yes
 
 ### Phase 14: Drag-to-Reorder
@@ -127,5 +132,5 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14
 | 10. Distribution | v1.0 | 3/3 | Complete | 2026-05-05 |
 | 11. Foundation | v1.1 | 5/5 | Complete | 2026-05-05 |
 | 12. Sidebar & Header | v1.1 | 2/2 | Complete | 2026-05-05 |
-| 13. Channel Cards | v1.1 | 0/? | Not started | - |
+| 13. Channel Cards | v1.1 | 0/2 | Not started | - |
 | 14. Drag-to-Reorder | v1.1 | 0/? | Not started | - |
