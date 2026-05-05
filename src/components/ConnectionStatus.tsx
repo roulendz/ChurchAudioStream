@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import type { ConnectionStatus as ConnectionStatusType } from "../hooks/useWebSocket";
 
 interface ConnectionStatusProps {
@@ -9,15 +10,15 @@ const STATUS_DISPLAY: Record<
   ConnectionStatusType,
   { label: string; className: string }
 > = {
-  connected: { label: "Connected", className: "status-dot--connected" },
-  connecting: { label: "Connecting...", className: "status-dot--connecting" },
+  connected: { label: "Connected", className: "bg-success shadow-[0_0_6px] shadow-success" },
+  connecting: { label: "Connecting...", className: "bg-warning animate-pulse" },
   reconnecting: {
     label: "Reconnecting",
-    className: "status-dot--reconnecting",
+    className: "bg-warning animate-pulse",
   },
   disconnected: {
     label: "Disconnected",
-    className: "status-dot--disconnected",
+    className: "bg-destructive",
   },
 };
 
@@ -32,9 +33,9 @@ export function ConnectionStatus({
       : label;
 
   return (
-    <div className="connection-status" role="status" aria-live="polite">
-      <span className={`status-dot ${className}`} aria-hidden="true" />
-      <span className="status-label">{displayLabel}</span>
+    <div className="flex items-center gap-2 text-sm px-3 py-1 rounded-full bg-card" role="status" aria-live="polite">
+      <span className={cn("size-2 rounded-full shrink-0", className)} aria-hidden="true" />
+      <span className="text-muted-foreground whitespace-nowrap">{displayLabel}</span>
     </div>
   );
 }

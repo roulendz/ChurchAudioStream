@@ -78,34 +78,35 @@ export function QrCodeDisplay({ config }: QrCodeDisplayProps) {
 
   if (!config) {
     return (
-      <div className="qr-display">
-        <div className="stat-card-label">Listener QR Code</div>
-        <div className="qr-loading">Loading...</div>
+      <div className="flex flex-col items-center gap-4 p-6 bg-card border border-border rounded-md">
+        <div className="text-xs text-muted-foreground mb-1">Listener QR Code</div>
+        <div className="text-muted-foreground italic">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="qr-display">
-      <div className="stat-card-label">Listener QR Code</div>
+    <div className="flex flex-col items-center gap-4 p-6 bg-card border border-border rounded-md">
+      <div className="text-xs text-muted-foreground mb-1">Listener QR Code</div>
 
       {qrDataUrl ? (
         <img
+          className="rounded-md"
           src={qrDataUrl}
           alt={`QR code for ${listenerUrl}`}
           width={200}
           height={200}
         />
       ) : (
-        <div className="qr-loading">Generating...</div>
+        <div className="text-muted-foreground italic">Generating...</div>
       )}
 
       {listenerUrl && (
         <>
-          <span className="qr-url">{listenerUrl}</span>
+          <span className="font-mono text-sm text-primary break-all">{listenerUrl}</span>
           <button
             type="button"
-            className="btn-copy"
+            className="px-3 py-1.5 bg-input border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-all duration-150 hover:border-primary hover:text-primary"
             onClick={handleCopyUrl}
           >
             {copied ? "Copied!" : "Copy URL"}
@@ -113,7 +114,7 @@ export function QrCodeDisplay({ config }: QrCodeDisplayProps) {
         </>
       )}
 
-      <p className="qr-hint">
+      <p className="text-xs text-muted-foreground text-center max-w-[300px]">
         Scan this QR code or visit the URL on your phone (must be on the same
         WiFi network).
       </p>

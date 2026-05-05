@@ -19,9 +19,9 @@ export function DashboardShell({
   children,
 }: DashboardShellProps) {
   return (
-    <div className="dashboard-shell">
-      <header className="dashboard-header">
-        <h1 className="app-title">Church Audio Stream - Admin</h1>
+    <div className="grid grid-cols-[220px_1fr] grid-rows-[auto_1fr] min-h-screen">
+      <header className="col-span-full flex items-center justify-between px-5 py-3 border-b border-border bg-background sticky top-0 z-50">
+        <h1 className="text-xl font-semibold text-foreground">Church Audio Stream - Admin</h1>
         <ConnectionStatus
           status={connectionStatus}
           reconnectAttempts={reconnectAttempts}
@@ -30,7 +30,7 @@ export function DashboardShell({
 
       <Sidebar currentSection={currentSection} onNavigate={onNavigate} />
 
-      <main className="dashboard-content">{children}</main>
+      <main className="row-start-2 p-6 overflow-y-auto">{children}</main>
     </div>
   );
 }
