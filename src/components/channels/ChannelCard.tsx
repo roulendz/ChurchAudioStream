@@ -17,10 +17,11 @@ import {
   Square,
   Settings,
   Trash2,
-  ChevronUp,
-  ChevronDown,
+  GripVertical,
   EyeOff,
 } from "lucide-react";
+import { useSortable } from "@dnd-kit/react/sortable";
+import { cn } from "@/lib/utils";
 import { ChannelStatusBadge } from "./ChannelStatusBadge";
 import { VuMeter } from "@/components/monitoring/VuMeter";
 import type { AdminChannel } from "@/hooks/useChannels";
@@ -29,28 +30,27 @@ import type { ChannelLevelData } from "@/hooks/useAudioLevels";
 export interface ChannelCardProps {
   channel: AdminChannel;
   index: number;
-  totalChannels: number;
   getLevels: (channelId: string) => ChannelLevelData | null;
   onStart: (channelId: string) => void;
   onStop: (channelId: string) => void;
   onConfigure: (channelId: string) => void;
   onRemove: (channelId: string) => void;
-  onMoveUp: (index: number) => void;
-  onMoveDown: (index: number) => void;
 }
 
 export function ChannelCard({
   channel,
   index,
-  totalChannels,
   getLevels,
   onStart,
   onStop,
   onConfigure,
   onRemove,
-  onMoveUp,
-  onMoveDown,
 }: ChannelCardProps) {
+  const { ref, handleRef, isDragSource } = useSortable({
+    id: channel.id,
+    index,
+  });
+
   const isRunning =
     channel.status === "streaming" || channel.status === "starting";
 
@@ -60,9 +60,22 @@ export function ChannelCard({
   );
 
   return (
-    <Card>
+    <Card
+      ref={ref}
+      className={cn(
+        "transition-shadow",
+        isDragSource && "opacity-50 ring-2 ring-primary/50 shadow-lg"
+      )}
+    >
       <CardHeader>
         <div className="flex items-center gap-2 min-w-0">
+          <button
+            ref={handleRef}
+            className="cursor-grab active:cursor-grabbing touch-none p-0.5 rounded hover:bg-accent"
+            aria-label="Drag to reorder"
+          >
+            <GripVertical className="size-4 text-muted-foreground" />
+          </button>
           <CardTitle className="text-sm font-semibold truncate">
             {channel.name}
           </CardTitle>
@@ -99,34 +112,6 @@ export function ChannelCard({
             </div>
           </div>
           <div className="flex items-center gap-1">
-            {/* Reorder buttons -- Phase 14 replaces with drag handles */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon-xs"
-                  disabled={index === 0}
-                  onClick={() => onMoveUp(index)}
-                >
-                  <ChevronUp className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Move up</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon-xs"
-                  disabled={index === totalChannels - 1}
-                  onClick={() => onMoveDown(index)}
-                >
-                  <ChevronDown className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Move down</TooltipContent>
-            </Tooltip>
-
             {/* Start / Stop toggle */}
             <Tooltip>
               <TooltipTrigger asChild>

@@ -1,3 +1,5 @@
+import { DragDropProvider } from "@dnd-kit/react";
+import { isSortable } from "@dnd-kit/react/sortable";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus } from "lucide-react";
@@ -26,17 +28,17 @@ export function ChannelList({
   onCreateClick,
   getLevels,
 }: ChannelListProps) {
-  function handleMoveUp(index: number) {
-    if (index === 0) return;
-    const ids = channels.map((ch) => ch.id);
-    [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
-    onReorderChannels(ids);
-  }
+  function handleDragEnd(event: Parameters<NonNullable<React.ComponentProps<typeof DragDropProvider>['onDragEnd']>>[0]) {
+    if (event.canceled) return;
+    const { source } = event.operation;
+    if (!isSortable(source)) return;
 
-  function handleMoveDown(index: number) {
-    if (index === channels.length - 1) return;
+    const { initialIndex, index } = source.sortable;
+    if (initialIndex === index) return;
+
     const ids = channels.map((ch) => ch.id);
-    [ids[index], ids[index + 1]] = [ids[index + 1], ids[index]];
+    const [moved] = ids.splice(initialIndex, 1);
+    ids.splice(index, 0, moved);
     onReorderChannels(ids);
   }
 
@@ -55,25 +57,24 @@ export function ChannelList({
           No channels yet. Create one to get started.
         </p>
       ) : (
-        <ScrollArea className="h-[calc(100vh-12rem)]">
-          <div className="flex flex-col gap-3 pr-4">
-            {channels.map((channel, index) => (
-              <ChannelCard
-                key={channel.id}
-                channel={channel}
-                index={index}
-                totalChannels={channels.length}
-                getLevels={getLevels}
-                onStart={onStartChannel}
-                onStop={onStopChannel}
-                onConfigure={onConfigureChannel}
-                onRemove={onRemoveChannel}
-                onMoveUp={handleMoveUp}
-                onMoveDown={handleMoveDown}
-              />
-            ))}
-          </div>
-        </ScrollArea>
+        <DragDropProvider onDragEnd={handleDragEnd}>
+          <ScrollArea className="h-[calc(100vh-12rem)]">
+            <div className="flex flex-col gap-3 pr-4">
+              {channels.map((channel, index) => (
+                <ChannelCard
+                  key={channel.id}
+                  channel={channel}
+                  index={index}
+                  getLevels={getLevels}
+                  onStart={onStartChannel}
+                  onStop={onStopChannel}
+                  onConfigure={onConfigureChannel}
+                  onRemove={onRemoveChannel}
+                />
+              ))}
+            </div>
+          </ScrollArea>
+        </DragDropProvider>
       )}
     </div>
   );
