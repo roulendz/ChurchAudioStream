@@ -23,11 +23,11 @@ Requirements for Admin Panel Improvements milestone. Each maps to roadmap phases
 
 ### Channel Cards
 
-- [ ] **CARD-01**: Each channel rendered as a shadcn Card component with consistent padding and elevation
-- [ ] **CARD-02**: Channel status shown as a colored Badge (streaming=green, stopped=muted, error=red)
-- [ ] **CARD-03**: Action buttons wrapped in Tooltips for accessibility
+- [x] **CARD-01**: Each channel rendered as a shadcn Card component with consistent padding and elevation
+- [x] **CARD-02**: Channel status shown as a colored Badge (streaming=green, stopped=muted, error=red)
+- [x] **CARD-03**: Action buttons wrapped in Tooltips for accessibility
 - [ ] **CARD-04**: Channel list supports drag-to-reorder with visual feedback (replaces arrow buttons)
-- [ ] **CARD-05**: Each channel card shows an inline VU meter preview
+- [x] **CARD-05**: Each channel card shows an inline VU meter preview
 
 ### Header
 
@@ -40,7 +40,7 @@ Requirements for Admin Panel Improvements milestone. Each maps to roadmap phases
 
 - [ ] **TYPO-01**: Consistent design token usage across all admin components (colors, radius, spacing)
 - [x] **TYPO-02**: Section headings visually prominent with proper hierarchy
-- [ ] **TYPO-03**: Channel list overflow handled by ScrollArea component
+- [x] **TYPO-03**: Channel list overflow handled by ScrollArea component
 
 ## v2 Requirements
 
@@ -82,18 +82,18 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | SIDE-01 | Phase 12 | Complete (12-01) |
 | SIDE-02 | Phase 12 | Complete (12-01) |
 | SIDE-03 | Phase 12 | Complete (12-01) |
-| CARD-01 | Phase 13 | Pending |
-| CARD-02 | Phase 13 | Pending |
-| CARD-03 | Phase 13 | Pending |
+| CARD-01 | Phase 13 | Complete |
+| CARD-02 | Phase 13 | Complete |
+| CARD-03 | Phase 13 | Complete |
 | CARD-04 | Phase 14 | Pending |
-| CARD-05 | Phase 13 | Pending |
+| CARD-05 | Phase 13 | Complete |
 | HEAD-01 | Phase 12 | Complete (12-02) |
 | HEAD-02 | Phase 12 | Complete (12-02) |
 | HEAD-03 | Phase 12 | Complete (12-02) |
 | HEAD-04 | Phase 12 | Complete (12-02) |
 | TYPO-01 | Phase 11 | Complete (11-05) |
 | TYPO-02 | Phase 12 | Complete (12-01) |
-| TYPO-03 | Phase 13 | Pending |
+| TYPO-03 | Phase 13 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 20 total

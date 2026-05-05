@@ -132,5 +132,5 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14
 | 10. Distribution | v1.0 | 3/3 | Complete | 2026-05-05 |
 | 11. Foundation | v1.1 | 5/5 | Complete | 2026-05-05 |
 | 12. Sidebar & Header | v1.1 | 2/2 | Complete | 2026-05-05 |
-| 13. Channel Cards | v1.1 | 2/2 | Complete   | 2026-05-05 |
+| 13. Channel Cards | v1.1 | 2/2 | Complete    | 2026-05-05 |
 | 14. Drag-to-Reorder | v1.1 | 0/? | Not started | - |
