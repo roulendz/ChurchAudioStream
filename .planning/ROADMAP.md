@@ -81,7 +81,7 @@ Plans:
 **Wave 1**
 - [x] 12-01-PLAN.md — Install shadcn primitives, upgrade Sidebar (icons, groups, separators, active bar, headings), sidebar tests
 **Wave 2**
-- [ ] 12-02-PLAN.md — Upgrade header (breadcrumb, connection Badge, listener Badge, toggle), update ConnectionStatus + ListenerCountBadge, App.tsx props, header tests, visual checkpoint
+- [x] 12-02-PLAN.md — Upgrade header (breadcrumb, connection Badge, listener Badge, toggle), update ConnectionStatus + ListenerCountBadge, App.tsx props, header tests, visual checkpoint
 **UI hint**: yes
 
 ### Phase 13: Channel Cards
@@ -126,6 +126,6 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14
 | 9. Monitoring & Polish | v1.0 | 4/4 | Complete | 2026-05-05 |
 | 10. Distribution | v1.0 | 3/3 | Complete | 2026-05-05 |
 | 11. Foundation | v1.1 | 5/5 | Complete | 2026-05-05 |
-| 12. Sidebar & Header | v1.1 | 1/2 | In progress | - |
+| 12. Sidebar & Header | v1.1 | 2/2 | Complete | 2026-05-05 |
 | 13. Channel Cards | v1.1 | 0/? | Not started | - |
 | 14. Drag-to-Reorder | v1.1 | 0/? | Not started | - |

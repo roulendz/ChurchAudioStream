@@ -31,10 +31,10 @@ Requirements for Admin Panel Improvements milestone. Each maps to roadmap phases
 
 ### Header
 
-- [ ] **HEAD-01**: Header displays a breadcrumb showing current navigation path
-- [ ] **HEAD-02**: Connection status shown as an animated Badge with colored dot indicator
-- [ ] **HEAD-03**: Listener count badge prominently visible in header area
-- [ ] **HEAD-04**: Sidebar toggle trigger button in header
+- [x] **HEAD-01**: Header displays a breadcrumb showing current navigation path
+- [x] **HEAD-02**: Connection status shown as an animated Badge with colored dot indicator
+- [x] **HEAD-03**: Listener count badge prominently visible in header area
+- [x] **HEAD-04**: Sidebar toggle trigger button in header
 
 ### Typography & Spacing
 
@@ -87,10 +87,10 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | CARD-03 | Phase 13 | Pending |
 | CARD-04 | Phase 14 | Pending |
 | CARD-05 | Phase 13 | Pending |
-| HEAD-01 | Phase 12 | Pending |
-| HEAD-02 | Phase 12 | Pending |
-| HEAD-03 | Phase 12 | Pending |
-| HEAD-04 | Phase 12 | Pending |
+| HEAD-01 | Phase 12 | Complete (12-02) |
+| HEAD-02 | Phase 12 | Complete (12-02) |
+| HEAD-03 | Phase 12 | Complete (12-02) |
+| HEAD-04 | Phase 12 | Complete (12-02) |
 | TYPO-01 | Phase 11 | Complete (11-05) |
 | TYPO-02 | Phase 12 | Complete (12-01) |
 | TYPO-03 | Phase 13 | Pending |
@@ -102,4 +102,4 @@ Deferred to future milestone. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-05-05*
-*Last updated: 2026-05-05 after Phase 12 Plan 01 completion*
+*Last updated: 2026-05-05 after Phase 12 Plan 02 completion*

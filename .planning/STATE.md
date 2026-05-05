@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: Admin Panel Improvements
 status: executing
 stopped_at: Roadmap created, ready for `/gsd-plan-phase 11`
-last_updated: "2026-05-05T18:25:44.000Z"
-last_activity: 2026-05-05 -- Phase 12 Plan 01 COMPLETE (sidebar + shadcn primitives)
+last_updated: "2026-05-05T18:34:30.000Z"
+last_activity: 2026-05-05 -- Phase 12 Plan 02 COMPLETE (header + breadcrumb + toggle + badges)
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
-  percent: 86
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-05-05)
 
 ## Current Position
 
-Phase: 12 (Sidebar & Header) — IN PROGRESS
-Plan: 1 of 2 (Plan 01 complete)
-Status: Plan 12-01 complete. Ready for Plan 12-02 (Header).
-Last activity: 2026-05-05 -- Phase 12 Plan 01 COMPLETE (sidebar + shadcn primitives)
+Phase: 12 (Sidebar & Header) — COMPLETE
+Plan: 2 of 2 (all plans complete)
+Status: Phase 12 complete. All SIDE-* and HEAD-* requirements done. Visual verification pending.
+Last activity: 2026-05-05 -- Phase 12 Plan 02 COMPLETE (header + breadcrumb + toggle + badges)
 
 ```
-[############--] 86% (12/14 phases)
+[##############] 100% (14/14 phases)
 ```
 
-v1.1 progress: 1/4 phases complete (6/7 plans done)
+v1.1 progress: 2/4 phases complete (7/7 plans done)
 
 ## Accumulated Context
 
@@ -55,6 +55,9 @@ v1.1 progress: 1/4 phases complete (6/7 plans done)
 - [v1.1]: shadcn as regular dep (not devDep) for shadcn/tailwind.css
 - [v1.1]: Manual components.json + utils.ts instead of npx shadcn init
 - [v1.1]: Separator decorative={false} for semantic nav group dividers (role=separator)
+- [v1.1]: Breadcrumb root "Admin" as plain span (no router, no link)
+- [v1.1]: Sidebar toggle unmounts component (not CSS hidden) for clean grid layout
+- [v1.1]: SECTION_LABELS map for breadcrumb display text
 
 ### Blockers/Concerns
 
@@ -71,5 +74,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-05-05
-Stopped at: Phase 12 Plan 01 COMPLETE. Ready for Plan 12-02 (Header).
-Resume file: .planning/phases/12-sidebar-header/12-01-SUMMARY.md
+Stopped at: Phase 12 COMPLETE. All plans done. Visual verification pending.
+Resume file: .planning/phases/12-sidebar-header/12-02-SUMMARY.md
