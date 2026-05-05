@@ -17,9 +17,9 @@ Requirements for Admin Panel Improvements milestone. Each maps to roadmap phases
 
 ### Sidebar
 
-- [ ] **SIDE-01**: Each nav item displays a Lucide SVG icon alongside its label
-- [ ] **SIDE-02**: Active nav item has a visible indicator bar (not just text color change)
-- [ ] **SIDE-03**: Nav items grouped into logical sections with visual separators
+- [x] **SIDE-01**: Each nav item displays a Lucide SVG icon alongside its label
+- [x] **SIDE-02**: Active nav item has a visible indicator bar (not just text color change)
+- [x] **SIDE-03**: Nav items grouped into logical sections with visual separators
 
 ### Channel Cards
 
@@ -39,7 +39,7 @@ Requirements for Admin Panel Improvements milestone. Each maps to roadmap phases
 ### Typography & Spacing
 
 - [ ] **TYPO-01**: Consistent design token usage across all admin components (colors, radius, spacing)
-- [ ] **TYPO-02**: Section headings visually prominent with proper hierarchy
+- [x] **TYPO-02**: Section headings visually prominent with proper hierarchy
 - [ ] **TYPO-03**: Channel list overflow handled by ScrollArea component
 
 ## v2 Requirements
@@ -79,9 +79,9 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | FOUN-03 | Phase 11 | Complete (11-05) |
 | FOUN-04 | Phase 11 | Complete (11-01) |
 | FOUN-05 | Phase 11 | Complete (11-01) |
-| SIDE-01 | Phase 12 | Pending |
-| SIDE-02 | Phase 12 | Pending |
-| SIDE-03 | Phase 12 | Pending |
+| SIDE-01 | Phase 12 | Complete (12-01) |
+| SIDE-02 | Phase 12 | Complete (12-01) |
+| SIDE-03 | Phase 12 | Complete (12-01) |
 | CARD-01 | Phase 13 | Pending |
 | CARD-02 | Phase 13 | Pending |
 | CARD-03 | Phase 13 | Pending |
@@ -92,7 +92,7 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | HEAD-03 | Phase 12 | Pending |
 | HEAD-04 | Phase 12 | Pending |
 | TYPO-01 | Phase 11 | Complete (11-05) |
-| TYPO-02 | Phase 12 | Pending |
+| TYPO-02 | Phase 12 | Complete (12-01) |
 | TYPO-03 | Phase 13 | Pending |
 
 **Coverage:**
@@ -102,4 +102,4 @@ Deferred to future milestone. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-05-05*
-*Last updated: 2026-05-05 after initial definition*
+*Last updated: 2026-05-05 after Phase 12 Plan 01 completion*

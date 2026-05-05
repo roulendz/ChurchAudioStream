@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: Admin Panel Improvements
 status: executing
 stopped_at: Roadmap created, ready for `/gsd-plan-phase 11`
-last_updated: "2026-05-05T17:09:00.000Z"
-last_activity: 2026-05-05 -- Phase 11 COMPLETE (visual verification approved)
+last_updated: "2026-05-05T18:25:44.000Z"
+last_activity: 2026-05-05 -- Phase 12 Plan 01 COMPLETE (sidebar + shadcn primitives)
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_plans: 7
+  completed_plans: 6
+  percent: 86
 ---
 
 # Project State
@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-05-05)
 
 ## Current Position
 
-Phase: 11 (Foundation) — COMPLETE
-Plan: 5 of 5
-Status: Phase 11 complete, visual verification approved. Ready for Phase 12.
-Last activity: 2026-05-05 -- Phase 11 COMPLETE (visual verification approved)
+Phase: 12 (Sidebar & Header) — IN PROGRESS
+Plan: 1 of 2 (Plan 01 complete)
+Status: Plan 12-01 complete. Ready for Plan 12-02 (Header).
+Last activity: 2026-05-05 -- Phase 12 Plan 01 COMPLETE (sidebar + shadcn primitives)
 
 ```
-[###########---] 79% (11/14 phases)
+[############--] 86% (12/14 phases)
 ```
 
-v1.1 progress: 1/4 phases complete (5/5 plans done)
+v1.1 progress: 1/4 phases complete (6/7 plans done)
 
 ## Accumulated Context
 
@@ -54,6 +54,7 @@ v1.1 progress: 1/4 phases complete (5/5 plans done)
 - [v1.1]: Plugin order [react(), tailwindcss()] per shadcn docs
 - [v1.1]: shadcn as regular dep (not devDep) for shadcn/tailwind.css
 - [v1.1]: Manual components.json + utils.ts instead of npx shadcn init
+- [v1.1]: Separator decorative={false} for semantic nav group dividers (role=separator)
 
 ### Blockers/Concerns
 
@@ -70,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-05-05
-Stopped at: Phase 11 COMPLETE. Ready for Phase 12 (Sidebar & Header).
-Resume file: .planning/phases/11-foundation/11-05-SUMMARY.md
+Stopped at: Phase 12 Plan 01 COMPLETE. Ready for Plan 12-02 (Header).
+Resume file: .planning/phases/12-sidebar-header/12-01-SUMMARY.md
