@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Admin Panel Improvements
 status: executing
 stopped_at: Phase 12 COMPLETE. All plans done. Visual verification pending.
-last_updated: "2026-05-05T20:26:13.358Z"
-last_activity: 2026-05-05 -- Phase 14 planning complete
+last_updated: "2026-05-05T20:26:41.003Z"
+last_activity: 2026-05-05 -- Phase 14 execution started
 progress:
   total_phases: 4
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-05)
 
 **Core value:** Enable multilingual church members and hearing-impaired listeners to hear sermons in their language through their own phones, using the church's existing audio infrastructure -- with near-zero latency and zero friction.
-**Current focus:** Phase 13 — Channel Cards
+**Current focus:** Phase 14 — Drag-to-Reorder
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-05 -- Phase 14 planning complete
+Phase: 14 (Drag-to-Reorder) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 14
+Last activity: 2026-05-05 -- Phase 14 execution started
 
 ```
 [##############] 100% (14/14 phases)
