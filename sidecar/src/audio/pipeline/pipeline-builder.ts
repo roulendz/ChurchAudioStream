@@ -116,7 +116,7 @@ function buildOpusRtpChain(opus: OpusEncodingConfig, rtp: RtpOutputConfig): stri
     `audio-type=${opus.audioType} bitrate-type=${bitrateTypeGst} ` +
     `inband-fec=${opus.fec} dtx=false ! ` +
     `rtpopuspay pt=101 ssrc=${rtp.ssrc} ! ` +
-    `udpsink host=${rtp.host} port=${rtp.rtpPort} bind-port=${senderBindPort} sync=false async=false`
+    `udpsink host=${rtp.host} port=${rtp.rtpPort} bind-port=${senderBindPort} sync=true async=false`
   );
 }
 
