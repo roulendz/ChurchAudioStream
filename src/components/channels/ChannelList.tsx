@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import type { AdminChannel } from "../../hooks/useChannels";
 
 interface ChannelListProps {
@@ -10,18 +11,18 @@ interface ChannelListProps {
   onCreateClick: () => void;
 }
 
-/** Map channel status to a CSS modifier class. */
-function statusModifier(status: string): string {
+/** Map channel status to Tailwind badge classes. */
+function statusBadgeClass(status: string): string {
   switch (status) {
     case "streaming":
-      return "channel-status--streaming";
+      return "bg-success/20 text-success";
     case "starting":
-      return "channel-status--starting";
+      return "bg-warning/20 text-warning";
     case "error":
     case "crashed":
-      return "channel-status--error";
+      return "bg-destructive/20 text-destructive";
     default:
-      return "channel-status--stopped";
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -52,12 +53,12 @@ export function ChannelList({
     status === "streaming" || status === "starting";
 
   return (
-    <div className="channel-list">
-      <div className="channel-list-header">
-        <h3 className="channel-list-title">Channels</h3>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-foreground">Channels</h3>
         <button
           type="button"
-          className="btn-primary"
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium cursor-pointer transition-colors hover:bg-accent-hover disabled:bg-accent-disabled disabled:text-muted-foreground disabled:cursor-not-allowed"
           onClick={onCreateClick}
         >
           + New Channel
@@ -65,41 +66,50 @@ export function ChannelList({
       </div>
 
       {channels.length === 0 && (
-        <p className="channel-list-empty">
+        <p className="text-muted-foreground italic py-8 text-center">
           No channels yet. Create one to get started.
         </p>
       )}
 
-      <ul className="channel-cards">
+      <ul className="list-none flex flex-col gap-2">
         {channels.map((channel, index) => (
-          <li key={channel.id} className="channel-card">
-            <div className="channel-card-main">
-              <div className="channel-card-info">
-                <span className="channel-card-name">{channel.name}</span>
+          <li
+            key={channel.id}
+            className="flex items-center justify-between gap-4 px-4 py-3 bg-secondary border border-border rounded-md transition-colors hover:border-muted-foreground"
+          >
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-[0.95rem] text-foreground">{channel.name}</span>
                 <span
-                  className={`channel-status-badge ${statusModifier(channel.status)}`}
+                  className={cn(
+                    "text-[0.7rem] font-semibold uppercase px-2 py-0.5 rounded-full tracking-wide",
+                    statusBadgeClass(channel.status),
+                  )}
                 >
                   {channel.status}
                 </span>
                 {!channel.visible && (
-                  <span className="channel-hidden-badge" title="Hidden from listeners">
+                  <span
+                    className="text-[0.7rem] text-muted-foreground border border-border rounded-md px-1.5 py-0"
+                    title="Hidden from listeners"
+                  >
                     Hidden
                   </span>
                 )}
               </div>
-              <div className="channel-card-meta">
-                <span className="channel-meta-format">{channel.outputFormat}</span>
-                <span className="channel-meta-sources">
+              <div className="flex gap-3 text-xs text-muted-foreground">
+                <span>{channel.outputFormat}</span>
+                <span>
                   {channel.sources.length} source{channel.sources.length !== 1 ? "s" : ""}
                 </span>
               </div>
             </div>
 
-            <div className="channel-card-actions">
+            <div className="flex items-center gap-1.5 shrink-0">
               {/* Reorder buttons */}
               <button
                 type="button"
-                className="btn-icon"
+                className="bg-transparent border border-border rounded-md text-muted-foreground size-7 text-xs inline-flex items-center justify-center cursor-pointer transition-all hover:border-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                 disabled={index === 0}
                 onClick={() => handleMoveUp(index)}
                 title="Move up"
@@ -108,7 +118,7 @@ export function ChannelList({
               </button>
               <button
                 type="button"
-                className="btn-icon"
+                className="bg-transparent border border-border rounded-md text-muted-foreground size-7 text-xs inline-flex items-center justify-center cursor-pointer transition-all hover:border-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                 disabled={index === channels.length - 1}
                 onClick={() => handleMoveDown(index)}
                 title="Move down"
@@ -120,7 +130,7 @@ export function ChannelList({
               {isRunning(channel.status) ? (
                 <button
                   type="button"
-                  className="btn-secondary btn-stop"
+                  className="px-3 py-1.5 bg-destructive/10 border border-destructive/30 rounded-md text-destructive text-sm cursor-pointer transition-all hover:bg-destructive/20 disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => onStopChannel(channel.id)}
                 >
                   Stop
@@ -128,7 +138,7 @@ export function ChannelList({
               ) : (
                 <button
                   type="button"
-                  className="btn-secondary btn-start"
+                  className="px-3 py-1.5 bg-transparent border border-success text-success rounded-md text-sm cursor-pointer transition-all hover:bg-success/10 disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => onStartChannel(channel.id)}
                 >
                   Start
@@ -138,7 +148,7 @@ export function ChannelList({
               {/* Configure */}
               <button
                 type="button"
-                className="btn-secondary"
+                className="px-3 py-1.5 bg-transparent border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-all hover:border-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
                 onClick={() => onConfigureChannel(channel.id)}
               >
                 Configure
@@ -147,7 +157,7 @@ export function ChannelList({
               {/* Remove */}
               <button
                 type="button"
-                className="btn-icon btn-remove-channel"
+                className="bg-transparent border border-transparent rounded-md text-destructive size-7 text-xs inline-flex items-center justify-center cursor-pointer transition-all hover:border-destructive/50 hover:bg-destructive/10 disabled:opacity-30 disabled:cursor-not-allowed"
                 onClick={() => onRemoveChannel(channel.id)}
                 title="Remove channel"
               >
