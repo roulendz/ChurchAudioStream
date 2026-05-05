@@ -44,7 +44,7 @@ export function DashboardShell({
   return (
     <div
       className={cn(
-        "grid grid-rows-[auto_1fr] min-h-screen",
+        "grid grid-rows-[auto_1fr] min-h-screen overflow-x-clip",
         sidebarVisible ? "grid-cols-[220px_1fr]" : "grid-cols-[1fr]"
       )}
     >
