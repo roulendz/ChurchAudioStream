@@ -17,9 +17,9 @@
  *   - Listener count (showListenerCount)
  */
 
+import { useTranslation } from "react-i18next";
 import type { ListenerChannelInfo, ChannelAudioLevel } from "../lib/types";
 import { StreamUptime } from "./StreamUptime";
-import { LevelMeter } from "./LevelMeter";
 
 interface ChannelCardProps {
   channel: ListenerChannelInfo;
@@ -37,6 +37,7 @@ export function ChannelCard({
   isLastListened,
   onTap,
 }: ChannelCardProps) {
+  const { t } = useTranslation();
   const isLive = channel.hasActiveProducer;
   const { displayToggles } = channel;
   const flag = channel.language.flag || FALLBACK_FLAG;
@@ -65,17 +66,7 @@ export function ChannelCard({
     >
       <div className="channel-card__flag-tile" aria-hidden="true">
         <span className="channel-card__flag">{flag}</span>
-        {isLive && hasSignal ? (
-          <LevelMeter
-            rms={level?.rms}
-            clipping={level?.clipping}
-            barCount={3}
-            className="channel-card__waveform channel-card__waveform--live"
-            variant="horizontal"
-          />
-        ) : (
-          isLive && <MiniWaveform />
-        )}
+        {isLive && <MiniWaveform active={hasSignal} />}
       </div>
 
       <div className="channel-card__body">
@@ -119,7 +110,7 @@ export function ChannelCard({
             )}
           {!isLive && (
             <span className="channel-card__hint channel-card__hint--muted">
-              Not streaming
+              {t("channelCard.notStarted")}
             </span>
           )}
           {isLastListened && (
@@ -148,11 +139,12 @@ export function ChannelCard({
   );
 }
 
-function MiniWaveform() {
-  // Three CSS-animated bars overlaying the flag tile so live channels
-  // visually pulse on the list. Pure CSS, no JS / canvas overhead.
+function MiniWaveform({ active }: { active: boolean }) {
+  const cls = active
+    ? "channel-card__waveform channel-card__waveform--active"
+    : "channel-card__waveform";
   return (
-    <span className="channel-card__waveform" aria-hidden="true">
+    <span className={cls} aria-hidden="true">
       <span className="channel-card__waveform-bar" />
       <span className="channel-card__waveform-bar" />
       <span className="channel-card__waveform-bar" />
