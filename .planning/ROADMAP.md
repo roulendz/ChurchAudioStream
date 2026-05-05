@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### v1.1 Admin Panel Improvements
 
-- [ ] **Phase 11: Foundation** - Full Tailwind CSS v4 + shadcn/ui migration: all components converted, App.css deleted, OKLCH tokens, tests
+- [x] **Phase 11: Foundation** - Full Tailwind CSS v4 + shadcn/ui migration: all components converted, App.css deleted, OKLCH tokens, tests
 - [ ] **Phase 12: Sidebar & Header** - Navigation with Lucide icons, active indicators, breadcrumb, connection status, listener badge
 - [ ] **Phase 13: Channel Cards** - Card components with status badges, inline VU previews, tooltips, and scroll handling
 - [ ] **Phase 14: Drag-to-Reorder** - dnd-kit drag-and-drop channel reordering with visual feedback and persistence
@@ -55,15 +55,15 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 5 plans
 Plans:
 **Wave 1**
-- [ ] 11-01-PLAN.md — Install deps, configure Vite/TS/Vitest, create index.css with OKLCH tokens, cn() utility + tests
+- [x] 11-01-PLAN.md — Install deps, configure Vite/TS/Vitest, create index.css with OKLCH tokens, cn() utility + tests
 
-**Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 11-02-PLAN.md — Convert layout + small components (DashboardShell, Sidebar, ConnectionStatus, App.tsx, ListenerCountBadge, VuMeterBank, QrCodeDisplay)
-- [ ] 11-03-PLAN.md — Convert channel components (ChannelList, ChannelConfigPanel, ChannelCreateDialog, ProcessingControls, SourceSelector)
-- [ ] 11-04-PLAN.md — Convert settings/monitoring + CSS module components (ServerStatus, SettingsPanel + DesignTokensSection, LogViewer, CheckForUpdatesButton, UpdateToast)
+**Wave 2**
+- [x] 11-02-PLAN.md — Convert layout + small components (DashboardShell, Sidebar, ConnectionStatus, App.tsx, ListenerCountBadge, VuMeterBank, QrCodeDisplay)
+- [x] 11-03-PLAN.md — Convert channel components (ChannelList, ChannelConfigPanel, ChannelCreateDialog, ProcessingControls, SourceSelector)
+- [x] 11-04-PLAN.md — Convert settings/monitoring + CSS module components (ServerStatus, SettingsPanel + DesignTokensSection, LogViewer, CheckForUpdatesButton, UpdateToast)
 
-**Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 11-05-PLAN.md — Delete legacy CSS, VuMeter container, design token tests, build validation, visual checkpoint
+**Wave 3**
+- [x] 11-05-PLAN.md — Delete legacy CSS, VuMeter container, design token tests, build validation, visual checkpoint
 **UI hint**: yes
 
 ### Phase 12: Sidebar & Header
@@ -120,7 +120,7 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 8. Reliability | v1.0 | 5/5 | Complete | 2026-05-05 |
 | 9. Monitoring & Polish | v1.0 | 4/4 | Complete | 2026-05-05 |
 | 10. Distribution | v1.0 | 3/3 | Complete | 2026-05-05 |
-| 11. Foundation | v1.1 | 1/5 | In progress | - |
+| 11. Foundation | v1.1 | 5/5 | Complete | 2026-05-05 |
 | 12. Sidebar & Header | v1.1 | 0/? | Not started | - |
 | 13. Channel Cards | v1.1 | 0/? | Not started | - |
 | 14. Drag-to-Reorder | v1.1 | 0/? | Not started | - |
