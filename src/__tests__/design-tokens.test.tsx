@@ -74,15 +74,19 @@ describe("CSS migration completeness", () => {
 describe("component smoke tests (Tailwind classes render)", () => {
   it("DashboardShell renders without crash", async () => {
     const { DashboardShell } = await import("@/components/layout/DashboardShell");
+    const { TooltipProvider } = await import("@/components/ui/tooltip");
     render(
-      <DashboardShell
-        currentSection="overview"
-        onNavigate={() => {}}
-        connectionStatus={"connected" as any}
-        reconnectAttempts={0}
-      >
-        <div>test child</div>
-      </DashboardShell>
+      <TooltipProvider>
+        <DashboardShell
+          currentSection="overview"
+          onNavigate={() => {}}
+          connectionStatus={"connected" as any}
+          reconnectAttempts={0}
+          totalListeners={0}
+        >
+          <div>test child</div>
+        </DashboardShell>
+      </TooltipProvider>
     );
     expect(screen.getByText("test child")).toBeInTheDocument();
   });

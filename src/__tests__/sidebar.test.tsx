@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import type { DashboardSection } from "@/components/layout/Sidebar";
 
 describe("Sidebar navigation", () => {
-  async function renderSidebar(currentSection = "overview" as const) {
+  async function renderSidebar(currentSection: DashboardSection = "overview") {
     const { Sidebar } = await import("@/components/layout/Sidebar");
     return render(
       <Sidebar currentSection={currentSection} onNavigate={() => {}} />
