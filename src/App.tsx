@@ -17,6 +17,7 @@ import { ServerStatus } from "./components/monitoring/ServerStatus";
 import { QrCodeDisplay } from "./components/settings/QrCodeDisplay";
 import { UpdateToast } from "./components/UpdateToast";
 import { CheckForUpdatesButton } from "./components/CheckForUpdatesButton";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 function App() {
   const [currentSection, setCurrentSection] = useState<DashboardSection>("overview");
@@ -57,11 +58,13 @@ function App() {
   return (
     <>
     <UpdateToast />
+    <TooltipProvider>
     <DashboardShell
       currentSection={currentSection}
       onNavigate={setCurrentSection}
       connectionStatus={connectionStatus}
       reconnectAttempts={reconnectAttempts}
+      totalListeners={totalListeners}
     >
       {currentSection === "overview" && (
         <div className="space-y-6">
@@ -150,6 +153,7 @@ function App() {
         </>
       )}
     </DashboardShell>
+    </TooltipProvider>
     </>
   );
 }
