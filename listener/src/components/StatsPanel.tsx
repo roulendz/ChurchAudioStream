@@ -128,6 +128,16 @@ export function StatsPanel({
             value={`${snapshot.jitterMs.toFixed(1)} ms`}
           />
           <Stat
+            label="JB delay"
+            value={`${snapshot.jitterBufferDelayMs.toFixed(0)} ms`}
+            warn={snapshot.jitterBufferDelayMs > 100}
+          />
+          <Stat
+            label="JB target"
+            value={`${snapshot.jitterBufferTargetMs.toFixed(0)} ms`}
+            warn={snapshot.jitterBufferTargetMs > 100}
+          />
+          <Stat
             label="Packet loss"
             value={`${snapshot.packetLossPercent.toFixed(2)} %`}
             warn={snapshot.packetLossPercent > 1}

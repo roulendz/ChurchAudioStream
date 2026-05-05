@@ -42,6 +42,10 @@ export interface ConnectionStatsSnapshot {
   readonly receivingDurationMs: number;
   /** Wall-clock timestamp of this snapshot (ms since epoch). */
   readonly capturedAt: number;
+  /** Average jitter buffer delay in ms (jitterBufferDelay / emittedCount * 1000). */
+  readonly jitterBufferDelayMs: number;
+  /** Current jitter buffer target in ms (jitterBufferTargetDelay / emittedCount * 1000). */
+  readonly jitterBufferTargetMs: number;
 }
 
 const EMPTY_SNAPSHOT: ConnectionStatsSnapshot = {
@@ -60,6 +64,8 @@ const EMPTY_SNAPSHOT: ConnectionStatsSnapshot = {
   bytesReceived: 0,
   receivingDurationMs: 0,
   capturedAt: 0,
+  jitterBufferDelayMs: 0,
+  jitterBufferTargetMs: 0,
 };
 
 export async function captureConnectionStats(
@@ -84,6 +90,8 @@ export async function captureConnectionStats(
     let selectedRemoteCandidateId = "";
     let candidateType = "";
     let remoteCandidateType = "";
+    let jitterBufferDelayMs = 0;
+    let jitterBufferTargetMs = 0;
 
     // Build candidate id -> type lookup so we can resolve the selected
     // pair after walking once.
@@ -147,6 +155,17 @@ export async function captureConnectionStats(
         if (typeof report.totalSamplesDuration === "number") {
           receivingMs = report.totalSamplesDuration * 1000;
         }
+
+        // Jitter buffer metrics (W3C webrtc-stats spec):
+        // jitterBufferDelay and jitterBufferTargetDelay are cumulative seconds;
+        // divide by jitterBufferEmittedCount for current average.
+        const jbDelay = (report as Record<string, unknown>).jitterBufferDelay as number | undefined;
+        const jbEmitted = (report as Record<string, unknown>).jitterBufferEmittedCount as number | undefined;
+        const jbTarget = (report as Record<string, unknown>).jitterBufferTargetDelay as number | undefined;
+        if (jbEmitted && jbEmitted > 0) {
+          jitterBufferDelayMs = ((jbDelay ?? 0) / jbEmitted) * 1000;
+          jitterBufferTargetMs = ((jbTarget ?? 0) / jbEmitted) * 1000;
+        }
       }
     });
 
@@ -186,6 +205,8 @@ export async function captureConnectionStats(
       bytesReceived,
       receivingDurationMs: receivingMs,
       capturedAt: now,
+      jitterBufferDelayMs,
+      jitterBufferTargetMs,
     };
   } catch {
     return EMPTY_SNAPSHOT;
