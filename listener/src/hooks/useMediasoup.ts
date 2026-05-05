@@ -123,6 +123,10 @@ export function useMediasoup(): UseMediasoupResult {
       });
       consumerRef.current = consumer;
 
+      // Step 5b: Constrain browser jitter buffer to 50ms.
+      // Without this, Chrome's NetEQ grows adaptively (can reach seconds).
+      setLowLatencyJitterBuffer(consumer);
+
       // Step 6: Resume consumer (server starts sending RTP)
       await peer.request("resumeConsumer");
 
@@ -137,4 +141,34 @@ export function useMediasoup(): UseMediasoupResult {
   );
 
   return { connectToChannel, disconnect, handleReconnect, getConsumer };
+}
+
+// ---------------------------------------------------------------------------
+// Jitter buffer constraint
+// ---------------------------------------------------------------------------
+
+/** Target jitter buffer delay in milliseconds. */
+const JITTER_BUFFER_TARGET_MS = 50;
+
+/**
+ * Constrain the browser's adaptive jitter buffer to prevent unbounded growth.
+ *
+ * Chrome's NetEQ starts at ~20ms but grows freely under perceived jitter,
+ * reaching seconds on mobile WiFi. Setting jitterBufferTarget (standard API,
+ * Chrome 111+) and playoutDelayHint (legacy Chrome 107-110) caps it at 50ms.
+ *
+ * Both properties are not yet in TypeScript's lib.dom.d.ts, hence the casts.
+ */
+function setLowLatencyJitterBuffer(consumer: mediasoupTypes.Consumer): void {
+  const receiver = consumer.rtpReceiver;
+  if (!receiver) return;
+
+  if ("jitterBufferTarget" in receiver) {
+    (receiver as unknown as Record<string, number>).jitterBufferTarget =
+      JITTER_BUFFER_TARGET_MS;
+  }
+  if ("playoutDelayHint" in receiver) {
+    (receiver as unknown as Record<string, number>).playoutDelayHint =
+      JITTER_BUFFER_TARGET_MS / 1000; // seconds
+  }
 }
