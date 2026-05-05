@@ -122,6 +122,7 @@ function App() {
               onConfigureChannel={setSelectedChannelId}
               onReorderChannels={reorderChannels}
               onCreateClick={() => setShowCreateDialog(true)}
+              getLevels={audioLevels.getLevels}
             />
           )}
         </>
