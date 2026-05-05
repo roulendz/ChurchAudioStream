@@ -96,8 +96,8 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | TYPO-03 | Phase 13 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 18 total
-- Mapped to phases: 18
+- v1.1 requirements: 20 total
+- Mapped to phases: 20
 - Unmapped: 0 ✓
 
 ---
