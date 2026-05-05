@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import styles from "./CheckForUpdatesButton.module.css";
+import { cn } from "@/lib/utils";
 import { useUpdateState } from "../../hooks/useUpdateState";
 import { formatRelativeTime } from "../../lib/relative-time";
 
@@ -60,29 +60,45 @@ export function CheckForUpdatesButton() {
   const message = buildResultMessage(result);
 
   return (
-    <div className={styles["card"]}>
-      <div className={styles["card-header"]}>
-        <h3 className={styles["card-title"]}>Check for updates</h3>
+    <div className="bg-card border border-border rounded-lg px-5 py-4 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-base font-semibold text-foreground m-0">Check for updates</h3>
         <button
           type="button"
-          className={styles["check-button"]}
+          className={cn(
+            "px-4 py-2 rounded-md bg-success text-white font-medium text-sm",
+            "min-w-24 inline-flex items-center justify-center border-none cursor-pointer",
+            "disabled:opacity-60 disabled:cursor-progress"
+          )}
           onClick={onClick}
           disabled={pending}
           aria-busy={pending}
         >
-          {pending ? <span className={styles["spinner"]} aria-label="checking" /> : "Check now"}
+          {pending ? (
+            <span
+              className="size-4 border-2 border-white/40 border-t-white rounded-full animate-spin motion-reduce:animate-none"
+              aria-label="checking"
+            />
+          ) : (
+            "Check now"
+          )}
         </button>
       </div>
-      <div className={styles["card-subtext"]}>Last checked: {humanized}</div>
+      <div className="text-[0.8125rem] text-muted-foreground">Last checked: {humanized}</div>
       {message !== "" && (
-        <div className={styles["card-result"]} role="status">
+        <div className="text-sm text-success" role="status">
           {message}
         </div>
       )}
       {skippedVersions.length > 0 && (
-        <div className={styles["chip-row"]}>
+        <div className="flex flex-wrap gap-1.5">
           {skippedVersions.map((v) => (
-            <span key={v} className={styles["chip"]}>Skipped: v{v}</span>
+            <span
+              key={v}
+              className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+            >
+              Skipped: v{v}
+            </span>
           ))}
         </div>
       )}
