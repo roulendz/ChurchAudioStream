@@ -41,7 +41,7 @@ const NAV_GROUPS: NavGroup[] = [
 export function Sidebar({ currentSection, onNavigate }: SidebarProps) {
   return (
     <nav
-      className="row-start-2 bg-card border-r border-border py-4 overflow-y-auto"
+      className="row-start-2 sticky top-[49px] h-[calc(100vh-49px)] bg-card border-r border-border py-4 overflow-y-auto"
       aria-label="Dashboard navigation"
     >
       {NAV_GROUPS.map((group, groupIndex) => (
