@@ -1,26 +1,25 @@
 /**
- * Full-screen offline overlay.
+ * Full-screen offline overlay with auto-recovery.
  *
  * Shows when EITHER the device has no network (navigator.onLine === false)
  * OR the signaling server is unreachable (connectionState === "disconnected").
  *
- * When the issue is server unreachability (WiFi is up but sidecar is down),
- * Try Again reloads the page to create a fresh protoo peer since the old
- * one has already given up and closed.
+ * Auto-pings the server every 3 seconds. When a response comes back,
+ * reloads the page to create a fresh protoo peer.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { ConnectionState } from "../hooks/useSignaling";
 
 interface OfflineScreenProps {
-  /** Signaling connection state. When "disconnected", server is unreachable. */
   connectionState?: ConnectionState;
 }
 
 export function OfflineScreen({ connectionState }: OfflineScreenProps) {
   const { t } = useTranslation();
   const [isNetworkOffline, setIsNetworkOffline] = useState(!navigator.onLine);
+  const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const handleOnline = (): void => setIsNetworkOffline(false);
@@ -35,12 +34,36 @@ export function OfflineScreen({ connectionState }: OfflineScreenProps) {
     };
   }, []);
 
-  // Show offline screen when EITHER network is down OR server is unreachable
   const isOffline = isNetworkOffline || connectionState === "disconnected";
 
+  useEffect(() => {
+    if (!isOffline) {
+      if (retryTimerRef.current) {
+        clearInterval(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+      return;
+    }
+
+    retryTimerRef.current = setInterval(async () => {
+      if (!navigator.onLine) return;
+      try {
+        const res = await fetch("/api/status", { cache: "no-store" });
+        if (res.ok) window.location.reload();
+      } catch {
+        // Server still down, keep retrying
+      }
+    }, 3000);
+
+    return () => {
+      if (retryTimerRef.current) {
+        clearInterval(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, [isOffline]);
+
   const handleTryAgain = useCallback(() => {
-    // Reload page to fully re-establish the signaling connection.
-    // Once protoo gives up, only a fresh page load can create a new peer.
     if (navigator.onLine) {
       window.location.reload();
     }
