@@ -11,7 +11,7 @@ Requirements for Admin Panel Improvements milestone. Each maps to roadmap phases
 
 - [x] **FOUN-01**: Admin app builds with Tailwind CSS v4 via @tailwindcss/vite plugin (no PostCSS)
 - [x] **FOUN-02**: shadcn/ui CLI configured with components.json, cn() utility, and @/ path aliases
-- [ ] **FOUN-03**: All App.css styles converted to Tailwind utilities; App.css deleted (user override: full migration, no legacy)
+- [x] **FOUN-03**: All App.css styles converted to Tailwind utilities; App.css deleted (user override: full migration, no legacy)
 - [x] **FOUN-04**: Dark theme tokens mapped from existing palette to shadcn OKLCH variables
 - [x] **FOUN-05**: System font stack configured (no external CDN fonts)
 
@@ -76,7 +76,7 @@ Deferred to future milestone. Tracked but not in current roadmap.
 |-------------|-------|--------|
 | FOUN-01 | Phase 11 | Complete (11-01) |
 | FOUN-02 | Phase 11 | Complete (11-01) |
-| FOUN-03 | Phase 11 | Pending |
+| FOUN-03 | Phase 11 | Complete (11-05) |
 | FOUN-04 | Phase 11 | Complete (11-01) |
 | FOUN-05 | Phase 11 | Complete (11-01) |
 | SIDE-01 | Phase 12 | Pending |
@@ -91,7 +91,7 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | HEAD-02 | Phase 12 | Pending |
 | HEAD-03 | Phase 12 | Pending |
 | HEAD-04 | Phase 12 | Pending |
-| TYPO-01 | Phase 11 | Pending |
+| TYPO-01 | Phase 11 | Complete (11-05) |
 | TYPO-02 | Phase 12 | Pending |
 | TYPO-03 | Phase 13 | Pending |
 
