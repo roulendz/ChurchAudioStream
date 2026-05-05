@@ -14,6 +14,7 @@ import { ensureHostsEntry } from "./network/hosts";
 import { publishService, unpublishService } from "./network/mdns";
 import { setupWebSocket, type WebSocketSetupResult } from "./ws/handler";
 import { logger } from "./utils/logger";
+import { registerOgRoutes } from "./routes/og-meta";
 
 const SIDECAR_VERSION = "0.1.0";
 
@@ -55,6 +56,7 @@ export async function createServer(
   app.use(express.json());
 
   const staticDirectory = resolveStaticDirectory(basePath);
+  await registerOgRoutes(app, staticDirectory, config);
   app.use(express.static(staticDirectory));
 
   app.get("/api/status", (_req, res) => {

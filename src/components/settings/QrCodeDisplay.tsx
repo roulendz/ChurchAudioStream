@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import QRCode from "qrcode";
+import { Share2 } from "lucide-react";
 import type { AppConfig } from "../../hooks/useServerStatus";
 
 // ---------------------------------------------------------------------------
@@ -67,12 +68,27 @@ export function QrCodeDisplay({ config }: QrCodeDisplayProps) {
     };
   }, [listenerUrl]);
 
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+
   const handleCopyUrl = useCallback(() => {
     if (!listenerUrl) return;
 
     navigator.clipboard.writeText(listenerUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    });
+  }, [listenerUrl]);
+
+  const handleShare = useCallback(() => {
+    if (!listenerUrl) return;
+
+    navigator.share({
+      title: "Church Audio Stream",
+      text: "Listen to live translations on your phone",
+      url: listenerUrl,
+    }).catch((err: unknown) => {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      throw err;
     });
   }, [listenerUrl]);
 
@@ -103,7 +119,26 @@ export function QrCodeDisplay({ config }: QrCodeDisplayProps) {
 
       {listenerUrl && (
         <>
-          <span className="font-mono text-sm text-primary break-all">{listenerUrl}</span>
+          <div className="flex items-center gap-2">
+            <a
+              href={listenerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-sm text-primary break-all hover:underline"
+            >
+              {listenerUrl}
+            </a>
+            {canShare && (
+              <button
+                type="button"
+                className="p-1.5 rounded-md text-muted-foreground transition-colors hover:text-primary hover:bg-accent"
+                onClick={handleShare}
+                aria-label="Share listener URL"
+              >
+                <Share2 className="size-4" />
+              </button>
+            )}
+          </div>
           <button
             type="button"
             className="px-3 py-1.5 bg-input border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-all duration-150 hover:border-primary hover:text-primary"
