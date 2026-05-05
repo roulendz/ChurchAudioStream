@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### v1.1 Admin Panel Improvements
 
-- [ ] **Phase 11: Foundation** - Tailwind CSS v4 + shadcn/ui initialization with design tokens and legacy coexistence
+- [ ] **Phase 11: Foundation** - Full Tailwind CSS v4 + shadcn/ui migration: all components converted, App.css deleted, OKLCH tokens, tests
 - [ ] **Phase 12: Sidebar & Header** - Navigation with Lucide icons, active indicators, breadcrumb, connection status, listener badge
 - [ ] **Phase 13: Channel Cards** - Card components with status badges, inline VU previews, tooltips, and scroll handling
 - [ ] **Phase 14: Drag-to-Reorder** - dnd-kit drag-and-drop channel reordering with visual feedback and persistence
@@ -43,7 +43,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 11: Foundation
-**Goal**: Admin app has a working Tailwind CSS v4 + shadcn/ui design system foundation that coexists with existing styles without visual regressions
+**Goal**: Admin app fully migrated from hand-rolled CSS to Tailwind CSS v4 + shadcn/ui design system. All components converted. App.css deleted. OKLCH tokens. Tests validate migration.
 **Depends on**: Phase 10 (v1.0 complete)
 **Requirements**: FOUN-01, FOUN-02, FOUN-03, FOUN-04, FOUN-05, TYPO-01
 **Success Criteria** (what must be TRUE):
@@ -52,7 +52,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. shadcn cn() utility resolves classes and `npx shadcn add` installs components without errors
   4. Dark theme OKLCH variables produce correct colors matching existing palette (no color drift)
   5. Font rendering uses system stack with no network requests for fonts
-**Plans**: TBD
+**Plans:** 5 plans
+Plans:
+- [ ] 11-01-PLAN.md — Install deps, configure Vite/TS/Vitest, create index.css with OKLCH tokens, cn() utility + tests
+- [ ] 11-02-PLAN.md — Convert layout + small components (DashboardShell, Sidebar, ConnectionStatus, App.tsx, ListenerCountBadge, VuMeterBank, QrCodeDisplay)
+- [ ] 11-03-PLAN.md — Convert channel components (ChannelList, ChannelConfigPanel, ChannelCreateDialog, ProcessingControls, SourceSelector)
+- [ ] 11-04-PLAN.md — Convert settings/monitoring + CSS module components (ServerStatus, SettingsPanel + DesignTokensSection, LogViewer, CheckForUpdatesButton, UpdateToast)
+- [ ] 11-05-PLAN.md — Delete legacy CSS, VuMeter container, design token tests, build validation, visual checkpoint
 **UI hint**: yes
 
 ### Phase 12: Sidebar & Header
@@ -109,7 +115,7 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 8. Reliability | v1.0 | 5/5 | Complete | 2026-05-05 |
 | 9. Monitoring & Polish | v1.0 | 4/4 | Complete | 2026-05-05 |
 | 10. Distribution | v1.0 | 3/3 | Complete | 2026-05-05 |
-| 11. Foundation | v1.1 | 0/? | Not started | - |
+| 11. Foundation | v1.1 | 0/5 | Not started | - |
 | 12. Sidebar & Header | v1.1 | 0/? | Not started | - |
 | 13. Channel Cards | v1.1 | 0/? | Not started | - |
 | 14. Drag-to-Reorder | v1.1 | 0/? | Not started | - |
