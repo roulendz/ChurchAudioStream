@@ -145,13 +145,18 @@ function buildProcessingAndOutputTail(
   const agcEnabled = agc.enabled;
   const opusEnabled = opus.enabled;
 
+  // Bounded tee-branch queue: caps at 50ms, drops oldest on overflow.
+  // Prevents unbounded accumulation during micro-stalls (see RESEARCH.md §2 Cause 1).
+  const TEE_BRANCH_QUEUE =
+    `queue max-size-time=${LIVE_CAPTURE_QUEUE_NS} max-size-bytes=0 max-size-buffers=0 leaky=downstream`;
+
   // Case A: Both AGC and Opus enabled (full processing pipeline)
   if (agcEnabled && opusEnabled) {
     return (
       `${agcChain}` +
       `tee name=t ` +
-      `t. ! queue ! ${meteringElements} ` +
-      `t. ! queue ! ${opusRtpChain}`
+      `t. ! ${TEE_BRANCH_QUEUE} ! ${meteringElements} ` +
+      `t. ! ${TEE_BRANCH_QUEUE} ! ${opusRtpChain}`
     );
   }
 
@@ -165,8 +170,8 @@ function buildProcessingAndOutputTail(
     return (
       `audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! ` +
       `tee name=t ` +
-      `t. ! queue ! ${meteringElements} ` +
-      `t. ! queue ! ${opusRtpChain}`
+      `t. ! ${TEE_BRANCH_QUEUE} ! ${meteringElements} ` +
+      `t. ! ${TEE_BRANCH_QUEUE} ! ${opusRtpChain}`
     );
   }
 
