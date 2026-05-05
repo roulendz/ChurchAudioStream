@@ -420,7 +420,7 @@ import { GripVertical } from 'lucide-react';                 // ChannelCard (alr
 | A2 | DragDropProvider works without issues inside or alongside Radix ScrollArea | Pitfalls | Drag clipping or scroll interference. Mitigation: test with multiple channels that overflow. |
 | A3 | `isSortable(source)` exposes `source.sortable.initialIndex` and `source.sortable.index` (not direct properties on source) | Code Examples | onDragEnd handler fails to read position. Easy to fix by checking actual TypeScript types after install. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Exact TypeScript type for onDragEnd event parameter**
    - What we know: Event has `canceled` boolean and `operation.source` object
