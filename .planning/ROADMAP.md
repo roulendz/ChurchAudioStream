@@ -110,7 +110,12 @@ Plans:
   1. User can grab a channel card and drag it to a new position in the list
   2. Visual feedback shows drop target location during drag (placeholder or highlight)
   3. New order persists after drop — saved to config, survives app restart
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+**Wave 1**
+- [ ] 14-01-PLAN.md — Install @dnd-kit/react, convert ChannelCard/ChannelList to drag-to-reorder, update existing tests
+**Wave 2**
+- [ ] 14-02-PLAN.md — Dedicated drag-reorder test suite + visual checkpoint
 **UI hint**: yes
 
 ## Progress
@@ -133,4 +138,4 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14
 | 11. Foundation | v1.1 | 5/5 | Complete | 2026-05-05 |
 | 12. Sidebar & Header | v1.1 | 2/2 | Complete | 2026-05-05 |
 | 13. Channel Cards | v1.1 | 2/2 | Complete    | 2026-05-05 |
-| 14. Drag-to-Reorder | v1.1 | 0/? | Not started | - |
+| 14. Drag-to-Reorder | v1.1 | 0/2 | Not started | - |
