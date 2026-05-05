@@ -711,22 +711,13 @@ function DesignTokensSection() {
 | A2 | `shadcn` package as regular dependency (not devDep) required for `shadcn/tailwind.css` CSS import | Standard Stack | Medium -- if Vite resolves devDeps at build time, could be devDep instead |
 | A3 | `--success` and `--warning` custom vars registered in @theme inline will generate `bg-success`/`bg-warning` utilities | Code Examples | Medium -- if Tailwind requires specific naming, may need `--color-success` only |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **shadcn init behavior on existing project**
-   - What we know: `npx shadcn@latest init` asks interactive questions, creates components.json and lib/utils.ts
-   - What's unclear: Whether it overwrites existing files (index.css, etc.) or merges
-   - Recommendation: Run init first, then manually adjust index.css with custom OKLCH tokens. Or skip init and manually create components.json + lib/utils.ts.
+1. **shadcn init behavior on existing project** — RESOLVED: Skip `npx shadcn init`. Manually create components.json and src/lib/utils.ts. This avoids any overwrites and gives full control over index.css OKLCH tokens.
 
-2. **Tailwind v4 + Vitest plugin configuration**
-   - What we know: vitest.config.ts has `css: true` and uses react plugin
-   - What's unclear: Whether @tailwindcss/vite plugin is needed in vitest.config.ts for CSS import resolution
-   - Recommendation: Add tailwindcss() to vitest.config.ts plugins array. If tests pass without it (jsdom doesn't render CSS), may not be needed.
+2. **Tailwind v4 + Vitest plugin configuration** — RESOLVED: Add tailwindcss() to vitest.config.ts plugins array. jsdom doesn't render CSS visually but the plugin ensures CSS imports resolve without errors. If tests pass without it, the plugin can be removed later.
 
-3. **@keyframes pulse already in tw-animate-css?**
-   - What we know: App.css defines custom `@keyframes pulse` for connection status dot. tw-animate-css provides animation utilities.
-   - What's unclear: Whether tw-animate-css includes a pulse animation matching Tailwind's `animate-pulse`
-   - Recommendation: Use Tailwind's built-in `animate-pulse` class. It provides opacity pulse which matches current behavior.
+3. **@keyframes pulse already in tw-animate-css?** — RESOLVED: Use Tailwind's built-in `animate-pulse` class. It provides opacity-based pulse which matches the current connection status dot behavior. tw-animate-css adds additional utilities but the built-in is sufficient.
 
 ## Environment Availability
 

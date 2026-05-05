@@ -11,7 +11,7 @@ Requirements for Admin Panel Improvements milestone. Each maps to roadmap phases
 
 - [ ] **FOUN-01**: Admin app builds with Tailwind CSS v4 via @tailwindcss/vite plugin (no PostCSS)
 - [ ] **FOUN-02**: shadcn/ui CLI configured with components.json, cn() utility, and @/ path aliases
-- [ ] **FOUN-03**: Existing App.css wrapped in @layer legacy to coexist with Tailwind utilities
+- [ ] **FOUN-03**: All App.css styles converted to Tailwind utilities; App.css deleted (user override: full migration, no legacy)
 - [ ] **FOUN-04**: Dark theme tokens mapped from existing palette to shadcn OKLCH variables
 - [ ] **FOUN-05**: System font stack configured (no external CDN fonts)
 
