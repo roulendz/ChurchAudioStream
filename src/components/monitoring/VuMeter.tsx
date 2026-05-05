@@ -1,21 +1,9 @@
-/**
- * Canvas-based VU meter with 60fps rendering via requestAnimationFrame.
- *
- * Displays RMS bar (semi-transparent), peak hold line (bright), and
- * a clipping indicator (red flash at top). Supports HiDPI displays
- * by scaling the canvas by devicePixelRatio.
- */
-
 import { useRef, useEffect, useCallback } from "react";
 import type { ChannelLevelData } from "../../hooks/useAudioLevels";
 
-/** Smooth decay factor applied per frame (~0.92 gives natural VU fall-off). */
 const DECAY_FACTOR = 0.92;
-
-/** Peak hold time in frames before the peak indicator begins to fall. */
 const PEAK_HOLD_FRAMES = 30;
 
-/** Colors for the VU meter gradient. */
 const COLOR_GREEN = "#4caf50";
 const COLOR_YELLOW = "#ff9800";
 const COLOR_RED = "#f44336";
@@ -25,11 +13,14 @@ const COLOR_CLIPPING = "#f44336";
 const COLOR_BACKGROUND = "#1a1a2e";
 const COLOR_TRACK = "#2a3a5e";
 
+const STEREO_GAP = 2;
+
 interface VuMeterProps {
   channelName: string;
   getLevels: () => ChannelLevelData | null;
   width?: number;
   height?: number;
+  channelCount?: 1 | 2;
 }
 
 interface MeterState {
@@ -39,10 +30,6 @@ interface MeterState {
   peakHoldCounter: number;
 }
 
-/**
- * Create a vertical gradient for the meter bar: green at bottom, yellow
- * in the middle, red at the top.
- */
 function createMeterGradient(
   ctx: CanvasRenderingContext2D,
   barTop: number,
@@ -56,15 +43,79 @@ function createMeterGradient(
   return gradient;
 }
 
-export function VuMeter({ channelName, getLevels, width = 40, height = 160 }: VuMeterProps) {
+function createDefaultMeterState(): MeterState {
+  return { smoothedRms: 0, smoothedPeak: 0, peakHold: 0, peakHoldCounter: 0 };
+}
+
+function drawBar(
+  ctx: CanvasRenderingContext2D,
+  state: MeterState,
+  rawRms: number,
+  rawPeak: number,
+  isClipping: boolean,
+  barLeft: number,
+  barWidth: number,
+  barTop: number,
+  barBottom: number,
+  barHeight: number,
+  padding: number,
+  clipIndicatorHeight: number,
+): void {
+  state.smoothedRms = rawRms > state.smoothedRms
+    ? rawRms
+    : state.smoothedRms * DECAY_FACTOR;
+  state.smoothedPeak = rawPeak > state.smoothedPeak
+    ? rawPeak
+    : state.smoothedPeak * DECAY_FACTOR;
+
+  if (rawPeak > state.peakHold) {
+    state.peakHold = rawPeak;
+    state.peakHoldCounter = PEAK_HOLD_FRAMES;
+  } else if (state.peakHoldCounter > 0) {
+    state.peakHoldCounter--;
+  } else {
+    state.peakHold *= DECAY_FACTOR;
+  }
+
+  ctx.fillStyle = COLOR_TRACK;
+  ctx.fillRect(barLeft, barTop, barWidth, barHeight);
+
+  const rmsHeight = state.smoothedRms * barHeight;
+  if (rmsHeight > 0) {
+    ctx.fillStyle = COLOR_RMS;
+    ctx.fillRect(barLeft, barBottom - rmsHeight, barWidth, rmsHeight);
+  }
+
+  const peakHeight = state.smoothedPeak * barHeight;
+  if (peakHeight > 0) {
+    ctx.fillStyle = createMeterGradient(ctx, barTop, barBottom);
+    ctx.fillRect(barLeft, barBottom - peakHeight, barWidth, peakHeight);
+  }
+
+  if (state.peakHold > 0.01) {
+    const peakHoldY = barBottom - state.peakHold * barHeight;
+    ctx.strokeStyle = COLOR_PEAK_LINE;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(barLeft, peakHoldY);
+    ctx.lineTo(barLeft + barWidth, peakHoldY);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = isClipping ? COLOR_CLIPPING : COLOR_TRACK;
+  ctx.fillRect(barLeft, padding, barWidth, clipIndicatorHeight);
+}
+
+export function VuMeter({
+  channelName,
+  getLevels,
+  width = 40,
+  height = 160,
+  channelCount = 1,
+}: VuMeterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>(0);
-  const stateRef = useRef<MeterState>({
-    smoothedRms: 0,
-    smoothedPeak: 0,
-    peakHold: 0,
-    peakHoldCounter: 0,
-  });
+  const stateRef = useRef<MeterState[]>([]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -77,7 +128,6 @@ export function VuMeter({ channelName, getLevels, width = 40, height = 160 }: Vu
     const drawWidth = width * dpr;
     const drawHeight = height * dpr;
 
-    // Resize canvas backing store for HiDPI if needed
     if (canvas.width !== drawWidth || canvas.height !== drawHeight) {
       canvas.width = drawWidth;
       canvas.height = drawHeight;
@@ -85,94 +135,53 @@ export function VuMeter({ channelName, getLevels, width = 40, height = 160 }: Vu
 
     ctx.scale(dpr, dpr);
 
-    // Get current level data (non-blocking ref read)
     const levels = getLevels();
-    const state = stateRef.current;
 
-    // Compute mono-mixed values (max across channels)
-    const rawRms = levels ? Math.max(...levels.rms) : 0;
-    const rawPeak = levels ? Math.max(...levels.peak) : 0;
-    const isClipping = levels?.clipping ?? false;
-
-    // Smooth decay: rise instantly, fall with decay factor
-    state.smoothedRms = rawRms > state.smoothedRms
-      ? rawRms
-      : state.smoothedRms * DECAY_FACTOR;
-    state.smoothedPeak = rawPeak > state.smoothedPeak
-      ? rawPeak
-      : state.smoothedPeak * DECAY_FACTOR;
-
-    // Peak hold logic
-    if (rawPeak > state.peakHold) {
-      state.peakHold = rawPeak;
-      state.peakHoldCounter = PEAK_HOLD_FRAMES;
-    } else if (state.peakHoldCounter > 0) {
-      state.peakHoldCounter--;
-    } else {
-      state.peakHold = state.peakHold * DECAY_FACTOR;
+    while (stateRef.current.length < channelCount) {
+      stateRef.current.push(createDefaultMeterState());
     }
 
-    // Layout constants
     const padding = 2;
     const clipIndicatorHeight = 6;
     const barTop = padding + clipIndicatorHeight + 2;
     const barBottom = height - padding;
     const barHeight = barBottom - barTop;
-    const barLeft = padding;
-    const barWidth = width - padding * 2;
+    const gap = channelCount === 2 ? STEREO_GAP : 0;
+    const totalBarArea = width - padding * 2;
+    const singleBarWidth = channelCount === 2
+      ? (totalBarArea - gap) / 2
+      : totalBarArea;
 
-    // Clear
     ctx.clearRect(0, 0, width, height);
-
-    // Background
     ctx.fillStyle = COLOR_BACKGROUND;
     ctx.fillRect(0, 0, width, height);
 
-    // Track (empty meter area)
-    ctx.fillStyle = COLOR_TRACK;
-    ctx.fillRect(barLeft, barTop, barWidth, barHeight);
+    const isClipping = levels?.clipping ?? false;
 
-    // RMS bar (semi-transparent blue)
-    const rmsHeight = state.smoothedRms * barHeight;
-    if (rmsHeight > 0) {
-      ctx.fillStyle = COLOR_RMS;
-      ctx.fillRect(barLeft, barBottom - rmsHeight, barWidth, rmsHeight);
+    for (let i = 0; i < channelCount; i++) {
+      const barLeft = padding + i * (singleBarWidth + gap);
+      const rawRms = levels ? (levels.rms[i] ?? levels.rms[0] ?? 0) : 0;
+      const rawPeak = levels ? (levels.peak[i] ?? levels.peak[0] ?? 0) : 0;
+
+      drawBar(
+        ctx,
+        stateRef.current[i],
+        rawRms,
+        rawPeak,
+        isClipping,
+        barLeft,
+        singleBarWidth,
+        barTop,
+        barBottom,
+        barHeight,
+        padding,
+        clipIndicatorHeight,
+      );
     }
 
-    // Peak bar (gradient)
-    const peakHeight = state.smoothedPeak * barHeight;
-    if (peakHeight > 0) {
-      const gradient = createMeterGradient(ctx, barTop, barBottom);
-      ctx.fillStyle = gradient;
-      ctx.fillRect(barLeft, barBottom - peakHeight, barWidth, peakHeight);
-    }
-
-    // Peak hold line
-    if (state.peakHold > 0.01) {
-      const peakHoldY = barBottom - state.peakHold * barHeight;
-      ctx.strokeStyle = COLOR_PEAK_LINE;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(barLeft, peakHoldY);
-      ctx.lineTo(barLeft + barWidth, peakHoldY);
-      ctx.stroke();
-    }
-
-    // Clipping indicator (red rectangle at top)
-    if (isClipping) {
-      ctx.fillStyle = COLOR_CLIPPING;
-      ctx.fillRect(barLeft, padding, barWidth, clipIndicatorHeight);
-    } else {
-      ctx.fillStyle = COLOR_TRACK;
-      ctx.fillRect(barLeft, padding, barWidth, clipIndicatorHeight);
-    }
-
-    // Reset transform for next frame
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-    // Schedule next frame
     animationFrameRef.current = requestAnimationFrame(draw);
-  }, [getLevels, width, height]);
+  }, [getLevels, width, height, channelCount]);
 
   useEffect(() => {
     animationFrameRef.current = requestAnimationFrame(draw);

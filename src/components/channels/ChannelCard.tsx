@@ -100,8 +100,9 @@ export function ChannelCard({
             <VuMeter
               channelName={channel.name}
               getLevels={getChannelLevels}
-              width={24}
+              width={channel.outputFormat === "stereo" ? 32 : 24}
               height={56}
+              channelCount={channel.outputFormat === "stereo" ? 2 : 1}
             />
             <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
               <span>{channel.outputFormat}</span>
