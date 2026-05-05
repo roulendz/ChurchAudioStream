@@ -46,7 +46,7 @@ export function Sidebar({ currentSection, onNavigate }: SidebarProps) {
     >
       {NAV_GROUPS.map((group, groupIndex) => (
         <div key={group.label}>
-          {groupIndex > 0 && <Separator className="my-2 mx-3" />}
+          {groupIndex > 0 && <Separator decorative={false} className="my-2 mx-3" />}
           <p className="px-5 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
             {group.label}
           </p>
