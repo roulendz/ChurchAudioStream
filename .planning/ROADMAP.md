@@ -120,7 +120,7 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 8. Reliability | v1.0 | 5/5 | Complete | 2026-05-05 |
 | 9. Monitoring & Polish | v1.0 | 4/4 | Complete | 2026-05-05 |
 | 10. Distribution | v1.0 | 3/3 | Complete | 2026-05-05 |
-| 11. Foundation | v1.1 | 0/5 | Not started | - |
+| 11. Foundation | v1.1 | 1/5 | In progress | - |
 | 12. Sidebar & Header | v1.1 | 0/? | Not started | - |
 | 13. Channel Cards | v1.1 | 0/? | Not started | - |
 | 14. Drag-to-Reorder | v1.1 | 0/? | Not started | - |

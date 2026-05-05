@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: Admin Panel Improvements
 status: executing
 stopped_at: Roadmap created, ready for `/gsd-plan-phase 11`
-last_updated: "2026-05-05T17:00:10.897Z"
-last_activity: 2026-05-05 -- Phase 11 execution started
+last_updated: "2026-05-05T17:09:00.000Z"
+last_activity: 2026-05-05 -- Plan 11-01 complete (Tailwind + shadcn foundation)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-05-05)
 ## Current Position
 
 Phase: 11 (Foundation) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 11
-Last activity: 2026-05-05 -- Phase 11 execution started
+Plan: 2 of 5
+Status: Plan 11-01 complete, ready for 11-02
+Last activity: 2026-05-05 -- Plan 11-01 complete (Tailwind + shadcn foundation)
 
 ```
 [##########----] 71% (10/14 phases)
 ```
 
-v1.1 progress: 0/4 phases complete
+v1.1 progress: 0/4 phases complete (1/5 plans done)
 
 ## Accumulated Context
 
@@ -51,6 +51,10 @@ v1.1 progress: 0/4 phases complete
 - [v1.1]: @dnd-kit/react v0.4+ for drag-to-reorder (NOT legacy @dnd-kit/core)
 - [v1.1]: System font stack only (no external CDN fonts)
 
+- [v1.1]: Plugin order [react(), tailwindcss()] per shadcn docs
+- [v1.1]: shadcn as regular dep (not devDep) for shadcn/tailwind.css
+- [v1.1]: Manual components.json + utils.ts instead of npx shadcn init
+
 ### Blockers/Concerns
 
 None.
@@ -66,5 +70,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-05-05
-Stopped at: Roadmap created, ready for `/gsd-plan-phase 11`
-Resume file: None
+Stopped at: Completed 11-01-PLAN.md (Tailwind + shadcn foundation)
+Resume file: .planning/phases/11-foundation/11-01-SUMMARY.md
