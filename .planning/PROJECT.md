@@ -81,6 +81,35 @@ Enable multilingual church members and hearing-impaired listeners to hear sermon
 | No listener authentication | Church is welcoming, minimal friction to start listening | — Pending |
 | Tauri 2.x + Node.js sidecar | Lower RAM (150-250MB vs 400-600MB Electron), native feel, Node.js sidecar runs mediasoup/Express/WebSocket. Admin GUI connects to server via same API as Web UI. | — Pending |
 | Dante/AES67 + local audio device support | Both input methods: AES67 multicast for Dante churches, system audio devices for non-Dante churches. Broadens audience. | — Pending |
+| shadcn/ui + Tailwind CSS for admin panel | Design system with accessible Radix primitives, utility-first styling, Lucide icons. Replaces hand-rolled CSS. | — Pending |
+
+## Current Milestone: v1.1 Admin Panel Improvements
+
+**Goal:** Elevate the admin dashboard from hand-rolled CSS to a polished, component-library-driven UI using shadcn/ui + Tailwind CSS — adding visual hierarchy, real-time feedback, and mixing-console feel.
+
+**Target features:**
+- Foundation — Install Tailwind CSS + shadcn/ui (CLI), migrate existing components from plain CSS to Tailwind + shadcn primitives
+- Sidebar — SVG icons (Lucide), active indicator bar, section grouping, collapsible mode
+- Channel cards — Card components with real-time VU meter previews inline, status badges, drag-to-reorder with visual feedback
+- Header — Breadcrumb/section title, connection status dot, listener count badge prominently visible
+- Typography & spacing — Design tokens, larger section headings, card-based containers with subtle elevation, better whitespace rhythm
+
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
 
 ---
-*Last updated: 2026-02-05 after framework decision and requirements scoping*
+*Last updated: 2026-05-05 after milestone v1.1 initialization*
