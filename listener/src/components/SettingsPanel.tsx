@@ -1,23 +1,18 @@
 /**
- * Settings bottom sheet containing Language, Theme, and Audio Enhancement.
+ * Settings bottom sheet containing Language and Theme controls.
  *
  * Uses same slide-up animation as StatsPanel (stats-slide-up keyframes).
- * Audio Enhancement toggle only visible when isPlaying is true.
  */
 import { useTranslation } from "react-i18next";
 import type { ThemeMode } from "../hooks/useTheme";
 import { ThemeToggle } from "./ThemeToggle";
 import { LanguagePicker } from "./LanguagePicker";
-import { ProcessingToggle } from "./ProcessingToggle";
 
 interface SettingsPanelProps {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly themeMode: ThemeMode;
   readonly onThemeModeChange: (mode: ThemeMode) => void;
-  readonly processingEnabled: boolean;
-  readonly onProcessingToggle: () => void;
-  readonly isPlaying: boolean;
 }
 
 export function SettingsPanel({
@@ -25,9 +20,6 @@ export function SettingsPanel({
   onClose,
   themeMode,
   onThemeModeChange,
-  processingEnabled,
-  onProcessingToggle,
-  isPlaying,
 }: SettingsPanelProps) {
   const { t } = useTranslation();
 
@@ -68,16 +60,6 @@ export function SettingsPanel({
           <span className="settings-panel__section-label">{t("settings.appearance")}</span>
           <ThemeToggle mode={themeMode} onModeChange={onThemeModeChange} />
         </div>
-
-        {isPlaying && (
-          <div className="settings-panel__section">
-            <ProcessingToggle
-              enabled={processingEnabled}
-              onToggle={onProcessingToggle}
-              disabled={!isPlaying}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

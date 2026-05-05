@@ -20,8 +20,6 @@ export interface UseAudioPlaybackResult {
   getAnalyser: () => AnalyserNode | null;
   /** False on iOS WebKit where audio.volume cannot be set. */
   isSoftwareVolumeSupported: boolean;
-  /** Get the AudioEngine instance (for mix balance Web Audio graph). */
-  getEngine: () => AudioEngine | null;
 }
 
 export function useAudioPlayback(): UseAudioPlaybackResult {
@@ -78,10 +76,6 @@ export function useAudioPlayback(): UseAudioPlaybackResult {
     return engineRef.current?.getAnalyser() ?? null;
   }, []);
 
-  const getEngine = useCallback((): AudioEngine | null => {
-    return engineRef.current;
-  }, []);
-
   return {
     startPlayback,
     stopPlayback,
@@ -91,6 +85,5 @@ export function useAudioPlayback(): UseAudioPlaybackResult {
     isMuted,
     getAnalyser,
     isSoftwareVolumeSupported,
-    getEngine,
   };
 }

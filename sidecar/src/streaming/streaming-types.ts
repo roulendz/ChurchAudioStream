@@ -104,17 +104,6 @@ export interface ListenerPeerData {
   currentChannelId: string | null;
   /** Whether this peer is an admin preview connection (excluded from listener counts). */
   isAdmin: boolean;
-
-  // -------------------------------------------------------------------------
-  // Secondary transport/consumer for dual-channel mixing (Phase 7)
-  // -------------------------------------------------------------------------
-
-  /** Secondary WebRTC transport for dual-channel mixing (null when not mixing). */
-  secondaryWebRtcTransport: mediasoupTypes.WebRtcTransport | null;
-  /** Secondary consumer for the mix channel (null when not mixing). */
-  secondaryConsumer: mediasoupTypes.Consumer | null;
-  /** Channel ID of the secondary mix channel (null when not mixing). */
-  secondaryChannelId: string | null;
 }
 
 // ---------------------------------------------------------------------------

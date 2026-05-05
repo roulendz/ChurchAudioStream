@@ -48,10 +48,6 @@ export interface AudioEngine {
   getAnalyser(): AnalyserNode | null;
   /** True if audio.volume mutates the audible level (false on iOS WebKit). */
   isSoftwareVolumeSupported(): boolean;
-  /** Get the AudioContext instance for Web Audio graph construction (mix mode). */
-  getAudioContext(): AudioContext;
-  /** Get the internal audio element for routing in mix mode. */
-  getAudioElement(): HTMLAudioElement;
   close(): void;
 }
 
@@ -163,14 +159,6 @@ export function createAudioEngine(): AudioEngine {
 
     isSoftwareVolumeSupported(): boolean {
       return !isIos;
-    },
-
-    getAudioContext(): AudioContext {
-      return audioContext;
-    },
-
-    getAudioElement(): HTMLAudioElement {
-      return audioElement;
     },
 
     close(): void {

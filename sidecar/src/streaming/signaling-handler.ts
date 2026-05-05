@@ -48,14 +48,6 @@ export type ChannelStreamingConfigResolver = (channelId: string) =>
     }
   | undefined;
 
-/**
- * Callback that toggles AGC processing for a channel.
- * Keeps SignalingHandler decoupled from AudioSubsystem.
- */
-export type ProcessingToggleHandler = (
-  channelId: string,
-  enabled: boolean,
-) => void;
 
 // ---------------------------------------------------------------------------
 // PeerHeartbeatTracker (private helper -- SRP)
@@ -141,7 +133,6 @@ export class SignalingHandler extends EventEmitter {
   private readonly metadataResolver: ChannelMetadataResolver;
   private readonly channelConfigResolver: ChannelStreamingConfigResolver;
   private readonly channelListProvider: () => ListenerChannelInfo[];
-  private readonly processingToggleHandler: ProcessingToggleHandler | null;
   private readonly heartbeatTracker: PeerHeartbeatTracker;
   private readonly peers: Map<string, ProtooPeer> = new Map();
 
@@ -152,7 +143,6 @@ export class SignalingHandler extends EventEmitter {
     channelConfigResolver: ChannelStreamingConfigResolver,
     heartbeatIntervalMs: number,
     channelListProvider?: () => ListenerChannelInfo[],
-    processingToggleHandler?: ProcessingToggleHandler,
   ) {
     super();
     this.routerManager = routerManager;
@@ -161,7 +151,6 @@ export class SignalingHandler extends EventEmitter {
     this.channelConfigResolver = channelConfigResolver;
     this.channelListProvider = channelListProvider
       ?? (() => this.routerManager.getActiveChannelList(this.metadataResolver));
-    this.processingToggleHandler = processingToggleHandler ?? null;
     this.heartbeatTracker = new PeerHeartbeatTracker(
       heartbeatIntervalMs,
       (peerId: string) => this.peers.get(peerId),
@@ -224,9 +213,6 @@ export class SignalingHandler extends EventEmitter {
       currentConsumer: null,
       currentChannelId: null,
       isAdmin: false,
-      secondaryWebRtcTransport: null,
-      secondaryConsumer: null,
-      secondaryChannelId: null,
     };
     Object.assign(peer.data, peerData);
 
@@ -475,26 +461,6 @@ export class SignalingHandler extends EventEmitter {
 
       case "switchChannel":
         await this.handleSwitchChannel(peer, request, accept, reject);
-        break;
-
-      case "consumeSecondary":
-        await this.handleConsumeSecondary(peer, request, accept, reject);
-        break;
-
-      case "disconnectSecondary":
-        this.handleDisconnectSecondary(peer, accept);
-        break;
-
-      case "connectSecondaryTransport":
-        await this.handleConnectSecondaryTransport(peer, request, accept, reject);
-        break;
-
-      case "resumeSecondaryConsumer":
-        await this.handleResumeSecondaryConsumer(peer, accept, reject);
-        break;
-
-      case "toggleProcessing":
-        this.handleToggleProcessing(peer, request, accept, reject);
         break;
 
       default:
@@ -983,234 +949,6 @@ export class SignalingHandler extends EventEmitter {
     });
   }
 
-  // -----------------------------------------------------------------------
-  // Internal: secondary consumer lifecycle (dual-channel mixing)
-  // -----------------------------------------------------------------------
-
-  /**
-   * Subscribe to a secondary channel for dual-channel mixing.
-   * Creates a separate WebRtcTransport on the secondary channel's router.
-   * Only one secondary consumer per peer (previous is closed on re-request).
-   */
-  private async handleConsumeSecondary(
-    peer: ProtooPeer,
-    request: ProtooRequest,
-    accept: ProtooAcceptFn,
-    reject: ProtooRejectFn,
-  ): Promise<void> {
-    const channelId = request.data?.channelId as string | undefined;
-    if (!channelId) {
-      reject(400, "Missing channelId");
-      return;
-    }
-
-    const peerData = peer.data as unknown as ListenerPeerData;
-    if (!peerData.rtpCapabilities) {
-      reject(400, "RTP capabilities not set");
-      return;
-    }
-
-    // Cannot mix with the same channel
-    if (channelId === peerData.currentChannelId) {
-      reject(400, "Secondary channel must differ from primary");
-      return;
-    }
-
-    const router = this.routerManager.getRouterForChannel(channelId);
-    const producer = this.routerManager.getProducerForChannel(channelId);
-
-    if (!router || !producer) {
-      reject(404, "Secondary channel not active");
-      return;
-    }
-
-    if (!router.canConsume({ producerId: producer.id, rtpCapabilities: peerData.rtpCapabilities })) {
-      reject(400, "Cannot consume secondary: incompatible RTP capabilities");
-      return;
-    }
-
-    // Close existing secondary if switching mix channel
-    this.closeSecondary(peerData, peer.id);
-
-    // Create secondary transport on the secondary channel's router
-    const secondaryPeerId = `${peer.id}__secondary`;
-    const transportInfo = await this.transportManager.createForListener(
-      router,
-      secondaryPeerId,
-    );
-
-    peerData.secondaryWebRtcTransport =
-      this.transportManager.getTransport(secondaryPeerId) ?? null;
-
-    // Resolve loss recovery for secondary channel
-    const channelConfig = this.channelConfigResolver(channelId);
-    const lossRecovery = channelConfig?.lossRecovery ?? "nack";
-    const consumerRtpCapabilities = this.buildConsumerRtpCapabilities(
-      peerData.rtpCapabilities,
-      lossRecovery,
-    );
-
-    // Create consumer paused
-    const consumer = await peerData.secondaryWebRtcTransport!.consume({
-      producerId: producer.id,
-      rtpCapabilities: consumerRtpCapabilities,
-      paused: true,
-    });
-
-    this.wireConsumerEventHandlers(consumer, peer);
-
-    peerData.secondaryConsumer = consumer;
-    peerData.secondaryChannelId = channelId;
-
-    accept({
-      transportInfo: {
-        id: transportInfo.id,
-        iceParameters: transportInfo.iceParameters,
-        iceCandidates: transportInfo.iceCandidates,
-        dtlsParameters: transportInfo.dtlsParameters,
-      },
-      consumerId: consumer.id,
-      producerId: consumer.producerId,
-      kind: consumer.kind,
-      rtpParameters: consumer.rtpParameters,
-      latencyMode: channelConfig?.latencyMode ?? "live",
-      lossRecovery,
-    });
-
-    logger.info("Secondary consumer created for mixing", {
-      peerId: peer.id,
-      primaryChannelId: peerData.currentChannelId,
-      secondaryChannelId: channelId,
-      consumerId: consumer.id,
-    });
-  }
-
-  /**
-   * Disconnect secondary consumer and transport (stop mixing).
-   */
-  private handleDisconnectSecondary(
-    peer: ProtooPeer,
-    accept: ProtooAcceptFn,
-  ): void {
-    const peerData = peer.data as unknown as ListenerPeerData;
-    this.closeSecondary(peerData, peer.id);
-    accept();
-
-    logger.info("Secondary consumer disconnected", { peerId: peer.id });
-  }
-
-  /**
-   * Connect the secondary WebRTC transport (DTLS handshake).
-   */
-  private async handleConnectSecondaryTransport(
-    peer: ProtooPeer,
-    request: ProtooRequest,
-    accept: ProtooAcceptFn,
-    reject: ProtooRejectFn,
-  ): Promise<void> {
-    const peerData = peer.data as unknown as ListenerPeerData;
-    if (!peerData.secondaryWebRtcTransport) {
-      reject(400, "No secondary transport to connect");
-      return;
-    }
-
-    if (!request.data?.dtlsParameters) {
-      reject(400, "Missing dtlsParameters");
-      return;
-    }
-
-    await peerData.secondaryWebRtcTransport.connect({
-      dtlsParameters: request.data.dtlsParameters as mediasoupTypes.DtlsParameters,
-    });
-    accept();
-  }
-
-  /**
-   * Resume the secondary consumer (client ready for secondary audio).
-   */
-  private async handleResumeSecondaryConsumer(
-    peer: ProtooPeer,
-    accept: ProtooAcceptFn,
-    reject: ProtooRejectFn,
-  ): Promise<void> {
-    const peerData = peer.data as unknown as ListenerPeerData;
-    if (!peerData.secondaryConsumer) {
-      reject(400, "No secondary consumer to resume");
-      return;
-    }
-    await peerData.secondaryConsumer.resume();
-    accept();
-  }
-
-  /**
-   * Close secondary consumer and transport. Reusable helper for
-   * disconnect, peer close, and secondary channel switch scenarios.
-   */
-  private closeSecondary(peerData: ListenerPeerData, peerId: string): void {
-    if (peerData.secondaryConsumer) {
-      peerData.secondaryConsumer.close();
-      peerData.secondaryConsumer = null;
-    }
-    if (peerData.secondaryWebRtcTransport) {
-      const secondaryPeerId = `${peerId}__secondary`;
-      this.transportManager.closeTransport(secondaryPeerId);
-      peerData.secondaryWebRtcTransport = null;
-    }
-    peerData.secondaryChannelId = null;
-  }
-
-  // -----------------------------------------------------------------------
-  // Internal: processing toggle
-  // -----------------------------------------------------------------------
-
-  /**
-   * Toggle AGC processing for a channel. Validates inputs, delegates to
-   * the processingToggleHandler callback (wired to AudioSubsystem).
-   */
-  private handleToggleProcessing(
-    peer: ProtooPeer,
-    request: ProtooRequest,
-    accept: ProtooAcceptFn,
-    reject: ProtooRejectFn,
-  ): void {
-    if (!this.processingToggleHandler) {
-      reject(500, "Processing toggle not available");
-      return;
-    }
-
-    const channelId = request.data?.channelId as string | undefined;
-    const enabled = request.data?.enabled;
-
-    if (!channelId) {
-      reject(400, "Missing channelId");
-      return;
-    }
-
-    if (typeof enabled !== "boolean") {
-      reject(400, "Missing or invalid 'enabled' (boolean required)");
-      return;
-    }
-
-    // Validate channel exists via router manager
-    const router = this.routerManager.getRouterForChannel(channelId);
-    if (!router) {
-      reject(404, "Channel not active");
-      return;
-    }
-
-    try {
-      this.processingToggleHandler(channelId, enabled);
-      accept({ channelId, processingEnabled: enabled });
-
-      logger.info("Processing toggled by listener", {
-        peerId: peer.id,
-        channelId,
-        enabled,
-      });
-    } catch (error) {
-      reject(500, `Failed to toggle processing: ${toErrorMessage(error)}`);
-    }
-  }
 
   // -----------------------------------------------------------------------
   // Internal: peer close cleanup
@@ -1218,9 +956,6 @@ export class SignalingHandler extends EventEmitter {
 
   private handlePeerClose(peer: ProtooPeer): void {
     const peerData = peer.data as unknown as ListenerPeerData;
-
-    // Close secondary transport/consumer if mixing
-    this.closeSecondary(peerData, peer.id);
 
     // Close primary transport (cascades to consumer)
     this.transportManager.closeTransport(peer.id);

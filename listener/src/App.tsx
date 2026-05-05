@@ -25,8 +25,6 @@ import { useAudioPlayback } from "./hooks/useAudioPlayback";
 import { usePreferences } from "./hooks/usePreferences";
 import { usePwaInstall } from "./hooks/usePwaInstall";
 import { useTheme } from "./hooks/useTheme";
-import { useMixBalance } from "./hooks/useMixBalance";
-import { useProcessingToggle } from "./hooks/useProcessingToggle";
 import { ChannelListView } from "./views/ChannelListView";
 import { PlayerView } from "./views/PlayerView";
 import { OfflineScreen } from "./components/OfflineScreen";
@@ -60,13 +58,10 @@ function App() {
     isMuted,
     getAnalyser,
     isSoftwareVolumeSupported,
-    getEngine,
   } = useAudioPlayback();
   const { preferences, setLastChannel, isReturningListener } = usePreferences();
   const { canInstall, promptInstall } = usePwaInstall(isReturningListener);
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
-  const mixBalance = useMixBalance();
-  const processingToggle = useProcessingToggle();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   /** Saved scroll position for the channel list view. */
@@ -192,10 +187,6 @@ function App() {
               isSoftwareVolumeSupported={isSoftwareVolumeSupported}
               reconnectTrigger={reconnectTrigger}
               serverLevel={channelLevels.get(liveChannel.id) ?? null}
-              channels={channels}
-              mixBalance={mixBalance}
-              processingToggle={processingToggle}
-              getEngine={getEngine}
               onOpenSettings={() => setSettingsOpen(true)}
             />
           </div>
@@ -207,13 +198,6 @@ function App() {
         onClose={() => setSettingsOpen(false)}
         themeMode={themeMode}
         onThemeModeChange={setThemeMode}
-        processingEnabled={processingToggle.processingEnabled}
-        onProcessingToggle={() => {
-          if (peer && selectedChannel) {
-            processingToggle.toggle(selectedChannel.id, peer);
-          }
-        }}
-        isPlaying={currentView === "player" && !!selectedChannel}
       />
     </div>
   );
