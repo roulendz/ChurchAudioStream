@@ -1,5 +1,4 @@
 import { useState } from "react";
-import "./App.css";
 import { useServerStatus } from "./hooks/useServerStatus";
 import { useChannels } from "./hooks/useChannels";
 import { useSources } from "./hooks/useSources";
@@ -65,8 +64,8 @@ function App() {
       reconnectAttempts={reconnectAttempts}
     >
       {currentSection === "overview" && (
-        <div className="overview-section">
-          <h2>Overview</h2>
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold text-foreground">Overview</h2>
           <ServerStatus
             stats={stats}
             totalListeners={totalListeners}
@@ -74,16 +73,14 @@ function App() {
           />
           <QrCodeDisplay config={config} />
           {channels.length > 0 && (
-            <div className="overview-channel-badges">
-              <h3 className="overview-subheading">Listeners per Channel</h3>
-              <div className="overview-badge-grid">
+            <div className="bg-card border border-border rounded-md p-5">
+              <h3 className="text-base font-semibold text-foreground mb-3">Listeners per Channel</h3>
+              <div className="flex flex-wrap gap-3">
                 {channels.map((ch) => (
-                  <div key={ch.id} className="overview-badge-item">
-                    <span className="overview-badge-name">{ch.name}</span>
-                    <span className="listener-badge">
-                      <span className="listener-badge-count">
-                        {getChannelListenerCount(ch.id)}
-                      </span>
+                  <div key={ch.id} className="flex items-center gap-2 bg-secondary rounded-md px-3 py-2">
+                    <span className="text-sm text-muted-foreground">{ch.name}</span>
+                    <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+                      {getChannelListenerCount(ch.id)}
                     </span>
                   </div>
                 ))}
@@ -128,8 +125,8 @@ function App() {
       )}
 
       {currentSection === "monitoring" && (
-        <div className="monitoring-section">
-          <h2 className="monitoring-section-title">Audio Levels</h2>
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-foreground">Audio Levels</h2>
           <VuMeterBank channels={channels} audioLevels={audioLevels} />
         </div>
       )}
@@ -141,13 +138,13 @@ function App() {
             interfaces={interfaces}
             onSave={updateConfig}
           />
-          <div className="settings-update-card">
+          <div className="mt-6">
             <CheckForUpdatesButton />
           </div>
-          <div className="settings-qr-code">
+          <div className="mt-6">
             <QrCodeDisplay config={config} />
           </div>
-          <div className="settings-log-viewer">
+          <div className="mt-6">
             <LogViewer subscribe={subscribe} />
           </div>
         </>
