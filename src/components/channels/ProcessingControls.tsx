@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { cn } from "@/lib/utils";
 
 type AudioMode = "speech" | "music";
 
@@ -103,23 +104,33 @@ export function ProcessingControls({
   }, []);
 
   return (
-    <div className="processing-controls">
-      <h4 className="config-section-title">Audio Processing</h4>
+    <div className="flex flex-col gap-3">
+      <h4 className="text-sm font-semibold text-foreground mb-1">Audio Processing</h4>
 
       {/* Speech/Music mode toggle */}
-      <div className="processing-field">
-        <label className="processing-label">Mode</label>
-        <div className="mode-toggle">
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-muted-foreground">Mode</span>
+        <div className="inline-flex rounded-md border border-border overflow-hidden self-start">
           <button
             type="button"
-            className={`mode-toggle-btn ${localMode === "speech" ? "mode-toggle-btn--active" : ""}`}
+            className={cn(
+              "px-4 py-1.5 text-sm font-medium transition-colors border-r border-border",
+              localMode === "speech"
+                ? "bg-primary text-primary-foreground"
+                : "bg-transparent text-muted-foreground hover:text-foreground",
+            )}
             onClick={() => handleModeChange("speech")}
           >
             Speech
           </button>
           <button
             type="button"
-            className={`mode-toggle-btn ${localMode === "music" ? "mode-toggle-btn--active" : ""}`}
+            className={cn(
+              "px-4 py-1.5 text-sm font-medium transition-colors",
+              localMode === "music"
+                ? "bg-primary text-primary-foreground"
+                : "bg-transparent text-muted-foreground hover:text-foreground",
+            )}
             onClick={() => handleModeChange("music")}
           >
             Music
@@ -128,22 +139,23 @@ export function ProcessingControls({
       </div>
 
       {/* AGC enabled toggle */}
-      <div className="processing-field">
-        <label className="processing-checkbox-label">
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
           <input
             type="checkbox"
             checked={localAgcEnabled}
             onChange={(e) => handleAgcEnabledChange(e.target.checked)}
+            className="accent-primary"
           />
           AGC (Auto Gain Control)
         </label>
       </div>
 
       {/* AGC target slider */}
-      <div className="processing-field">
-        <label className="processing-label">
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-muted-foreground">
           Target Loudness: {localTargetLufs} LUFS
-        </label>
+        </span>
         <input
           type="range"
           min={MIN_TARGET_LUFS}
@@ -154,9 +166,9 @@ export function ProcessingControls({
           onMouseUp={handleTargetLufsCommit}
           onTouchEnd={handleTargetLufsCommit}
           disabled={!localAgcEnabled}
-          className="processing-slider"
+          className="w-full accent-primary disabled:opacity-40 disabled:cursor-not-allowed"
         />
-        <div className="processing-slider-labels">
+        <div className="flex justify-between text-xs text-muted-foreground">
           <span>{MIN_TARGET_LUFS}</span>
           <span>{MAX_TARGET_LUFS}</span>
         </div>
