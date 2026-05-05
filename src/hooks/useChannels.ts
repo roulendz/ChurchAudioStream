@@ -100,7 +100,11 @@ export function useChannels(
     const unsubCreated = subscribe("channel:created", (msg: WsMessage) => {
       const created = msg.payload as AdminChannel | undefined;
       if (created) {
-        setChannels((prev) => sortBySortOrder([...prev, created]));
+        setChannels((prev) =>
+          prev.some((ch) => ch.id === created.id)
+            ? prev
+            : sortBySortOrder([...prev, created]),
+        );
       }
     });
 
