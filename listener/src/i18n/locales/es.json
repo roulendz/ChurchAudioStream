@@ -36,5 +36,6 @@
   "install.dismiss": "Descartar",
   "share.title": "Compartir este enlace",
   "share.close": "Cerrar",
-  "stats.title": "Estadisticas de conexion"
+  "stats.title": "Estadisticas de conexion",
+  "channelCard.notStarted": "El servicio aun no ha comenzado — por favor espera"
 }

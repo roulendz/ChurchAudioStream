@@ -36,5 +36,6 @@
   "install.dismiss": "Dismiss",
   "share.title": "Share this link",
   "share.close": "Close",
-  "stats.title": "Connection Stats"
+  "stats.title": "Connection Stats",
+  "channelCard.notStarted": "Service not started yet — please wait"
 }

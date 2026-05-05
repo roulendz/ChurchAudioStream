@@ -26,6 +26,11 @@ interface ChannelStoppedData {
   remainingChannels: ListenerChannelInfo[];
 }
 
+interface ChannelStateChangedData {
+  channelId: string;
+  state: "active" | "stopped";
+}
+
 /**
  * Sort channels: live first (hasActiveProducer=true), offline last.
  * Within each group, preserve original server order.
@@ -75,11 +80,23 @@ export function useChannelList(peer: Peer | null): UseChannelListResult {
 
         case "channelStopped": {
           const payload = notification.data as unknown as ChannelStoppedData;
-          // Update the stopped channel to offline and merge with remaining
           setChannels((prev) => {
             const updated = prev.map((ch) =>
               ch.id === payload.channelId
                 ? { ...ch, hasActiveProducer: false }
+                : ch,
+            );
+            return sortChannels(updated);
+          });
+          break;
+        }
+
+        case "channelStateChanged": {
+          const payload = notification.data as unknown as ChannelStateChangedData;
+          setChannels((prev) => {
+            const updated = prev.map((ch) =>
+              ch.id === payload.channelId
+                ? { ...ch, hasActiveProducer: payload.state === "active" }
                 : ch,
             );
             return sortChannels(updated);

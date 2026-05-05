@@ -36,5 +36,6 @@
   "install.dismiss": "Noraidit",
   "share.title": "Kopigot saiti",
   "share.close": "Aizvert",
-  "stats.title": "Savienojuma statistika"
+  "stats.title": "Savienojuma statistika",
+  "channelCard.notStarted": "Tulkojums vēl nav sākts — lūdzu, uzgaidiet"
 }
