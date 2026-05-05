@@ -54,10 +54,15 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Font rendering uses system stack with no network requests for fonts
 **Plans:** 5 plans
 Plans:
+**Wave 1**
 - [ ] 11-01-PLAN.md — Install deps, configure Vite/TS/Vitest, create index.css with OKLCH tokens, cn() utility + tests
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 11-02-PLAN.md — Convert layout + small components (DashboardShell, Sidebar, ConnectionStatus, App.tsx, ListenerCountBadge, VuMeterBank, QrCodeDisplay)
 - [ ] 11-03-PLAN.md — Convert channel components (ChannelList, ChannelConfigPanel, ChannelCreateDialog, ProcessingControls, SourceSelector)
 - [ ] 11-04-PLAN.md — Convert settings/monitoring + CSS module components (ServerStatus, SettingsPanel + DesignTokensSection, LogViewer, CheckForUpdatesButton, UpdateToast)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 11-05-PLAN.md — Delete legacy CSS, VuMeter container, design token tests, build validation, visual checkpoint
 **UI hint**: yes
 
