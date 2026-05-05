@@ -18,9 +18,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: WebRTC Streaming Core** - mediasoup SFU distributing Opus audio to browser listeners with sub-100ms latency
 - [x] **Phase 5: Listener Web UI** - Mobile-first PWA with channel selection, volume control, and QR code access
 - [x] **Phase 6: Admin Dashboard** - Channel configuration, real-time VU meters, listener counts, and server status monitoring
-- [x] **Phase 7: Listener Advanced Features** - Mix balance slider, processing toggles, localization, and light/dark theme
-- [ ] **Phase 8: Reliability & Self-Healing** - Auto-reconnection, pipeline crash recovery, worker rotation, and network diagnostics
-- [ ] **Phase 9: Monitoring & Admin Polish** - Stream health graphs, engagement statistics, admin theming, and settings import/export
+- [x] **Phase 7: Listener UX & Audio Latency** - i18n (en/es/lv), light/dark theme, audio latency fix (4s → <150ms)
+- [ ] **Phase 8: Reliability & Self-Healing** - Auto-reconnection (latency-aware), pipeline crash recovery, worker rotation, health indicators
+- [ ] **Phase 9: Monitoring & Admin Polish** - Latency dashboard, stream health, engagement graphs, admin theming, settings export/import
 - [ ] **Phase 10: Distribution & Deployment** - Cross-platform installers, portable builds, auto-start, and update notifications
 
 ## Phase Details
@@ -145,58 +145,61 @@ Plans:
 - [ ] 06-03-PLAN.md -- Real-time Canvas VU meters and per-channel audio processing controls
 - [ ] 06-04-PLAN.md -- Listener counts, server status monitoring, and QR code display
 
-### Phase 7: Listener Advanced Features
-**Goal**: Listeners can blend two channels, toggle audio processing, use the UI in their own language, and choose light or dark theme
+### Phase 7: Listener UX & Audio Latency
+**Goal**: Listeners get i18n, theming, and sub-150ms audio latency (down from 4 seconds) via bounded GStreamer queues and jitter buffer control
 **Depends on**: Phase 5
-**Requirements**: STRM-03, STRM-04, LWEB-06, LWEB-07
+**Requirements**: LWEB-06, LWEB-07
 **Success Criteria** (what must be TRUE):
-  1. Listener can use a mix balance slider to blend the original language channel with a translation channel, hearing both at an adjustable ratio
-  2. Listener can toggle server-side audio processing (normalization) on or off from their phone, and the change is audible immediately
-  3. Listener can switch the Web UI language (e.g., English, Spanish) and all interface text updates without reloading
-  4. Web UI adapts to the phone's system light/dark preference automatically, and listener can manually override the theme
+  1. Listener can switch the Web UI language (en/es/lv) and all interface text updates without reloading
+  2. Web UI adapts to the phone's system light/dark preference automatically, and listener can manually override the theme
+  3. Audio latency from GStreamer to listener is under 150ms on LAN (measured via jitter buffer stats panel)
+  4. GStreamer tee queues are bounded (50ms, leaky=downstream) preventing accumulation drift
+  5. Browser jitter buffer target is set to 50ms preventing adaptive growth to seconds
 **Plans**: 5 plans
 
 Plans:
 - [x] 07-01-PLAN.md -- Vitest setup + CSS custom property refactoring + themes.css + useTheme hook + FOUC prevention
 - [x] 07-02-PLAN.md -- i18n framework (i18next) + 3 locale files (en/es/lv) + wrap all existing components with t()
-- [x] 07-03-PLAN.md -- Server-side protoo handlers: consumeSecondary, toggleProcessing, secondary transport lifecycle
-- [x] 07-04-PLAN.md -- Client mix balance hook (Web Audio crossfade) + processing toggle hook + slider/picker components
-- [x] 07-05-PLAN.md -- SettingsPanel + ThemeToggle + LanguagePicker + ProcessingToggle + PlayerView/App integration
+- [x] 07-03-PLAN.md -- Audio latency fixes: bounded tee queues, jitterBufferTarget, udpsink sync removal
+- [x] 07-04-PLAN.md -- Jitter buffer metrics in connection-stats + StatsPanel display
+- [x] 07-05-PLAN.md -- SettingsPanel with ThemeToggle + LanguagePicker (cleanup: removed mix/processing)
 
 ### Phase 8: Reliability & Self-Healing
-**Goal**: The system recovers automatically from WiFi drops, pipeline crashes, worker memory leaks, and network issues -- a Sunday service runs unattended without intervention
-**Depends on**: Phase 4, Phase 6
+**Goal**: The system recovers automatically from WiFi drops, pipeline crashes, and network issues while preserving low latency -- a Sunday service runs unattended without intervention
+**Depends on**: Phase 4, Phase 6, Phase 7
 **Requirements**: STRM-02, RELY-01, RELY-02, RELY-03, RELY-04, RELY-05
 **Success Criteria** (what must be TRUE):
-  1. When a listener's WiFi drops and reconnects, audio resumes automatically within 5 seconds without manual intervention
-  2. When a GStreamer pipeline crashes, it restarts automatically and the channel resumes streaming without affecting other channels
+  1. When a listener's WiFi drops and reconnects, audio resumes automatically within 5 seconds with latency staying under 150ms (no jitter buffer bloat after reconnect)
+  2. When a GStreamer pipeline crashes, it restarts automatically and the channel resumes streaming without affecting other channels or accumulating latency
   3. mediasoup workers that exceed a memory threshold are rotated gracefully without dropping active listener connections
-  4. Admin can run a network diagnostic that checks IGMP snooping, PTP clock status, and multicast health, and sees clear pass/fail results
-  5. Both admin GUI and listener Web UI show connection health indicators (connected, reconnecting, degraded) that reflect actual stream state
+  4. After any recovery event (reconnect, pipeline restart, worker rotation), measured jitter buffer delay returns to <100ms within 3 seconds
+  5. Both admin GUI and listener Web UI show connection health indicators (connected, reconnecting, degraded) that reflect actual stream state and latency
 **Plans**: TBD
 
 Plans:
-- [ ] 08-01: Listener auto-reconnection with exponential backoff and ICE restart
-- [ ] 08-02: GStreamer pipeline crash recovery and graceful degradation
+- [ ] 08-01: Listener auto-reconnection with exponential backoff, ICE restart, and jitter buffer reset
+- [ ] 08-02: GStreamer pipeline crash recovery with bounded-queue preservation
 - [ ] 08-03: mediasoup worker health monitoring and auto-rotation
-- [ ] 08-04: Network diagnostic tool (IGMP, PTP, multicast)
-- [ ] 08-05: Connection health indicators in admin and listener UIs
+- [ ] 08-04: Latency regression guard (alert if jitter buffer > 200ms sustained)
+- [ ] 08-05: Connection health indicators in admin and listener UIs (includes latency badge)
 
 ### Phase 9: Monitoring & Admin Polish
-**Goal**: Admin has deep visibility into stream health over time, can export/import settings across installations, and the admin GUI supports light/dark theming
-**Depends on**: Phase 6
+**Goal**: Admin has deep visibility into stream health (especially latency) over time, can export/import settings, and the admin GUI supports light/dark theming
+**Depends on**: Phase 6, Phase 7
 **Requirements**: AGUI-07, AGUI-08, AGUI-11, CONF-03
 **Success Criteria** (what must be TRUE):
-  1. Admin can view per-channel stream health metrics (latency, packet loss, buffer status) in real time
-  2. Admin can view historical engagement graphs showing listener trends and peak usage over a service session
-  3. Admin GUI supports light/dark theme with system-adaptive auto-detection and manual override
-  4. Admin can export all settings to a JSON file and import them on another installation, restoring the full configuration
+  1. Admin can view per-channel end-to-end latency (GStreamer queue + network + jitter buffer) in real time, with alert when >150ms
+  2. Admin can view per-channel stream health metrics (packet loss, buffer status, bitrate) alongside latency
+  3. Admin can view historical engagement graphs showing listener trends and peak usage over a service session
+  4. Admin GUI supports light/dark theme with system-adaptive auto-detection and manual override
+  5. Admin can export all settings to a JSON file and import them on another installation, restoring the full configuration
 **Plans**: TBD
 
 Plans:
-- [ ] 09-01: Stream health monitoring dashboard (latency, packet loss, buffer)
-- [ ] 09-02: Engagement statistics and historical graphs
+- [ ] 09-01: End-to-end latency dashboard (per-listener jitter buffer via consumer stats + GStreamer queue depth)
+- [ ] 09-02: Stream health panel (packet loss, bitrate, buffer) + engagement graphs
 - [ ] 09-03: Admin theme system and settings import/export
+- [ ] 09-04: Admin-only processing toggle (AGC on/off per channel, controlled from admin not listener)
 
 ### Phase 10: Distribution & Deployment
 **Goal**: The app is packaged for easy installation on Windows, Mac, and Linux, with optional auto-start and update notifications so churches can deploy and maintain it without technical expertise
@@ -214,6 +217,11 @@ Plans:
 - [ ] 10-02: Portable app builds
 - [ ] 10-03: Auto-start on boot and update notification system
 
+## Backlog (deferred from active phases)
+
+- **STRM-03**: Mix balance slider (blend two channels) — removed from Phase 7, not needed for MVP. Revisit after latency is validated in production.
+- **STRM-04**: Processing toggle in listener — removed. If needed, belongs in admin panel only (Phase 9, plan 09-04). One listener toggling AGC affects all listeners on that channel.
+
 ## Progress
 
 **Execution Order:**
@@ -228,7 +236,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 4. WebRTC Streaming Core | 9/9 | Verified (UAT v3: 6/6) | 2026-02-10 |
 | 5. Listener Web UI | 5/5 | Verified (7/7 must-haves, gaps closed) | 2026-02-10 |
 | 6. Admin Dashboard | 4/4 | Verified (26/26 must-haves) | 2026-02-10 |
-| 7. Listener Advanced Features | 5/5 | Complete | 30 min |
+| 7. Listener UX & Audio Latency | 5/5 | Complete (latency fix applied) | 2026-05-05 |
 | 8. Reliability & Self-Healing | 0/5 | Not started | - |
-| 9. Monitoring & Admin Polish | 0/3 | Not started | - |
+| 9. Monitoring & Admin Polish | 0/4 | Not started | - |
 | 10. Distribution & Deployment | 0/3 | Not started | - |

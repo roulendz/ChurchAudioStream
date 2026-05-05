@@ -42,10 +42,16 @@ export interface ConnectionStatsSnapshot {
   readonly receivingDurationMs: number;
   /** Wall-clock timestamp of this snapshot (ms since epoch). */
   readonly capturedAt: number;
-  /** Average jitter buffer delay in ms (jitterBufferDelay / emittedCount * 1000). */
+  /** Instantaneous jitter buffer delay in ms (delta over last interval). */
   readonly jitterBufferDelayMs: number;
-  /** Current jitter buffer target in ms (jitterBufferTargetDelay / emittedCount * 1000). */
+  /** Instantaneous jitter buffer target in ms (delta over last interval). */
   readonly jitterBufferTargetMs: number;
+  /** Raw cumulative jitterBufferDelay (seconds) — used for delta computation. */
+  readonly rawJbDelayCumulative: number;
+  /** Raw cumulative jitterBufferEmittedCount — used for delta computation. */
+  readonly rawJbEmittedCumulative: number;
+  /** Raw cumulative jitterBufferTargetDelay (seconds) — used for delta computation. */
+  readonly rawJbTargetCumulative: number;
 }
 
 const EMPTY_SNAPSHOT: ConnectionStatsSnapshot = {
@@ -66,6 +72,9 @@ const EMPTY_SNAPSHOT: ConnectionStatsSnapshot = {
   capturedAt: 0,
   jitterBufferDelayMs: 0,
   jitterBufferTargetMs: 0,
+  rawJbDelayCumulative: 0,
+  rawJbEmittedCumulative: 0,
+  rawJbTargetCumulative: 0,
 };
 
 export async function captureConnectionStats(
@@ -92,6 +101,9 @@ export async function captureConnectionStats(
     let remoteCandidateType = "";
     let jitterBufferDelayMs = 0;
     let jitterBufferTargetMs = 0;
+    let rawJbDelayCumulative = 0;
+    let rawJbEmittedCumulative = 0;
+    let rawJbTargetCumulative = 0;
 
     // Build candidate id -> type lookup so we can resolve the selected
     // pair after walking once.
@@ -157,14 +169,26 @@ export async function captureConnectionStats(
         }
 
         // Jitter buffer metrics (W3C webrtc-stats spec):
-        // jitterBufferDelay and jitterBufferTargetDelay are cumulative seconds;
-        // divide by jitterBufferEmittedCount for current average.
+        // Values are cumulative — compute DELTA between readings for instantaneous delay.
         const jbDelay = (report as Record<string, unknown>).jitterBufferDelay as number | undefined;
         const jbEmitted = (report as Record<string, unknown>).jitterBufferEmittedCount as number | undefined;
         const jbTarget = (report as Record<string, unknown>).jitterBufferTargetDelay as number | undefined;
-        if (jbEmitted && jbEmitted > 0) {
-          jitterBufferDelayMs = ((jbDelay ?? 0) / jbEmitted) * 1000;
-          jitterBufferTargetMs = ((jbTarget ?? 0) / jbEmitted) * 1000;
+        rawJbDelayCumulative = jbDelay ?? 0;
+        rawJbEmittedCumulative = jbEmitted ?? 0;
+        rawJbTargetCumulative = jbTarget ?? 0;
+
+        if (previous && previous.rawJbEmittedCumulative > 0) {
+          const dEmitted = rawJbEmittedCumulative - previous.rawJbEmittedCumulative;
+          if (dEmitted > 0) {
+            const dDelay = rawJbDelayCumulative - previous.rawJbDelayCumulative;
+            const dTarget = rawJbTargetCumulative - previous.rawJbTargetCumulative;
+            jitterBufferDelayMs = (dDelay / dEmitted) * 1000;
+            jitterBufferTargetMs = (dTarget / dEmitted) * 1000;
+          }
+        } else if (rawJbEmittedCumulative > 0) {
+          // First reading: use cumulative average as best estimate
+          jitterBufferDelayMs = (rawJbDelayCumulative / rawJbEmittedCumulative) * 1000;
+          jitterBufferTargetMs = (rawJbTargetCumulative / rawJbEmittedCumulative) * 1000;
         }
       }
     });
@@ -207,6 +231,9 @@ export async function captureConnectionStats(
       capturedAt: now,
       jitterBufferDelayMs,
       jitterBufferTargetMs,
+      rawJbDelayCumulative,
+      rawJbEmittedCumulative,
+      rawJbTargetCumulative,
     };
   } catch {
     return EMPTY_SNAPSHOT;
