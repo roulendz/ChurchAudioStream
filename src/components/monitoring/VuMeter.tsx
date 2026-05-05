@@ -185,12 +185,15 @@ export function VuMeter({ channelName, getLevels, width = 40, height = 160 }: Vu
   }, [draw]);
 
   return (
-    <div className="vu-meter">
+    <div className="flex flex-col items-center gap-1.5">
       <canvas
         ref={canvasRef}
+        className="rounded-sm"
         style={{ width: `${width}px`, height: `${height}px` }}
       />
-      <span className="vu-meter-label">{channelName}</span>
+      <span className="max-w-[60px] truncate text-center text-xs text-muted-foreground">
+        {channelName}
+      </span>
     </div>
   );
 }
