@@ -19,27 +19,26 @@ const mockGetLevels = (_channelId: string) => null;
 
 const noopFn = () => {};
 const noopIdFn = (_id: string) => {};
-const noopIdxFn = (_idx: number) => {};
 
 async function renderChannelCard(overrides: Partial<AdminChannel> = {}) {
   const { ChannelCard } = await import("@/components/channels/ChannelCard");
   const { TooltipProvider } = await import("@/components/ui/tooltip");
+  const { DragDropProvider } = await import("@dnd-kit/react");
   const channel = { ...mockChannel, ...overrides };
   return render(
-    <TooltipProvider>
-      <ChannelCard
-        channel={channel}
-        index={0}
-        totalChannels={3}
-        getLevels={mockGetLevels}
-        onStart={noopIdFn}
-        onStop={noopIdFn}
-        onConfigure={noopIdFn}
-        onRemove={noopIdFn}
-        onMoveUp={noopIdxFn}
-        onMoveDown={noopIdxFn}
-      />
-    </TooltipProvider>
+    <DragDropProvider>
+      <TooltipProvider>
+        <ChannelCard
+          channel={channel}
+          index={0}
+          getLevels={mockGetLevels}
+          onStart={noopIdFn}
+          onStop={noopIdFn}
+          onConfigure={noopIdFn}
+          onRemove={noopIdFn}
+        />
+      </TooltipProvider>
+    </DragDropProvider>
   );
 }
 
@@ -114,14 +113,28 @@ describe("Channel Cards", () => {
   it("action buttons wrapped in Tooltip triggers (CARD-03)", async () => {
     const { container } = await renderChannelCard();
     const tooltipTriggers = container.querySelectorAll('[data-slot="tooltip-trigger"]');
-    expect(tooltipTriggers.length).toBeGreaterThanOrEqual(5);
+    expect(tooltipTriggers.length).toBeGreaterThanOrEqual(3);
   });
 
   it("action buttons use shadcn Button component (CARD-03)", async () => {
     const { container } = await renderChannelCard();
     const buttons = container.querySelectorAll("button[data-variant]");
-    // moveUp, moveDown, start/stop, configure, remove = 5 buttons minimum
-    expect(buttons.length).toBeGreaterThanOrEqual(5);
+    // start/stop, configure, remove = 3 buttons minimum
+    expect(buttons.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("card has drag handle with GripVertical (CARD-04)", async () => {
+    await renderChannelCard();
+    const dragHandle = screen.getByRole("button", { name: /drag to reorder/i });
+    expect(dragHandle).toBeInTheDocument();
+  });
+
+  it("move up/down buttons removed (CARD-04)", async () => {
+    const { container } = await renderChannelCard();
+    const buttons = container.querySelectorAll("button");
+    const ariaLabels = Array.from(buttons).map(b => b.getAttribute("aria-label") ?? "");
+    expect(ariaLabels).not.toContain("Move up");
+    expect(ariaLabels).not.toContain("Move down");
   });
 
   it("card contains canvas element for VU meter (CARD-05)", async () => {
