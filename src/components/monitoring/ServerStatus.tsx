@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import type { ResourceStats, WorkerInfo } from "../../hooks/useResourceStats";
 
 // ---------------------------------------------------------------------------
@@ -40,44 +41,44 @@ export function ServerStatus({
 }: ServerStatusProps) {
   if (!stats) {
     return (
-      <div className="server-status">
-        <div className="stat-card">
-          <div className="stat-card-label">Server Status</div>
-          <div className="stat-card-value">Loading...</div>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+        <div className="bg-card border border-border rounded-md p-4">
+          <div className="text-xs text-muted-foreground mb-1">Server Status</div>
+          <div className="text-2xl font-semibold text-foreground">Loading...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="server-status">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
       {/* Total Listeners */}
-      <div className="stat-card">
-        <div className="stat-card-label">Total Listeners</div>
-        <div className="stat-card-value stat-card-value--large">
+      <div className="bg-card border border-border rounded-md p-4">
+        <div className="text-xs text-muted-foreground mb-1">Total Listeners</div>
+        <div className="text-3xl font-semibold text-foreground">
           {totalListeners}
         </div>
       </div>
 
       {/* Uptime */}
-      <div className="stat-card">
-        <div className="stat-card-label">Uptime</div>
-        <div className="stat-card-value">{formatUptime(stats.uptime)}</div>
+      <div className="bg-card border border-border rounded-md p-4">
+        <div className="text-xs text-muted-foreground mb-1">Uptime</div>
+        <div className="text-2xl font-semibold text-foreground">{formatUptime(stats.uptime)}</div>
       </div>
 
       {/* Host:Port */}
-      <div className="stat-card">
-        <div className="stat-card-label">Server Address</div>
-        <div className="stat-card-value stat-card-value--small">
+      <div className="bg-card border border-border rounded-md p-4">
+        <div className="text-xs text-muted-foreground mb-1">Server Address</div>
+        <div className="text-base font-semibold text-foreground font-[family-name:var(--font-mono)]">
           {stats.config.host}:{stats.config.port}
         </div>
       </div>
 
       {/* Connections */}
-      <div className="stat-card">
-        <div className="stat-card-label">Connections</div>
-        <div className="stat-card-value">{stats.connections.total}</div>
-        <div className="stat-card-breakdown">
+      <div className="bg-card border border-border rounded-md p-4">
+        <div className="text-xs text-muted-foreground mb-1">Connections</div>
+        <div className="text-2xl font-semibold text-foreground">{stats.connections.total}</div>
+        <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
           <span>Admin: {stats.connections.admin}</span>
           <span>Listener: {stats.connections.listener}</span>
           {stats.connections.unidentified > 0 && (
@@ -87,20 +88,23 @@ export function ServerStatus({
       </div>
 
       {/* Workers */}
-      <div className="stat-card">
-        <div className="stat-card-label">
+      <div className="bg-card border border-border rounded-md p-4">
+        <div className="text-xs text-muted-foreground mb-1">
           mediasoup Workers ({workers.length})
         </div>
         {workers.length === 0 ? (
-          <div className="stat-card-value stat-card-value--small">
+          <div className="text-base font-semibold text-foreground font-[family-name:var(--font-mono)]">
             No workers
           </div>
         ) : (
-          <div className="worker-list">
+          <div className="flex flex-col gap-2">
             {workers.map((worker) => (
-              <div key={worker.index} className="worker-item">
+              <div key={worker.index} className="flex items-center gap-2 text-sm">
                 <span
-                  className={`worker-dot ${worker.alive ? "worker-dot--alive" : "worker-dot--dead"}`}
+                  className={cn(
+                    "size-2 rounded-full shrink-0",
+                    worker.alive ? "bg-success" : "bg-destructive"
+                  )}
                 />
                 <span>
                   Worker {worker.index}: {formatMemoryKb(worker.peakMemoryKb)},{" "}
