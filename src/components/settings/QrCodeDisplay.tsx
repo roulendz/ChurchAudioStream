@@ -1,7 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
 import QRCode from "qrcode";
-import { Share2, ExternalLink } from "lucide-react";
-import { open } from "@tauri-apps/plugin-shell";
 import type { AppConfig } from "../../hooks/useServerStatus";
 
 // ---------------------------------------------------------------------------
@@ -69,13 +67,6 @@ export function QrCodeDisplay({ config }: QrCodeDisplayProps) {
     };
   }, [listenerUrl]);
 
-  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
-
-  const handleOpenUrl = useCallback(() => {
-    if (!listenerUrl) return;
-    open(listenerUrl);
-  }, [listenerUrl]);
-
   const handleCopyUrl = useCallback(() => {
     if (!listenerUrl) return;
 
@@ -84,24 +75,6 @@ export function QrCodeDisplay({ config }: QrCodeDisplayProps) {
       setTimeout(() => setCopied(false), 2000);
     });
   }, [listenerUrl]);
-
-  const handleShare = useCallback(() => {
-    if (!listenerUrl) return;
-
-    if (canShare) {
-      navigator.share({
-        title: "Church Audio Stream",
-        text: "Listen to live translations on your phone",
-        url: listenerUrl,
-      }).catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        open(listenerUrl);
-      });
-      return;
-    }
-
-    open(listenerUrl);
-  }, [listenerUrl, canShare]);
 
   if (!config) {
     return (
@@ -129,33 +102,13 @@ export function QrCodeDisplay({ config }: QrCodeDisplayProps) {
       )}
 
       {listenerUrl && (
-        <>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleOpenUrl}
-              className="font-mono text-sm text-primary break-all hover:underline text-left inline-flex items-center gap-1.5 cursor-pointer"
-            >
-              {listenerUrl}
-              <ExternalLink className="size-3.5 shrink-0" />
-            </button>
-            <button
-              type="button"
-              className="p-1.5 rounded-md text-muted-foreground transition-colors hover:text-primary hover:bg-accent"
-              onClick={handleShare}
-              aria-label="Share listener URL"
-            >
-              <Share2 className="size-4" />
-            </button>
-          </div>
-          <button
-            type="button"
-            className="px-3 py-1.5 bg-input border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-all duration-150 hover:border-primary hover:text-primary"
-            onClick={handleCopyUrl}
-          >
-            {copied ? "Copied!" : "Copy URL"}
-          </button>
-        </>
+        <button
+          type="button"
+          className="px-3 py-1.5 bg-input border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-all duration-150 hover:border-primary hover:text-primary"
+          onClick={handleCopyUrl}
+        >
+          {copied ? "Copied!" : "Copy URL"}
+        </button>
       )}
 
       <p className="text-xs text-muted-foreground text-center max-w-[300px]">
