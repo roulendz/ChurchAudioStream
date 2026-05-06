@@ -102,13 +102,16 @@ export function QrCodeDisplay({ config }: QrCodeDisplayProps) {
       )}
 
       {listenerUrl && (
-        <button
-          type="button"
-          className="px-3 py-1.5 bg-input border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-all duration-150 hover:border-primary hover:text-primary"
-          onClick={handleCopyUrl}
-        >
-          {copied ? "Copied!" : "Copy URL"}
-        </button>
+        <>
+          <span className="font-mono text-sm text-primary break-all">{listenerUrl}</span>
+          <button
+            type="button"
+            className="px-3 py-1.5 bg-input border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-all duration-150 hover:border-primary hover:text-primary"
+            onClick={handleCopyUrl}
+          >
+            {copied ? "Copied!" : "Copy URL"}
+          </button>
+        </>
       )}
 
       <p className="text-xs text-muted-foreground text-center max-w-[300px]">
