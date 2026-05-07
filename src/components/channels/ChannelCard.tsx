@@ -20,6 +20,8 @@ import {
   Trash2,
   GripVertical,
   EyeOff,
+  ShieldCheck,
+  AudioLines,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { cn } from "@/lib/utils";
@@ -50,6 +52,58 @@ function getProcessingField<T>(
     current = (current as Record<string, unknown>)[key];
   }
   return (current as T) ?? fallback;
+}
+
+function TogglePill({
+  checked,
+  onCheckedChange,
+  label,
+  icon: Icon,
+  activeHint,
+  inactiveHint,
+}: {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  activeHint: string;
+  inactiveHint: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <label
+          className={cn(
+            "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 cursor-pointer transition-colors select-none",
+            checked
+              ? "border-primary/40 bg-primary/10"
+              : "border-border bg-transparent hover:bg-accent/30",
+          )}
+        >
+          <Icon
+            className={cn(
+              "size-3.5 shrink-0",
+              checked ? "text-primary" : "text-muted-foreground",
+            )}
+          />
+          <span
+            className={cn(
+              "text-xs font-medium tracking-wide",
+              checked ? "text-foreground" : "text-muted-foreground",
+            )}
+          >
+            {label}
+          </span>
+          <Switch
+            checked={checked}
+            onCheckedChange={onCheckedChange}
+            size="sm"
+          />
+        </label>
+      </TooltipTrigger>
+      <TooltipContent>{checked ? activeHint : inactiveHint}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function ChannelCard({
@@ -134,8 +188,9 @@ export function ChannelCard({
         </CardAction>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3">
+          {/* Left: VU meter + channel info */}
+          <div className="flex items-center gap-3 shrink-0">
             <VuMeter
               channelName={channel.name}
               getLevels={getChannelLevels}
@@ -152,97 +207,74 @@ export function ChannelCard({
             </div>
           </div>
 
-          {/* Quick toggles + action buttons */}
-          <div className="flex items-center gap-2">
-            {sendMessage && (
-              <div className="flex items-center gap-2 mr-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1">
-                      <Switch
-                        size="sm"
-                        checked={fecEnabled}
-                        onCheckedChange={handleFecToggle}
-                        aria-label="Toggle FEC"
-                      />
-                      <span className="text-[0.65rem] text-muted-foreground uppercase tracking-wide">
-                        FEC
-                      </span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {fecEnabled ? "FEC on — recovers lost packets (+20ms)" : "FEC off — lost packets cause gaps"}
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1">
-                      <Switch
-                        size="sm"
-                        checked={agcEnabled}
-                        onCheckedChange={handleAgcToggle}
-                        aria-label="Toggle AGC"
-                      />
-                      <span className="text-[0.65rem] text-muted-foreground uppercase tracking-wide">
-                        AGC
-                      </span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {agcEnabled ? "AGC on — loudness normalization (+3s latency!)" : "AGC off — no loudness normalization"}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            )}
-
-            <div className="flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() =>
-                      isRunning ? onStop(channel.id) : onStart(channel.id)
-                    }
-                  >
-                    {isRunning ? (
-                      <Square className="size-3" />
-                    ) : (
-                      <Play className="size-3" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {isRunning ? "Stop streaming" : "Start streaming"}
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => onConfigure(channel.id)}
-                  >
-                    <Settings className="size-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Configure channel</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => onRemove(channel.id)}
-                  >
-                    <Trash2 className="size-3 text-destructive" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Remove channel</TooltipContent>
-              </Tooltip>
+          {/* Center: Processing toggle pills */}
+          {sendMessage && (
+            <div className="flex items-center gap-1.5">
+              <TogglePill
+                checked={fecEnabled}
+                onCheckedChange={handleFecToggle}
+                label="FEC"
+                icon={ShieldCheck}
+                activeHint="FEC on — recovers lost packets (+20ms)"
+                inactiveHint="FEC off — lost packets cause gaps"
+              />
+              <TogglePill
+                checked={agcEnabled}
+                onCheckedChange={handleAgcToggle}
+                label="AGC"
+                icon={AudioLines}
+                activeHint="AGC on — loudness normalization (+3s latency!)"
+                inactiveHint="AGC off — no loudness normalization"
+              />
             </div>
+          )}
+
+          {/* Right: Transport + Settings */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() =>
+                    isRunning ? onStop(channel.id) : onStart(channel.id)
+                  }
+                >
+                  {isRunning ? (
+                    <Square className="size-3.5" />
+                  ) : (
+                    <Play className="size-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isRunning ? "Stop streaming" : "Start streaming"}
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => onRemove(channel.id)}
+                >
+                  <Trash2 className="size-3.5 text-destructive" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Remove channel</TooltipContent>
+            </Tooltip>
+
+            <div className="w-px h-5 bg-border mx-0.5" />
+
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => onConfigure(channel.id)}
+            >
+              <Settings className="size-3" />
+              Settings
+            </Button>
           </div>
         </div>
       </CardContent>
