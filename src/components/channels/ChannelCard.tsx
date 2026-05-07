@@ -12,6 +12,11 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@/components/ui/tooltip";
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from "@/components/ui/hover-card";
 import { Switch } from "@/components/ui/switch";
 import {
   Play,
@@ -22,6 +27,7 @@ import {
   EyeOff,
   ShieldCheck,
   AudioLines,
+  Info,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { cn } from "@/lib/utils";
@@ -61,6 +67,7 @@ function TogglePill({
   icon: Icon,
   activeHint,
   inactiveHint,
+  detailContent,
 }: {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
@@ -68,41 +75,54 @@ function TogglePill({
   icon: React.ComponentType<{ className?: string }>;
   activeHint: string;
   inactiveHint: string;
+  detailContent?: React.ReactNode;
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <label
-          className={cn(
-            "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 cursor-pointer transition-colors select-none",
-            checked
-              ? "border-primary/40 bg-primary/10"
-              : "border-border bg-transparent hover:bg-accent/30",
-          )}
-        >
-          <Icon
+    <div className="inline-flex items-center gap-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <label
             className={cn(
-              "size-3.5 shrink-0",
-              checked ? "text-primary" : "text-muted-foreground",
-            )}
-          />
-          <span
-            className={cn(
-              "text-xs font-medium tracking-wide",
-              checked ? "text-foreground" : "text-muted-foreground",
+              "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 cursor-pointer transition-colors select-none",
+              checked
+                ? "border-primary/40 bg-primary/10"
+                : "border-border bg-transparent hover:bg-accent/30",
             )}
           >
-            {label}
-          </span>
-          <Switch
-            checked={checked}
-            onCheckedChange={onCheckedChange}
-            size="sm"
-          />
-        </label>
-      </TooltipTrigger>
-      <TooltipContent>{checked ? activeHint : inactiveHint}</TooltipContent>
-    </Tooltip>
+            <Icon
+              className={cn(
+                "size-3.5 shrink-0",
+                checked ? "text-primary" : "text-muted-foreground",
+              )}
+            />
+            <span
+              className={cn(
+                "text-xs font-medium tracking-wide",
+                checked ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {label}
+            </span>
+            <Switch
+              checked={checked}
+              onCheckedChange={onCheckedChange}
+              size="sm"
+            />
+          </label>
+        </TooltipTrigger>
+        <TooltipContent>{checked ? activeHint : inactiveHint}</TooltipContent>
+      </Tooltip>
+      {detailContent && (
+        <HoverCard openDelay={200}>
+          <HoverCardTrigger asChild>
+            <Info className="size-3.5 text-muted-foreground cursor-help shrink-0" />
+          </HoverCardTrigger>
+          <HoverCardContent side="top" className="w-72 text-sm">
+            {detailContent}
+          </HoverCardContent>
+        </HoverCard>
+      )}
+    </div>
   );
 }
 
@@ -126,6 +146,7 @@ export function ChannelCard({
 
   const fecEnabled = getProcessingField<boolean>(channel.processing, ["opus", "fec"], false);
   const agcEnabled = getProcessingField<boolean>(channel.processing, ["agc", "enabled"], false);
+  const frameSizeMs = getProcessingField<number>(channel.processing, ["opus", "frameSizeMs"], 20);
 
   const getChannelLevels = useCallback(
     () => getLevels(channel.id),
@@ -217,6 +238,22 @@ export function ChannelCard({
                 icon={ShieldCheck}
                 activeHint="FEC on — recovers lost packets (+20ms)"
                 inactiveHint="FEC off — lost packets cause gaps"
+                detailContent={
+                  <>
+                    <p className="font-semibold mb-1">Forward Error Correction</p>
+                    <p className="text-muted-foreground">
+                      Opus embeds redundant data from the previous frame in each
+                      packet. If a packet is lost, the receiver reconstructs the
+                      missing audio from the next packet instead of playing
+                      silence/clicks.
+                    </p>
+                    <p className="text-muted-foreground mt-2">
+                      <span className="font-medium text-foreground">Latency:</span>{" "}
+                      +{frameSizeMs}ms (one frame). Bitrate increases ~30–50%.
+                      Recommended when packet loss &gt; 1%.
+                    </p>
+                  </>
+                }
               />
               <TogglePill
                 checked={agcEnabled}
@@ -225,6 +262,23 @@ export function ChannelCard({
                 icon={AudioLines}
                 activeHint="AGC on — loudness normalization (+3s latency!)"
                 inactiveHint="AGC off — no loudness normalization"
+                detailContent={
+                  <>
+                    <p className="font-semibold mb-1">Auto Gain Control</p>
+                    <p className="text-muted-foreground">
+                      Normalizes loudness using EBU R128 (audioloudnorm). Quiet
+                      and loud sources on different channels produce similar
+                      perceived volume for listeners.
+                    </p>
+                    <p className="text-destructive mt-2 font-medium">
+                      +3000ms latency (3s EBU R128 lookahead window).
+                    </p>
+                    <p className="text-muted-foreground mt-1">
+                      Not suitable for low-latency live streaming. Use only when
+                      consistent loudness across sources matters more than delay.
+                    </p>
+                  </>
+                }
               />
             </div>
           )}
