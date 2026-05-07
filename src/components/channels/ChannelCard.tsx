@@ -78,51 +78,54 @@ function TogglePill({
   detailContent?: React.ReactNode;
 }) {
   return (
-    <div className="inline-flex items-center gap-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <label
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <label
+          className={cn(
+            "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 cursor-pointer transition-colors select-none",
+            checked
+              ? "border-primary/40 bg-primary/10"
+              : "border-border bg-transparent hover:bg-accent/30",
+          )}
+        >
+          <Switch
+            checked={checked}
+            onCheckedChange={onCheckedChange}
+            size="sm"
+          />
+          <Icon
             className={cn(
-              "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 cursor-pointer transition-colors select-none",
-              checked
-                ? "border-primary/40 bg-primary/10"
-                : "border-border bg-transparent hover:bg-accent/30",
+              "size-3.5 shrink-0",
+              checked ? "text-primary" : "text-muted-foreground",
+            )}
+          />
+          <span
+            className={cn(
+              "text-xs font-medium tracking-wide",
+              checked ? "text-foreground" : "text-muted-foreground",
             )}
           >
-            <Icon
-              className={cn(
-                "size-3.5 shrink-0",
-                checked ? "text-primary" : "text-muted-foreground",
-              )}
-            />
-            <span
-              className={cn(
-                "text-xs font-medium tracking-wide",
-                checked ? "text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {label}
-            </span>
-            <Switch
-              checked={checked}
-              onCheckedChange={onCheckedChange}
-              size="sm"
-            />
-          </label>
-        </TooltipTrigger>
-        <TooltipContent>{checked ? activeHint : inactiveHint}</TooltipContent>
-      </Tooltip>
-      {detailContent && (
-        <HoverCard openDelay={200}>
-          <HoverCardTrigger asChild>
-            <Info className="size-3.5 text-muted-foreground cursor-help shrink-0" />
-          </HoverCardTrigger>
-          <HoverCardContent side="top" className="w-72 text-sm">
-            {detailContent}
-          </HoverCardContent>
-        </HoverCard>
-      )}
-    </div>
+            {label}
+          </span>
+          {detailContent && (
+            <HoverCard openDelay={200}>
+              <HoverCardTrigger asChild>
+                <span
+                  className="inline-flex cursor-help"
+                  onClick={(e) => e.preventDefault()}
+                >
+                  <Info className="size-3.5 text-muted-foreground" />
+                </span>
+              </HoverCardTrigger>
+              <HoverCardContent side="top" className="w-72 text-sm">
+                {detailContent}
+              </HoverCardContent>
+            </HoverCard>
+          )}
+        </label>
+      </TooltipTrigger>
+      <TooltipContent>{checked ? activeHint : inactiveHint}</TooltipContent>
+    </Tooltip>
   );
 }
 
