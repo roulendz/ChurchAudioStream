@@ -179,6 +179,10 @@ export function ChannelConfigPanel({
                   enabled: ((channel.processing as Record<string, unknown>).agc as Record<string, unknown>)?.enabled as boolean ?? true,
                   targetLufs: ((channel.processing as Record<string, unknown>).agc as Record<string, unknown>)?.targetLufs as number ?? -16,
                 },
+                opus: {
+                  fec: ((channel.processing as Record<string, unknown>).opus as Record<string, unknown>)?.fec as boolean ?? false,
+                  frameSizeMs: Number(((channel.processing as Record<string, unknown>).opus as Record<string, unknown>)?.frameSize ?? "20"),
+                },
               }}
               sendMessage={sendMessage}
             />

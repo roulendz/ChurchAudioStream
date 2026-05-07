@@ -17,6 +17,10 @@ interface ProcessingState {
     enabled: boolean;
     targetLufs: number;
   };
+  opus: {
+    fec: boolean;
+    frameSizeMs: number;
+  };
 }
 
 interface ProcessingControlsProps {
@@ -42,6 +46,7 @@ export function ProcessingControls({
   );
   const [localAgcEnabled, setLocalAgcEnabled] = useState(processing.agc.enabled);
   const [localTargetLufs, setLocalTargetLufs] = useState(processing.agc.targetLufs);
+  const [localFecEnabled, setLocalFecEnabled] = useState(processing.opus.fec);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -50,7 +55,8 @@ export function ProcessingControls({
     setLocalMode(processing.mode === "music" ? "music" : "speech");
     setLocalAgcEnabled(processing.agc.enabled);
     setLocalTargetLufs(processing.agc.targetLufs);
-  }, [processing.mode, processing.agc.enabled, processing.agc.targetLufs]);
+    setLocalFecEnabled(processing.opus.fec);
+  }, [processing.mode, processing.agc.enabled, processing.agc.targetLufs, processing.opus.fec]);
 
   const sendProcessingUpdate = useCallback(
     (update: Record<string, unknown>) => {
@@ -70,6 +76,11 @@ export function ProcessingControls({
   function handleAgcEnabledChange(enabled: boolean) {
     setLocalAgcEnabled(enabled);
     sendProcessingUpdate({ agc: { enabled } });
+  }
+
+  function handleFecChange(enabled: boolean) {
+    setLocalFecEnabled(enabled);
+    sendProcessingUpdate({ opus: { fec: enabled } });
   }
 
   function handleTargetLufsChange(value: number) {
@@ -149,6 +160,24 @@ export function ProcessingControls({
           />
           AGC (Auto Gain Control)
         </label>
+      </div>
+
+      {/* FEC (Forward Error Correction) toggle */}
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={localFecEnabled}
+            onChange={(e) => handleFecChange(e.target.checked)}
+            className="accent-primary"
+          />
+          FEC (Forward Error Correction)
+        </label>
+        <span className="text-xs text-muted-foreground ml-6">
+          {localFecEnabled
+            ? `+${processing.opus.frameSizeMs}ms latency, recovers lost packets on WiFi`
+            : "Off — lost packets cause audio gaps"}
+        </span>
       </div>
 
       {/* AGC target slider */}
