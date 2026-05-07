@@ -123,6 +123,7 @@ function App() {
               onReorderChannels={reorderChannels}
               onCreateClick={() => setShowCreateDialog(true)}
               getLevels={audioLevels.getLevels}
+              sendMessage={sendMessage}
             />
           )}
         </>

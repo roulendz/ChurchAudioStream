@@ -16,6 +16,7 @@ interface ChannelListProps {
   onReorderChannels: (channelIds: string[]) => void;
   onCreateClick: () => void;
   getLevels: (channelId: string) => ChannelLevelData | null;
+  sendMessage?: (type: string, payload?: unknown) => void;
 }
 
 export function ChannelList({
@@ -27,6 +28,7 @@ export function ChannelList({
   onReorderChannels,
   onCreateClick,
   getLevels,
+  sendMessage,
 }: ChannelListProps) {
   function handleDragEnd(event: Parameters<NonNullable<React.ComponentProps<typeof DragDropProvider>['onDragEnd']>>[0]) {
     if (event.canceled) return;
@@ -70,6 +72,7 @@ export function ChannelList({
                   onStop={onStopChannel}
                   onConfigure={onConfigureChannel}
                   onRemove={onRemoveChannel}
+                  sendMessage={sendMessage}
                 />
               ))}
             </div>

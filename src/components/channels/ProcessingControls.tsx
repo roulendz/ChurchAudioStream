@@ -1,17 +1,25 @@
 /**
  * Per-channel audio processing controls: Speech/Music mode toggle,
- * AGC enable/disable, and AGC target slider.
+ * AGC enable/disable, FEC enable/disable, and AGC target slider.
  *
+ * Uses Switch for toggles and HoverCard for detailed explanations.
  * Sends `channel:processing:update` WS messages with debounced slider
  * values to avoid flooding the server during drag.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from "@/components/ui/hover-card";
+import { Info } from "lucide-react";
 
 type AudioMode = "speech" | "music";
 
-interface ProcessingState {
+export interface ProcessingState {
   mode: string;
   agc: {
     enabled: boolean;
@@ -29,11 +37,8 @@ interface ProcessingControlsProps {
   sendMessage: (type: string, payload?: unknown) => void;
 }
 
-/** Minimum and maximum target LUFS values for the AGC slider. */
 const MIN_TARGET_LUFS = -20;
 const MAX_TARGET_LUFS = -14;
-
-/** Debounce delay for slider changes (ms). */
 const SLIDER_DEBOUNCE_MS = 300;
 
 export function ProcessingControls({
@@ -50,7 +55,6 @@ export function ProcessingControls({
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync local state when server pushes updates
   useEffect(() => {
     setLocalMode(processing.mode === "music" ? "music" : "speech");
     setLocalAgcEnabled(processing.agc.enabled);
@@ -85,8 +89,6 @@ export function ProcessingControls({
 
   function handleTargetLufsChange(value: number) {
     setLocalTargetLufs(value);
-
-    // Debounce slider to avoid flooding during drag
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
@@ -97,7 +99,6 @@ export function ProcessingControls({
   }
 
   function handleTargetLufsCommit() {
-    // On mouseup/touchend, send immediately (cancel pending debounce)
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
@@ -105,7 +106,6 @@ export function ProcessingControls({
     sendProcessingUpdate({ agc: { targetLufs: localTargetLufs } });
   }
 
-  // Cleanup debounce timer on unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
@@ -149,34 +149,91 @@ export function ProcessingControls({
         </div>
       </div>
 
-      {/* AGC enabled toggle */}
-      <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-          <input
-            type="checkbox"
-            checked={localAgcEnabled}
-            onChange={(e) => handleAgcEnabledChange(e.target.checked)}
-            className="accent-primary"
-          />
-          AGC (Auto Gain Control)
-        </label>
+      {/* FEC toggle */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Switch
+              id={`fec-${channelId}`}
+              checked={localFecEnabled}
+              onCheckedChange={handleFecChange}
+              size="sm"
+            />
+            <label
+              htmlFor={`fec-${channelId}`}
+              className="text-sm text-foreground cursor-pointer"
+            >
+              FEC
+            </label>
+            <HoverCard openDelay={200}>
+              <HoverCardTrigger asChild>
+                <Info className="size-3.5 text-muted-foreground cursor-help" />
+              </HoverCardTrigger>
+              <HoverCardContent side="right" className="w-72 text-sm">
+                <p className="font-semibold mb-1">Forward Error Correction</p>
+                <p className="text-muted-foreground">
+                  Opus embeds redundant data from the previous frame in each packet.
+                  If a packet is lost, the receiver reconstructs the missing audio
+                  from the next packet instead of playing silence/clicks.
+                </p>
+                <p className="text-muted-foreground mt-2">
+                  <span className="font-medium text-foreground">Latency:</span>{" "}
+                  +{processing.opus.frameSizeMs}ms (one frame). Bitrate increases ~30-50%.
+                  Recommended when packet loss &gt; 1%.
+                </p>
+              </HoverCardContent>
+            </HoverCard>
+          </div>
+        </div>
+        <span className="text-xs text-muted-foreground ml-9">
+          {localFecEnabled
+            ? `+${processing.opus.frameSizeMs}ms latency, recovers lost packets`
+            : "Off — lost packets cause audio gaps"}
+        </span>
       </div>
 
-      {/* FEC (Forward Error Correction) toggle */}
-      <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-          <input
-            type="checkbox"
-            checked={localFecEnabled}
-            onChange={(e) => handleFecChange(e.target.checked)}
-            className="accent-primary"
-          />
-          FEC (Forward Error Correction)
-        </label>
-        <span className="text-xs text-muted-foreground ml-6">
-          {localFecEnabled
-            ? `+${processing.opus.frameSizeMs}ms latency, recovers lost packets on WiFi`
-            : "Off — lost packets cause audio gaps"}
+      {/* AGC toggle */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Switch
+              id={`agc-${channelId}`}
+              checked={localAgcEnabled}
+              onCheckedChange={handleAgcEnabledChange}
+              size="sm"
+            />
+            <label
+              htmlFor={`agc-${channelId}`}
+              className="text-sm text-foreground cursor-pointer"
+            >
+              AGC
+            </label>
+            <HoverCard openDelay={200}>
+              <HoverCardTrigger asChild>
+                <Info className="size-3.5 text-muted-foreground cursor-help" />
+              </HoverCardTrigger>
+              <HoverCardContent side="right" className="w-72 text-sm">
+                <p className="font-semibold mb-1">Auto Gain Control</p>
+                <p className="text-muted-foreground">
+                  Normalizes loudness using EBU R128 (audioloudnorm). Quiet and loud
+                  sources on different channels produce similar perceived volume
+                  for listeners.
+                </p>
+                <p className="text-destructive mt-2 font-medium">
+                  +3000ms latency (3s EBU R128 lookahead window).
+                </p>
+                <p className="text-muted-foreground mt-1">
+                  Not suitable for low-latency live streaming. Use only when
+                  consistent loudness across sources matters more than delay.
+                </p>
+              </HoverCardContent>
+            </HoverCard>
+          </div>
+        </div>
+        <span className="text-xs text-muted-foreground ml-9">
+          {localAgcEnabled
+            ? "+3000ms latency — EBU R128 lookahead"
+            : "Off — no loudness normalization"}
         </span>
       </div>
 
