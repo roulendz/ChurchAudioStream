@@ -29,6 +29,8 @@ function App() {
     connectionStatus,
     reconnectAttempts,
     interfaces,
+    serverVersion,
+    serverInstanceId,
     updateConfig,
     sendMessage,
     subscribe,
@@ -65,6 +67,8 @@ function App() {
       connectionStatus={connectionStatus}
       reconnectAttempts={reconnectAttempts}
       totalListeners={totalListeners}
+      serverVersion={serverVersion}
+      serverInstanceId={serverInstanceId}
     >
       {currentSection === "overview" && (
         <div className="space-y-6">
@@ -73,23 +77,10 @@ function App() {
             stats={stats}
             totalListeners={totalListeners}
             workers={workers}
+            channels={channels}
+            getChannelListenerCount={getChannelListenerCount}
           />
           <QrCodeDisplay config={config} />
-          {channels.length > 0 && (
-            <div className="bg-card border border-border rounded-md p-5">
-              <h3 className="text-base font-semibold text-foreground mb-3">Listeners per Channel</h3>
-              <div className="flex flex-wrap gap-3">
-                {channels.map((ch) => (
-                  <div key={ch.id} className="flex items-center gap-2 bg-secondary rounded-md px-3 py-2">
-                    <span className="text-sm text-muted-foreground">{ch.name}</span>
-                    <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-                      {getChannelListenerCount(ch.id)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 

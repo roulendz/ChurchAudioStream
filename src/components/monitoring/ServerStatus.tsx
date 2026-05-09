@@ -5,10 +5,17 @@ import type { ResourceStats, WorkerInfo } from "../../hooks/useResourceStats";
 // Props
 // ---------------------------------------------------------------------------
 
+interface ChannelInfo {
+  id: string;
+  name: string;
+}
+
 interface ServerStatusProps {
   stats: ResourceStats | null;
   totalListeners: number;
   workers: WorkerInfo[];
+  channels: ChannelInfo[];
+  getChannelListenerCount: (channelId: string) => number;
 }
 
 // ---------------------------------------------------------------------------
@@ -38,6 +45,8 @@ export function ServerStatus({
   stats,
   totalListeners,
   workers,
+  channels,
+  getChannelListenerCount,
 }: ServerStatusProps) {
   if (!stats) {
     return (
@@ -52,12 +61,24 @@ export function ServerStatus({
 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-      {/* Total Listeners */}
+      {/* Total Visitors + per-channel breakdown */}
       <div className="bg-card border border-border rounded-md p-4">
-        <div className="text-xs text-muted-foreground mb-1">Total Listeners</div>
+        <div className="text-xs text-muted-foreground mb-1">Total Visitors</div>
         <div className="text-3xl font-semibold text-foreground">
           {totalListeners}
         </div>
+        {channels.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {channels.map((ch) => (
+              <div key={ch.id} className="flex items-center gap-1.5 bg-secondary rounded-md px-2 py-1">
+                <span className="text-xs text-muted-foreground">{ch.name}</span>
+                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-primary text-primary-foreground text-[11px] font-semibold">
+                  {getChannelListenerCount(ch.id)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Uptime */}
