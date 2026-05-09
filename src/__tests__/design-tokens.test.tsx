@@ -83,6 +83,8 @@ describe("component smoke tests (Tailwind classes render)", () => {
           connectionStatus={"connected" as any}
           reconnectAttempts={0}
           totalListeners={0}
+          serverVersion="0.1.3"
+          serverInstanceId="abcd1234"
         >
           <div>test child</div>
         </DashboardShell>

@@ -46,6 +46,8 @@ interface UseServerStatusReturn {
   connectionStatus: ConnectionStatus;
   reconnectAttempts: number;
   interfaces: NetworkInterface[];
+  serverVersion: string | null;
+  serverInstanceId: string | null;
   updateConfig: (
     partial: Partial<AppConfig>,
   ) => Promise<ConfigUpdateResult>;
@@ -94,6 +96,8 @@ export function useServerStatus(): UseServerStatusReturn {
   const [wsUrl, setWsUrl] = useState(resolveWebSocketUrl);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [interfaces, setInterfaces] = useState<NetworkInterface[]>([]);
+  const [serverVersion, setServerVersion] = useState<string | null>(null);
+  const [serverInstanceId, setServerInstanceId] = useState<string | null>(null);
 
   const pendingRequests = useRef<
     Map<string, (result: ConfigUpdateResult) => void>
@@ -165,10 +169,21 @@ export function useServerStatus(): UseServerStatusReturn {
       },
     );
 
+    const unsubWelcome = subscribe("welcome", (message: WsMessage) => {
+      const payload = message.payload as { version?: string; instanceId?: string };
+      if (typeof payload?.version === "string") {
+        setServerVersion(payload.version);
+      }
+      if (typeof payload?.instanceId === "string") {
+        setServerInstanceId(payload.instanceId);
+      }
+    });
+
     return () => {
       unsubConfigResponse();
       unsubConfigUpdated();
       unsubInterfaces();
+      unsubWelcome();
     };
   }, [subscribe]);
 
@@ -212,6 +227,8 @@ export function useServerStatus(): UseServerStatusReturn {
     connectionStatus,
     reconnectAttempts,
     interfaces,
+    serverVersion,
+    serverInstanceId,
     updateConfig,
     sendMessage,
     subscribe,

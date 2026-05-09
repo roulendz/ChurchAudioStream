@@ -17,6 +17,8 @@ describe("Header components", () => {
           connectionStatus={"connected" as any}
           reconnectAttempts={0}
           totalListeners={42}
+          serverVersion="0.1.3"
+          serverInstanceId="abcd1234"
         >
           <div>test child</div>
         </DashboardShell>
