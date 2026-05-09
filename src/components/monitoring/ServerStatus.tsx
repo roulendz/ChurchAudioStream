@@ -13,6 +13,7 @@ interface ChannelInfo {
 interface ServerStatusProps {
   stats: ResourceStats | null;
   totalListeners: number;
+  totalVisitors: number;
   workers: WorkerInfo[];
   channels: ChannelInfo[];
   getChannelListenerCount: (channelId: string) => number;
@@ -44,6 +45,7 @@ function formatMemoryKb(kb: number): string {
 export function ServerStatus({
   stats,
   totalListeners,
+  totalVisitors,
   workers,
   channels,
   getChannelListenerCount,
@@ -65,7 +67,7 @@ export function ServerStatus({
       <div className="bg-card border border-border rounded-md p-4">
         <div className="text-xs text-muted-foreground mb-1">Total Visitors</div>
         <div className="text-3xl font-semibold text-foreground">
-          {totalListeners}
+          {totalVisitors}
         </div>
         {channels.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-3">

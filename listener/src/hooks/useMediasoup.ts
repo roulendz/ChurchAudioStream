@@ -85,8 +85,14 @@ export interface UseMediasoupResult {
 export function useMediasoup(): UseMediasoupResult {
   const transportRef = useRef<mediasoupTypes.Transport | null>(null);
   const consumerRef = useRef<mediasoupTypes.Consumer | null>(null);
+  const peerRef = useRef<Peer | null>(null);
 
   const disconnect = useCallback(() => {
+    const peer = peerRef.current;
+    if (peer && !peer.closed) {
+      peer.request("leaveChannel").catch(() => {});
+    }
+    peerRef.current = null;
     if (consumerRef.current) {
       consumerRef.current.close();
       consumerRef.current = null;
@@ -106,6 +112,7 @@ export function useMediasoup(): UseMediasoupResult {
     async (channelId: string, peer: Peer): Promise<MediaStreamTrack> => {
       // Clean up any existing connection
       disconnect();
+      peerRef.current = peer;
 
       // Step 1: Get router RTP capabilities and load Device
       const capResponse = (await peer.request(

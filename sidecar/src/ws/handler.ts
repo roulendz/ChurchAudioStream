@@ -1022,6 +1022,7 @@ async function handleStreamingMessageAsync(
         "streaming:status",
         {
           totalListeners: streamingSubsystem.getListenerCount(),
+          totalVisitors: streamingSubsystem.getVisitorCount(),
           channels: channelStatuses,
           workers: workerInfo,
         },
@@ -1156,6 +1157,7 @@ function wireStreamingBroadcasts(
         channelId,
         count,
         totalListeners: streamingSubsystem.getListenerCount(),
+        totalVisitors: streamingSubsystem.getVisitorCount(),
       });
     },
   );

@@ -102,6 +102,8 @@ export interface ListenerPeerData {
   currentConsumer: mediasoupTypes.Consumer | null;
   /** Channel ID the listener is currently subscribed to. */
   currentChannelId: string | null;
+  /** True after the listener explicitly starts playback (pressed "Start Listening"). */
+  isListening: boolean;
   /** Whether this peer is an admin preview connection (excluded from listener counts). */
   isAdmin: boolean;
 }

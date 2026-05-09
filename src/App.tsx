@@ -50,7 +50,7 @@ function App() {
 
   const { sources } = useSources(sendMessage, subscribe);
   const audioLevels = useAudioLevels(subscribe);
-  const { totalListeners, getChannelListenerCount } = useListenerCounts(sendMessage, subscribe);
+  const { totalListeners, totalVisitors, getChannelListenerCount } = useListenerCounts(sendMessage, subscribe);
   const { stats, workers } = useResourceStats(sendMessage, subscribe);
 
   const selectedChannel = selectedChannelId
@@ -76,6 +76,7 @@ function App() {
           <ServerStatus
             stats={stats}
             totalListeners={totalListeners}
+            totalVisitors={totalVisitors}
             workers={workers}
             channels={channels}
             getChannelListenerCount={getChannelListenerCount}
