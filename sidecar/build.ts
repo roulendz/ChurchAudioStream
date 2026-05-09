@@ -63,8 +63,32 @@ function resolvePkgTarget(targetTriple: string): string {
   process.exit(1);
 }
 
+function generateVersionModule(): void {
+  const pkgPath = path.resolve(SIDECAR_ROOT, "package.json");
+  const raw = fs.readFileSync(pkgPath, "utf-8");
+  const pkg = JSON.parse(raw) as { version: string };
+  if (typeof pkg.version !== "string" || pkg.version.length === 0) {
+    console.error("[build] package.json missing or empty 'version' field");
+    process.exit(1);
+  }
+  const versionFile = path.resolve(SIDECAR_ROOT, "src", "version.ts");
+  const content = [
+    `import crypto from "node:crypto";`,
+    ``,
+    `export const SIDECAR_VERSION = ${JSON.stringify(pkg.version)};`,
+    ``,
+    `export const SERVER_INSTANCE_ID = crypto.randomBytes(4).toString("hex");`,
+    ``,
+  ].join("\n");
+  fs.writeFileSync(versionFile, content);
+  console.log(`[build] Generated src/version.ts → ${pkg.version}`);
+}
+
 function build(): void {
   console.log("=== ChurchAudioStream Sidecar Build ===\n");
+
+  // Step 0: Generate version module from package.json before tsc
+  generateVersionModule();
 
   // Detect platform early (used throughout)
   const targetTriple = detectTargetTriple();

@@ -15,8 +15,7 @@ import { publishService, unpublishService } from "./network/mdns";
 import { setupWebSocket, type WebSocketSetupResult } from "./ws/handler";
 import { logger } from "./utils/logger";
 import { registerOgRoutes } from "./routes/og-meta";
-
-const SIDECAR_VERSION = "0.1.0";
+import { SIDECAR_VERSION, SERVER_INSTANCE_ID } from "./version.js";
 
 /**
  * Fixed loopback port for the Tauri admin UI WebSocket connection.
@@ -57,12 +56,25 @@ export async function createServer(
 
   const staticDirectory = resolveStaticDirectory(basePath);
   await registerOgRoutes(app, staticDirectory, config);
+
+  app.get("/sw.js", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Service-Worker-Allowed", "/");
+    res.sendFile(path.join(staticDirectory, "sw.js"));
+  });
+
+  app.get("/api/clear-cache", (_req, res) => {
+    res.setHeader("Clear-Site-Data", '"cache", "storage"');
+    res.json({ cleared: true, instanceId: SERVER_INSTANCE_ID });
+  });
+
   app.use(express.static(staticDirectory));
 
   app.get("/api/status", (_req, res) => {
     res.json({
       status: "running",
       version: SIDECAR_VERSION,
+      instanceId: SERVER_INSTANCE_ID,
       uptime: process.uptime(),
     });
   });
