@@ -146,7 +146,14 @@ function App() {
 
       {connectionState === "reconnecting" && (
         <div className="app-reconnecting-banner" role="alert">
-          {t("status.reconnecting")}
+          <span className="app-reconnecting-banner__text">
+            {t("status.reconnecting")}
+          </span>
+          <span className="app-reconnecting-banner__dots" aria-hidden="true">
+            <span className="app-reconnecting-banner__dot" />
+            <span className="app-reconnecting-banner__dot" />
+            <span className="app-reconnecting-banner__dot" />
+          </span>
         </div>
       )}
 
