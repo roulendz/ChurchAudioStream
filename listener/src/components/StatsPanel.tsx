@@ -118,6 +118,11 @@ export function StatsPanel({
         </header>
 
         <div className="stats-panel__grid">
+          <Stat
+            label="E2E delay (est.)"
+            value={`${snapshot.estimatedE2eDelayMs.toFixed(0)} ms`}
+            warn={snapshot.estimatedE2eDelayMs > 200}
+          />
           <Stat label="Bitrate" value={`${snapshot.bitrateKbps.toFixed(0)} kbps`} />
           <Stat
             label="Round-trip"

@@ -13,6 +13,7 @@ interface ChannelInfo {
   id: string;
   name: string;
   status: string;
+  outputFormat: string;
 }
 
 interface VuMeterBankProps {
@@ -30,19 +31,20 @@ export function VuMeterBank({ channels, audioLevels }: VuMeterBankProps) {
 
   if (meteredChannels.length === 0) {
     return (
-      <div className="vu-meter-bank-empty">
+      <div className="text-muted-foreground italic p-8 text-center bg-card border border-border rounded-md">
         No active channels. Start a channel to see audio levels.
       </div>
     );
   }
 
   return (
-    <div className="vu-meter-bank">
+    <div className="flex flex-wrap gap-4 p-4 bg-card border border-border rounded-md">
       {meteredChannels.map((channel) => (
         <VuMeterItem
           key={channel.id}
           channelId={channel.id}
           channelName={channel.name}
+          channelCount={channel.outputFormat === "stereo" ? 2 : 1}
           getLevels={audioLevels.getLevels}
         />
       ))}
@@ -54,10 +56,12 @@ export function VuMeterBank({ channels, audioLevels }: VuMeterBankProps) {
 function VuMeterItem({
   channelId,
   channelName,
+  channelCount,
   getLevels,
 }: {
   channelId: string;
   channelName: string;
+  channelCount: 1 | 2;
   getLevels: UseAudioLevelsReturn["getLevels"];
 }) {
   const getChannelLevels = useCallback(
@@ -69,6 +73,7 @@ function VuMeterItem({
     <VuMeter
       channelName={channelName}
       getLevels={getChannelLevels}
+      channelCount={channelCount}
     />
   );
 }

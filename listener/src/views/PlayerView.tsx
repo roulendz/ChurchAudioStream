@@ -457,11 +457,14 @@ export function PlayerView({
       setVolumeExternal?.(DEFAULT_VOLUME);
       playbackStartedRef.current = true;
       setPlayerState("playing");
+      if (!peer.closed) {
+        peer.request("startListening").catch(() => {});
+      }
     } catch {
       setErrorMessage(t("status.disconnected"));
       setPlayerState("error");
     }
-  }, [startPlayback, setVolumeExternal, t]);
+  }, [startPlayback, setVolumeExternal, peer, t]);
 
   const handleBack = useCallback(() => {
     clearTimers();
@@ -558,8 +561,7 @@ export function PlayerView({
         </button>
 
         <div className="player-view__header-meta">
-          <span className="player-view__eyebrow">Now listening</span>
-          <span className="player-view__live-dot" data-live={isPlaying} />
+          <h1 className="player-view__header-name">{channel.name}</h1>
         </div>
 
         <div className="player-view__header-tools">
@@ -612,82 +614,88 @@ export function PlayerView({
       </header>
 
       <main className="player-view__stage">
-        <div className="player-view__viz-wrap">
+        <button
+          type="button"
+          className={[
+            "player-view__orb",
+            isPlaying && !isMuted ? "player-view__orb--active" : "",
+            isMuted ? "player-view__orb--paused" : "",
+            playerState === "ready" ? "player-view__orb--ready" : "",
+            playerState === "connecting" ? "player-view__orb--connecting" : "",
+          ].filter(Boolean).join(" ")}
+          onClick={
+            playerState === "ready"
+              ? handleStartListening
+              : playerState === "playing" || playerState === "reconnecting"
+                ? handleMuteToggle
+                : undefined
+          }
+          disabled={playerState === "connecting"}
+          aria-label={
+            playerState === "ready"
+              ? t("player.startListening")
+              : playerState === "playing" || playerState === "reconnecting"
+                ? isMuted ? t("player.unmute") : t("player.mute")
+                : t("status.connecting")
+          }
+        >
           <AudioVisualizer
             getAnalyser={getAnalyser}
             isActive={isVisualizerActive}
             accentColor="#7c5cff"
           />
-          <div className="player-view__viz-caption">
-            <span className="player-view__flag">{channel.language.flag}</span>
-            <h1 className="player-view__channel-name">{channel.name}</h1>
-            <p className="player-view__language">{channel.language.label}</p>
-          </div>
-        </div>
+          <span className="player-view__orb-icon">
+            {playerState === "connecting" && (
+              <span className="player-view__orb-spinner" />
+            )}
+            {playerState === "ready" && (
+              <>
+                <PlayIcon size={40} />
+                <span className="player-view__orb-label">{t("player.startListening")}</span>
+              </>
+            )}
+            {(playerState === "playing" || playerState === "reconnecting") && (
+              isMuted
+                ? <PlayIcon size={36} />
+                : <PauseIcon size={36} />
+            )}
+            {playerState === "channel-offline" && (
+              <span className="player-view__orb-label">{t("player.channelOffline")}</span>
+            )}
+          </span>
+        </button>
 
         <div className="player-view__status">
-          {playerState === "connecting" && (
-            <div className="player-view__pill player-view__pill--muted">
-              <span className="player-view__pulse-dot" />
-              {t("status.connecting")}
-            </div>
-          )}
-
-          {playerState === "ready" && (
-            <button
-              className="player-view__cta"
-              onClick={handleStartListening}
-              type="button"
-            >
-              <PlayIcon />
-              <span>{t("player.startListening")}</span>
-            </button>
-          )}
-
           {(playerState === "playing" || playerState === "reconnecting") && (
-            <>
-              <div
-                className={`player-view__pill ${
-                  playerState === "reconnecting" ? "player-view__pill--warn" : ""
+            <div
+              className={`player-view__pill ${
+                playerState === "reconnecting" ? "player-view__pill--warn" : ""
+              }`}
+            >
+              <span
+                className={`player-view__pulse-dot ${
+                  playerState === "reconnecting"
+                    ? "player-view__pulse-dot--warn"
+                    : "player-view__pulse-dot--live"
                 }`}
-              >
-                <span
-                  className={`player-view__pulse-dot ${
-                    playerState === "reconnecting"
-                      ? "player-view__pulse-dot--warn"
-                      : "player-view__pulse-dot--live"
-                  }`}
-                />
-                {playerState === "reconnecting"
-                  ? t("status.reconnecting")
-                  : `Listening · ${formatElapsedTime(elapsedSeconds)}`}
-                {playerState === "playing" &&
-                  channel.displayToggles.showListenerCount && (
-                    <>
-                      <span className="player-view__pill-sep" />
-                      {t("channel.listeningCount", { count: listenerCount })}
-                    </>
-                  )}
-                {playerState === "playing" && channel.producerStartedAt && (
+              />
+              {playerState === "reconnecting"
+                ? t("status.reconnecting")
+                : `${t("player.nowListening")} · ${formatElapsedTime(elapsedSeconds)}`}
+              {playerState === "playing" &&
+                channel.displayToggles.showListenerCount && (
                   <>
                     <span className="player-view__pill-sep" />
-                    <StreamUptime startedAt={channel.producerStartedAt} />
+                    {t("channel.listeningCount", { count: listenerCount })}
                   </>
                 )}
-              </div>
-
-              <button
-                type="button"
-                className={`player-view__playpause ${
-                  isMuted ? "player-view__playpause--paused" : ""
-                }`}
-                onClick={handleMuteToggle}
-                aria-label={isMuted ? "Resume audio" : "Pause audio"}
-                aria-pressed={isMuted}
-              >
-                {isMuted ? <PlayIcon size={28} /> : <PauseIcon size={28} />}
-              </button>
-            </>
+              {playerState === "playing" && channel.producerStartedAt && (
+                <>
+                  <span className="player-view__pill-sep" />
+                  <StreamUptime startedAt={channel.producerStartedAt} />
+                </>
+              )}
+            </div>
           )}
 
           {playerState === "channel-offline" && (

@@ -1,4 +1,5 @@
 {
+  "player.nowListening": "Listening",
   "player.startListening": "Start Listening",
   "player.mix": "Mix",
   "player.keepAwake": "Keep Awake",
@@ -14,7 +15,7 @@
   "channel.live": "Live",
   "channel.offline": "Offline",
   "channel.listeningCount": "{{count}} listening",
-  "status.reconnecting": "Reconnecting...",
+  "status.reconnecting": "Reconnecting",
   "status.connecting": "Connecting...",
   "status.disconnected": "Can't reach the audio server. Make sure you're on the church WiFi.",
   "offline.title": "Connection Lost",

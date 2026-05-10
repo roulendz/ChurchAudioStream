@@ -1,4 +1,11 @@
-import type { AdminChannel } from "../../hooks/useChannels";
+import { DragDropProvider } from "@dnd-kit/react";
+import { isSortable } from "@dnd-kit/react/sortable";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Plus } from "lucide-react";
+import { ChannelCard } from "./ChannelCard";
+import type { AdminChannel } from "@/hooks/useChannels";
+import type { ChannelLevelData } from "@/hooks/useAudioLevels";
 
 interface ChannelListProps {
   channels: AdminChannel[];
@@ -8,21 +15,8 @@ interface ChannelListProps {
   onConfigureChannel: (channelId: string) => void;
   onReorderChannels: (channelIds: string[]) => void;
   onCreateClick: () => void;
-}
-
-/** Map channel status to a CSS modifier class. */
-function statusModifier(status: string): string {
-  switch (status) {
-    case "streaming":
-      return "channel-status--streaming";
-    case "starting":
-      return "channel-status--starting";
-    case "error":
-    case "crashed":
-      return "channel-status--error";
-    default:
-      return "channel-status--stopped";
-  }
+  getLevels: (channelId: string) => ChannelLevelData | null;
+  sendMessage?: (type: string, payload?: unknown) => void;
 }
 
 export function ChannelList({
@@ -33,130 +27,58 @@ export function ChannelList({
   onConfigureChannel,
   onReorderChannels,
   onCreateClick,
+  getLevels,
+  sendMessage,
 }: ChannelListProps) {
-  function handleMoveUp(index: number) {
-    if (index === 0) return;
+  function handleDragEnd(event: Parameters<NonNullable<React.ComponentProps<typeof DragDropProvider>['onDragEnd']>>[0]) {
+    if (event.canceled) return;
+    const { source } = event.operation;
+    if (!isSortable(source)) return;
+
+    const { initialIndex, index } = source.sortable;
+    if (initialIndex === index) return;
+
     const ids = channels.map((ch) => ch.id);
-    [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
+    const [moved] = ids.splice(initialIndex, 1);
+    ids.splice(index, 0, moved);
     onReorderChannels(ids);
   }
-
-  function handleMoveDown(index: number) {
-    if (index === channels.length - 1) return;
-    const ids = channels.map((ch) => ch.id);
-    [ids[index], ids[index + 1]] = [ids[index + 1], ids[index]];
-    onReorderChannels(ids);
-  }
-
-  const isRunning = (status: string) =>
-    status === "streaming" || status === "starting";
 
   return (
-    <div className="channel-list">
-      <div className="channel-list-header">
-        <h3 className="channel-list-title">Channels</h3>
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={onCreateClick}
-        >
-          + New Channel
-        </button>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-foreground">Channels</h3>
+        <Button onClick={onCreateClick}>
+          <Plus className="size-4" />
+          New Channel
+        </Button>
       </div>
 
-      {channels.length === 0 && (
-        <p className="channel-list-empty">
+      {channels.length === 0 ? (
+        <p className="text-muted-foreground italic py-8 text-center">
           No channels yet. Create one to get started.
         </p>
+      ) : (
+        <DragDropProvider onDragEnd={handleDragEnd}>
+          <ScrollArea className="h-[calc(100vh-12rem)]">
+            <div className="flex flex-col gap-3 pr-4">
+              {channels.map((channel, index) => (
+                <ChannelCard
+                  key={channel.id}
+                  channel={channel}
+                  index={index}
+                  getLevels={getLevels}
+                  onStart={onStartChannel}
+                  onStop={onStopChannel}
+                  onConfigure={onConfigureChannel}
+                  onRemove={onRemoveChannel}
+                  sendMessage={sendMessage}
+                />
+              ))}
+            </div>
+          </ScrollArea>
+        </DragDropProvider>
       )}
-
-      <ul className="channel-cards">
-        {channels.map((channel, index) => (
-          <li key={channel.id} className="channel-card">
-            <div className="channel-card-main">
-              <div className="channel-card-info">
-                <span className="channel-card-name">{channel.name}</span>
-                <span
-                  className={`channel-status-badge ${statusModifier(channel.status)}`}
-                >
-                  {channel.status}
-                </span>
-                {!channel.visible && (
-                  <span className="channel-hidden-badge" title="Hidden from listeners">
-                    Hidden
-                  </span>
-                )}
-              </div>
-              <div className="channel-card-meta">
-                <span className="channel-meta-format">{channel.outputFormat}</span>
-                <span className="channel-meta-sources">
-                  {channel.sources.length} source{channel.sources.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-            </div>
-
-            <div className="channel-card-actions">
-              {/* Reorder buttons */}
-              <button
-                type="button"
-                className="btn-icon"
-                disabled={index === 0}
-                onClick={() => handleMoveUp(index)}
-                title="Move up"
-              >
-                &#9650;
-              </button>
-              <button
-                type="button"
-                className="btn-icon"
-                disabled={index === channels.length - 1}
-                onClick={() => handleMoveDown(index)}
-                title="Move down"
-              >
-                &#9660;
-              </button>
-
-              {/* Start / Stop toggle */}
-              {isRunning(channel.status) ? (
-                <button
-                  type="button"
-                  className="btn-secondary btn-stop"
-                  onClick={() => onStopChannel(channel.id)}
-                >
-                  Stop
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-secondary btn-start"
-                  onClick={() => onStartChannel(channel.id)}
-                >
-                  Start
-                </button>
-              )}
-
-              {/* Configure */}
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => onConfigureChannel(channel.id)}
-              >
-                Configure
-              </button>
-
-              {/* Remove */}
-              <button
-                type="button"
-                className="btn-icon btn-remove-channel"
-                onClick={() => onRemoveChannel(channel.id)}
-                title="Remove channel"
-              >
-                X
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

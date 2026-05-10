@@ -39,7 +39,7 @@ const RESTART_SIGNAL_DELAY_MS = 1_000;
 /** Interval (ms) for flushing buffered level data to admin clients. */
 const LEVEL_BROADCAST_INTERVAL_MS = 100;
 
-const SIDECAR_VERSION = "0.1.0";
+import { SIDECAR_VERSION, SERVER_INSTANCE_ID } from "../version.js";
 
 const RESTART_TRIGGERING_FIELDS = new Set([
   "server.port",
@@ -117,6 +117,7 @@ export function setupWebSocket(
 
     sendMessage(extSocket, "welcome", {
       version: SIDECAR_VERSION,
+      instanceId: SERVER_INSTANCE_ID,
       clientId,
     });
 
@@ -1021,6 +1022,7 @@ async function handleStreamingMessageAsync(
         "streaming:status",
         {
           totalListeners: streamingSubsystem.getListenerCount(),
+          totalVisitors: streamingSubsystem.getVisitorCount(),
           channels: channelStatuses,
           workers: workerInfo,
         },
@@ -1155,6 +1157,7 @@ function wireStreamingBroadcasts(
         channelId,
         count,
         totalListeners: streamingSubsystem.getListenerCount(),
+        totalVisitors: streamingSubsystem.getVisitorCount(),
       });
     },
   );

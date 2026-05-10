@@ -1,5 +1,4 @@
 import { useState } from "react";
-import "./App.css";
 import { useServerStatus } from "./hooks/useServerStatus";
 import { useChannels } from "./hooks/useChannels";
 import { useSources } from "./hooks/useSources";
@@ -18,6 +17,7 @@ import { ServerStatus } from "./components/monitoring/ServerStatus";
 import { QrCodeDisplay } from "./components/settings/QrCodeDisplay";
 import { UpdateToast } from "./components/UpdateToast";
 import { CheckForUpdatesButton } from "./components/CheckForUpdatesButton";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 function App() {
   const [currentSection, setCurrentSection] = useState<DashboardSection>("overview");
@@ -29,6 +29,8 @@ function App() {
     connectionStatus,
     reconnectAttempts,
     interfaces,
+    serverVersion,
+    serverInstanceId,
     updateConfig,
     sendMessage,
     subscribe,
@@ -48,7 +50,7 @@ function App() {
 
   const { sources } = useSources(sendMessage, subscribe);
   const audioLevels = useAudioLevels(subscribe);
-  const { totalListeners, getChannelListenerCount } = useListenerCounts(sendMessage, subscribe);
+  const { totalListeners, totalVisitors, getChannelListenerCount } = useListenerCounts(sendMessage, subscribe);
   const { stats, workers } = useResourceStats(sendMessage, subscribe);
 
   const selectedChannel = selectedChannelId
@@ -58,38 +60,28 @@ function App() {
   return (
     <>
     <UpdateToast />
+    <TooltipProvider>
     <DashboardShell
       currentSection={currentSection}
       onNavigate={setCurrentSection}
       connectionStatus={connectionStatus}
       reconnectAttempts={reconnectAttempts}
+      totalListeners={totalListeners}
+      serverVersion={serverVersion}
+      serverInstanceId={serverInstanceId}
     >
       {currentSection === "overview" && (
-        <div className="overview-section">
-          <h2>Overview</h2>
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold text-foreground">Overview</h2>
           <ServerStatus
             stats={stats}
             totalListeners={totalListeners}
+            totalVisitors={totalVisitors}
             workers={workers}
+            channels={channels}
+            getChannelListenerCount={getChannelListenerCount}
           />
           <QrCodeDisplay config={config} />
-          {channels.length > 0 && (
-            <div className="overview-channel-badges">
-              <h3 className="overview-subheading">Listeners per Channel</h3>
-              <div className="overview-badge-grid">
-                {channels.map((ch) => (
-                  <div key={ch.id} className="overview-badge-item">
-                    <span className="overview-badge-name">{ch.name}</span>
-                    <span className="listener-badge">
-                      <span className="listener-badge-count">
-                        {getChannelListenerCount(ch.id)}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -122,14 +114,16 @@ function App() {
               onConfigureChannel={setSelectedChannelId}
               onReorderChannels={reorderChannels}
               onCreateClick={() => setShowCreateDialog(true)}
+              getLevels={audioLevels.getLevels}
+              sendMessage={sendMessage}
             />
           )}
         </>
       )}
 
       {currentSection === "monitoring" && (
-        <div className="monitoring-section">
-          <h2 className="monitoring-section-title">Audio Levels</h2>
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-foreground">Audio Levels</h2>
           <VuMeterBank channels={channels} audioLevels={audioLevels} />
         </div>
       )}
@@ -141,18 +135,19 @@ function App() {
             interfaces={interfaces}
             onSave={updateConfig}
           />
-          <div className="settings-update-card">
+          <div className="mt-6">
             <CheckForUpdatesButton />
           </div>
-          <div className="settings-qr-code">
+          <div className="mt-6">
             <QrCodeDisplay config={config} />
           </div>
-          <div className="settings-log-viewer">
+          <div className="mt-6">
             <LogViewer subscribe={subscribe} />
           </div>
         </>
       )}
     </DashboardShell>
+    </TooltipProvider>
     </>
   );
 }

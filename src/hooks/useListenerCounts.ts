@@ -12,6 +12,7 @@ interface StreamingStatusChannel {
 
 interface StreamingStatusPayload {
   totalListeners: number;
+  totalVisitors: number;
   channels: StreamingStatusChannel[];
 }
 
@@ -19,10 +20,12 @@ interface ListenerCountPayload {
   channelId: string | null;
   count: number;
   totalListeners: number;
+  totalVisitors: number;
 }
 
 interface UseListenerCountsReturn {
   totalListeners: number;
+  totalVisitors: number;
   channelCounts: Map<string, number>;
   getChannelListenerCount: (channelId: string) => number;
 }
@@ -36,6 +39,7 @@ export function useListenerCounts(
   subscribe: (type: string, handler: (msg: WsMessage) => void) => () => void,
 ): UseListenerCountsReturn {
   const [totalListeners, setTotalListeners] = useState(0);
+  const [totalVisitors, setTotalVisitors] = useState(0);
   const [channelCounts, setChannelCounts] = useState<Map<string, number>>(
     () => new Map(),
   );
@@ -53,6 +57,7 @@ export function useListenerCounts(
         if (!payload?.channels) return;
 
         setTotalListeners(payload.totalListeners ?? 0);
+        setTotalVisitors(payload.totalVisitors ?? 0);
         setChannelCounts((prev) => {
           const next = new Map(prev);
           for (const channel of payload.channels) {
@@ -71,6 +76,7 @@ export function useListenerCounts(
         if (payload == null) return;
 
         setTotalListeners(payload.totalListeners);
+        setTotalVisitors(payload.totalVisitors ?? 0);
         if (payload.channelId != null) {
           setChannelCounts((prev) => {
             const next = new Map(prev);
@@ -92,5 +98,5 @@ export function useListenerCounts(
     [channelCounts],
   );
 
-  return { totalListeners, channelCounts, getChannelListenerCount };
+  return { totalListeners, totalVisitors, channelCounts, getChannelListenerCount };
 }

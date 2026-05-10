@@ -1,4 +1,5 @@
 {
+  "player.nowListening": "Escuchando",
   "player.startListening": "Comenzar a Escuchar",
   "player.mix": "Mezclar",
   "player.keepAwake": "Mantener activo",
@@ -14,7 +15,7 @@
   "channel.live": "En vivo",
   "channel.offline": "Sin conexion",
   "channel.listeningCount": "{{count}} escuchando",
-  "status.reconnecting": "Reconectando...",
+  "status.reconnecting": "Reconectando",
   "status.connecting": "Conectando...",
   "status.disconnected": "No se puede conectar al servidor de audio. Asegurate de estar en el WiFi de la iglesia.",
   "offline.title": "Conexion perdida",

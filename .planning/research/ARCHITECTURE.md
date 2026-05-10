@@ -1,721 +1,534 @@
-# Architecture Research
+# Architecture: shadcn/ui + Tailwind Migration for Admin Panel
 
-**Domain:** Church Audio Streaming / Dante-to-WebRTC Restreaming
-**Researched:** 2026-02-05
-**Confidence:** MEDIUM-HIGH
+**Domain:** Admin panel UI modernization (shadcn/ui + Tailwind v4 integration)
+**Researched:** 2026-05-05
+**Overall confidence:** HIGH
 
-## Standard Architecture
+---
 
-### System Overview
+## Current State Analysis
 
-```
-+------------------------------------------------------------------+
-|  DESKTOP APPLICATION (Electron)                                  |
-|                                                                  |
-|  +---------------------------+   +----------------------------+  |
-|  | RENDERER PROCESS          |   | MAIN PROCESS (Node.js)     |  |
-|  | (Admin Dashboard UI)      |   |                            |  |
-|  |                           |<->| - App lifecycle            |  |
-|  | - VU meters               |   | - Config management        |  |
-|  | - Channel management      |   | - Process orchestration    |  |
-|  | - Listener stats          |   | - System tray              |  |
-|  | - Settings panels         |   |                            |  |
-|  +---------------------------+   +---+----+---+---------------+  |
-|                                      |    |   |                  |
-|         IPC (Electron IPC)    +------+    |   +------+           |
-|                               |           |          |           |
-|  +----------------------------v--+  +-----v-----+ +-v--------+  |
-|  | MEDIASOUP SFU                 |  | WEB SERVER | | GSTREAMER|  |
-|  | (in-process Node.js)          |  | (Express)  | | PIPELINES|  |
-|  |                               |  |            | | (child   |  |
-|  | - Router per channel          |  | - PWA UI   | |  procs)  |  |
-|  | - PlainTransport (GStr input) |  | - Signaling| |          |  |
-|  | - WebRtcTransport (listeners) |  | - REST API | | - AES67  |  |
-|  | - Producer per channel        |  | - WebSocket| |   capture |  |
-|  | - Consumer per listener       |  |            | | - RNNoise|  |
-|  +---+---------------------------+  +-----+------+ | - Opus   |  |
-|      |                                    |         |   encode |  |
-|      |        RTP (localhost UDP)          |         +----+-----+  |
-|      +<-----------------------------------+--------------+        |
-+------------------------------------------------------------------+
-         |  WebRTC (UDP)              | HTTP/WS
-         v                            v
-+------------------+     +----------------------+
-| LISTENER PHONES  |     | LISTENER BROWSERS    |
-| (WebRTC audio)   |     | (PWA Web UI)         |
-+------------------+     +----------------------+
+### Layout Structure
+- `DashboardShell` — CSS Grid (`sidebar-width | 1fr`), 2-row (`header | content`)
+- `Sidebar` — plain `<button>` nav with BEM modifiers (`sidebar-nav-item--active`)
+- Single `App.css` (~1356 lines) holds ALL admin styles via CSS custom properties
+- 2 CSS Modules: `UpdateToast.module.css`, `CheckForUpdatesButton.module.css`
 
-NETWORK INPUT:
-+-------------------+
-| DANTE / AES67     |    Multicast RTP (L24 PCM)
-| Audio Network     +--->  224.x.x.x:port
-| (Church mixer)    |      per channel/language
-+-------------------+
-```
+### Component Inventory (18 .tsx files)
 
-### Component Responsibilities
+| Component | Current Styling | Complexity | shadcn Migration |
+|-----------|----------------|-----------|-----------------|
+| DashboardShell | global CSS grid | Low | Tailwind grid classes |
+| Sidebar | BEM buttons | Low | shadcn Sidebar or Tailwind nav |
+| ChannelList | BEM cards + buttons | Medium | Card + Button + Badge |
+| ChannelConfigPanel | form-field classes | Medium | Input + Select + Checkbox |
+| ChannelCreateDialog | custom dialog | Low | Dialog + Input |
+| ProcessingControls | custom slider/toggle | Medium | Slider + ToggleGroup |
+| SourceSelector | custom list + picks | Medium | Select + Badge + Button |
+| VuMeter | Canvas 60fps RAF | High | **NO CHANGE** (Canvas) |
+| VuMeterBank | flex wrapper | Low | Tailwind flex only |
+| ServerStatus | stat-card grid | Medium | Card grid |
+| ListenerCountBadge | pill badge | Low | Badge |
+| ConnectionStatus | dot + label | Low | Badge variant |
+| SettingsPanel | form fields | High | Input + Select + Checkbox + Button |
+| LogViewer | monospace scroller | Medium | Card shell (internals stay) |
+| QrCodeDisplay | centered card | Low | Card |
+| CheckForUpdatesButton | CSS Module | Low | Button (delete module) |
+| UpdateToast | CSS Module | Low | Toaster/Sonner (delete module) |
 
-| Component | Responsibility | Runtime | Talks To |
-|-----------|---------------|---------|----------|
-| **Main Process** | App lifecycle, config, process orchestration, system tray | Node.js (Electron main) | All components |
-| **Renderer Process** | Admin dashboard UI, VU meters, stats display | Chromium (Electron renderer) | Main Process via IPC |
-| **GStreamer Pipelines** | AES67 capture, audio processing, Opus encoding, RTP output | Child processes (gst-launch-1.0) | Network (AES67 input), mediasoup (RTP output) |
-| **mediasoup SFU** | WebRTC room management, RTP routing, transport management | In-process Node.js library | GStreamer (RTP input), Listeners (WebRTC output), Web Server (signaling) |
-| **Web Server** | Serve PWA, WebSocket signaling, REST API for admin | Express.js (in main process) | Renderer (API), mediasoup (signaling bridge), Browsers (HTTP/WS) |
-| **Config Manager** | Settings persistence, validation, import/export | Node.js module | Main Process, all components read config |
-
-## Recommended Project Structure
-
-```
-ChurchAudioStream/
-  src/
-    main/                          # Electron main process
-      index.ts                     # App entry, lifecycle
-      ipc-handlers.ts              # IPC bridge to renderer
-      tray.ts                      # System tray management
-      auto-updater.ts              # Update notifications
-
-    renderer/                      # Admin dashboard (React/Svelte)
-      App.tsx
-      pages/
-        Dashboard.tsx              # VU meters, status overview
-        Channels.tsx               # Channel config, per-channel settings
-        Settings.tsx               # Global settings, network config
-        Statistics.tsx             # Listener graphs, history
-      components/
-        VuMeter.tsx                # Real-time audio level display
-        ChannelCard.tsx            # Per-channel controls
-        ListenerCount.tsx          # Live listener badge
-      hooks/
-        useIpc.ts                  # Electron IPC abstraction
-        useAudioLevels.ts          # VU meter data subscription
-
-    server/                        # Web server + signaling
-      index.ts                     # Express app setup
-      routes/
-        api.ts                     # REST API for admin
-        signaling.ts               # WebSocket signaling for WebRTC
-      middleware/
-        cors.ts
-        error-handler.ts
-
-    sfu/                           # mediasoup integration
-      index.ts                     # Worker/Router lifecycle
-      room-manager.ts              # Channel-to-Room mapping
-      plain-transport.ts           # GStreamer RTP ingestion
-      webrtc-transport.ts          # Listener connections
-      producer-manager.ts          # Audio producers (one per channel)
-      consumer-manager.ts          # Audio consumers (one per listener)
-
-    audio/                         # GStreamer pipeline management
-      pipeline-manager.ts          # Spawn/monitor GStreamer child procs
-      pipeline-builder.ts          # Construct gst-launch arguments
-      aes67-source.ts              # AES67 multicast RTP source config
-      processing-chain.ts          # RNNoise, normalization, EQ params
-      opus-encoder.ts              # Opus encoding params
-      level-monitor.ts             # Audio level extraction for VU meters
-
-    config/                        # Configuration management
-      store.ts                     # Read/write JSON config
-      schema.ts                    # Config validation (Zod/JSON Schema)
-      defaults.ts                  # Default configuration values
-      migration.ts                 # Config version migration
-
-    shared/                        # Shared types and utilities
-      types.ts                     # TypeScript interfaces
-      constants.ts                 # Shared constants
-      events.ts                    # Event name definitions
-
-  web-ui/                          # Listener PWA (separate build)
-    src/
-      App.tsx
-      pages/
-        Welcome.tsx                # Church branding, enter
-        ChannelSelect.tsx          # Language/channel picker
-        Player.tsx                 # Audio player, volume, mix
-      lib/
-        webrtc-client.ts           # mediasoup-client integration
-        signaling.ts               # WebSocket signaling client
-        audio-context.ts           # Web Audio API for mix/volume
-        pwa.ts                     # Service worker, offline support
-      service-worker.ts
-      manifest.json
-
-  resources/                       # App resources
-    icons/
-    default-config.json
-
-  scripts/                         # Build and dev scripts
-    build-web-ui.ts
-    package-gstreamer.ts           # Bundle GStreamer for distribution
-```
-
-## Architectural Patterns
-
-### Pattern 1: Child Process Pipeline Management
-
-**What:** Each AES67 channel runs as an independent GStreamer child process. The Node.js main process spawns, monitors, and restarts these pipelines.
-
-**Why:** Process isolation means one crashing pipeline does not take down the app or other channels. GStreamer pipelines are CPU-intensive; separate processes allow OS-level scheduling across cores.
-
-**How it works:**
-
-```
-Main Process
-  |
-  +-- spawn("gst-launch-1.0", [...args])  -->  Channel 1 Pipeline (PID 1234)
-  +-- spawn("gst-launch-1.0", [...args])  -->  Channel 2 Pipeline (PID 1235)
-  +-- spawn("gst-launch-1.0", [...args])  -->  Channel 3 Pipeline (PID 1236)
-  |
-  +-- Monitor: restart on crash, log stderr, track health
-```
-
-Each pipeline outputs Opus-encoded RTP to a localhost UDP port that a mediasoup PlainTransport listens on.
-
-**Example pipeline (one channel):**
-
-```bash
-gst-launch-1.0 \
-  udpsrc address=239.x.x.x port=5004 \
-    caps="application/x-rtp,media=audio,clock-rate=48000,encoding-name=L24,channels=2" \
-  ! rtpjitterbuffer latency=5 \
-  ! rtpL24depay \
-  ! audioconvert \
-  ! audioresample \
-  ! audio/x-raw,rate=48000,channels=2,format=F32LE \
-  ! audiornnoise \
-  ! audiodynamic \
-  ! volume volume=1.0 \
-  ! level interval=100000000 \
-  ! opusenc bitrate=128000 frame-size=10 \
-  ! rtpopuspay pt=101 ssrc=11111 \
-  ! udpsink host=127.0.0.1 port=20001
-```
-
-### Pattern 2: mediasoup In-Process with PlainTransport Ingestion
-
-**What:** mediasoup runs as a Node.js library in the Electron main process. It receives audio from GStreamer via PlainTransport (localhost UDP) and serves it to listeners via WebRtcTransport.
-
-**Why:** mediasoup is designed as a Node.js module. Running it in-process avoids an extra IPC layer. The C++ media workers are already separate processes managed by mediasoup internally. PlainTransport is the official way to ingest external RTP into mediasoup.
-
-**How it works:**
-
-```typescript
-// Per channel setup (simplified)
-const router = await worker.createRouter({ mediaCodecs });
-const plainTransport = await router.createPlainTransport({
-  listenInfo: { protocol: 'udp', ip: '127.0.0.1', port: 20001 },
-  rtcpMux: false,
-  comedia: true,
-});
-const producer = await plainTransport.produce({
-  kind: 'audio',
-  rtpParameters: {
-    codecs: [{ mimeType: 'audio/opus', clockRate: 48000, channels: 2, payloadType: 101 }],
-    encodings: [{ ssrc: 11111 }],
-  },
-});
-```
-
-### Pattern 3: Event-Driven Architecture with Typed Events
-
-**What:** Components communicate through a typed event bus. Pipeline status, audio levels, listener counts, and config changes all flow as events.
-
-**Why:** Decouples components. The VU meter does not need to know about GStreamer; it subscribes to `audio:level` events. The dashboard does not poll; it reacts to `listener:join` / `listener:leave` events.
-
-**Key event flows:**
-
-```
-GStreamer stderr  -->  parse level messages  -->  emit("audio:level", { channel, dB })
-mediasoup         -->  consumer created      -->  emit("listener:join", { channel, id })
-Config change     -->  emit("config:changed", { key, value })
-Pipeline crash    -->  emit("pipeline:error", { channel, error })
-                  -->  auto-restart logic    -->  emit("pipeline:restarted", { channel })
-```
-
-### Pattern 4: Electron for Desktop GUI (Not Tauri)
-
-**What:** Use Electron as the desktop framework rather than Tauri.
-
-**Why this is the right call for this project:**
-
-1. **mediasoup is a Node.js library.** It needs a Node.js runtime. Electron provides this natively. Tauri would require running a Node.js sidecar as a compiled binary, adding complexity and potential failure points.
-2. **GStreamer child process management** is straightforward in Node.js via `child_process.spawn()`. Electron's main process handles this naturally.
-3. **The app is a server, not just a GUI.** It runs an Express web server, WebSocket signaling, mediasoup workers, and GStreamer pipelines. Electron's Node.js main process is the natural home for all of this.
-4. **Bundle size is acceptable.** This is a dedicated church machine, not a consumer app. The ~100MB installer is fine.
-5. **Memory overhead is acceptable.** The app runs one instance on a dedicated or semi-dedicated machine. 200-300MB baseline is fine when the machine's primary job is audio streaming.
-
-**When Tauri would be better:** If this were a lightweight client app with no Node.js backend requirements. It is not.
-
-### Pattern 5: One mediasoup Worker, One Router per Channel
-
-**What:** Use a single mediasoup Worker (or one per CPU core for larger deployments), with one Router per audio channel. Each Router has one PlainTransport (input from GStreamer) and N WebRtcTransports (one per listener on that channel).
-
-**Why:** Routers are the isolation boundary in mediasoup. One Router per channel means channels are independent: a listener on Channel A does not affect Channel B. The Worker is the C++ process that does the actual packet forwarding.
-
-```
-Worker (C++ process)
-  |
-  +-- Router "English"
-  |     +-- PlainTransport (from GStreamer, port 20001)
-  |     |     +-- Producer (Opus audio)
-  |     +-- WebRtcTransport (Listener 1)
-  |     |     +-- Consumer (forwarded Opus)
-  |     +-- WebRtcTransport (Listener 2)
-  |           +-- Consumer (forwarded Opus)
-  |
-  +-- Router "Spanish"
-  |     +-- PlainTransport (from GStreamer, port 20002)
-  |     |     +-- Producer (Opus audio)
-  |     +-- WebRtcTransport (Listener 3)
-  |           +-- Consumer (forwarded Opus)
-  |
-  +-- Router "Main Mix"
-        +-- PlainTransport (from GStreamer, port 20003)
-              +-- Producer (Opus audio)
-              (no listeners yet)
-```
-
-## Data Flow
-
-### Audio Pipeline Flow (end-to-end)
-
-```
-Dante Mixer                    Desktop App                         Phone
-+--------+    AES67/RTP     +--------------+   WebRTC/Opus     +--------+
-|        | -- multicast --> | GStreamer     | -- UDP/DTLS ----> | Browser|
-| Ch: EN |    L24 PCM       | Pipeline #1  |   via mediasoup   | WebAudio|
-|        |    48kHz/24bit   |              |                   |        |
-+--------+    239.x.x.x    | 1. Receive   |   mediasoup       | Decode |
-              port 5004     | 2. Dejitter  |   PlainTransport  | Volume |
-                            | 3. Depay     |   --> Producer    | Mix    |
-                            | 4. RNNoise   |   --> Consumer    | Output |
-                            | 5. Normalize |   --> WebRTC      |        |
-                            | 6. Opus enc  |      Transport    +--------+
-                            | 7. RTP pay   |
-                            | 8. UDP send  |
-                            |  -> 127.0.0.1|
-                            +--------------+
-
-Latency budget (target <100ms total):
-  AES67 jitter buffer:     5ms
-  Audio processing:       10ms
-  Opus encoding (10ms):   10ms
-  Local UDP transfer:     <1ms
-  mediasoup forwarding:   <1ms
-  WebRTC transport:      20-50ms (network dependent)
-  Browser decode:         10ms
-  Audio output buffer:    10ms
-  --------------------------------
-  TOTAL:                 ~65-95ms  (achievable on local WiFi)
-```
-
-### WebRTC Signaling Flow
-
-```
-Phone Browser                 Web Server              mediasoup SFU
-     |                            |                        |
-     |-- HTTP GET / ------------->|                        |
-     |<-- PWA index.html --------|                        |
-     |                            |                        |
-     |-- WS connect ------------->|                        |
-     |                            |                        |
-     |-- "join" { channel } ----->|                        |
-     |                            |-- createWebRtcTransport ->|
-     |                            |<-- transport params ------|
-     |<-- "transport-created" ----|                        |
-     |                            |                        |
-     |-- "connect-transport" ---->|                        |
-     |   { dtlsParameters }      |-- transport.connect() --->|
-     |                            |                        |
-     |-- "consume" { channel } -->|                        |
-     |                            |-- transport.consume() --->|
-     |                            |<-- consumer params -------|
-     |<-- "new-consumer" --------|                        |
-     |   { rtpParameters }       |                        |
-     |                            |                        |
-     |== WebRTC audio flows =================================>|
-     |                            |                        |
-     |-- "switch-channel" ------->|                        |
-     |   { newChannel }          |-- close old consumer ---->|
-     |                            |-- new consume() -------->|
-     |<-- "new-consumer" --------|                        |
-```
-
-### Configuration Flow
-
-```
-config.json (on disk)
-     |
-     +-- Read on startup --> Config Store (in memory)
-     |                            |
-     |                            +-- Validate (Zod schema)
-     |                            +-- Apply defaults for missing keys
-     |                            |
-     |                            +-- Feed to: GStreamer pipeline args
-     |                            +-- Feed to: mediasoup worker options
-     |                            +-- Feed to: Web server bind address
-     |                            +-- Feed to: Renderer (display settings)
-     |                            |
-     +-- Write on change <--------+-- Config change event
-     |                            |
-     +-- Export: JSON file download from Admin UI
-     +-- Import: JSON file upload, validate, apply, restart affected components
-```
-
-**Config structure (key sections):**
-
-```json
-{
-  "server": {
-    "listenIp": "0.0.0.0",
-    "port": 3000,
-    "announcedIp": "192.168.1.100"
-  },
-  "channels": [
-    {
-      "id": "english",
-      "name": "English",
-      "aes67": {
-        "multicastAddress": "239.69.1.1",
-        "port": 5004,
-        "sampleRate": 48000,
-        "bitDepth": 24,
-        "channelCount": 2
-      },
-      "processing": {
-        "noiseCancellation": true,
-        "normalization": { "enabled": true, "targetLufs": -16 },
-        "eq": { "enabled": false, "preset": "voice" }
-      },
-      "opus": {
-        "bitrate": 128000,
-        "frameSize": 10
-      },
-      "visible": true,
-      "order": 0
-    }
-  ],
-  "webUi": {
-    "churchName": "First Community Church",
-    "welcomeMessage": "Welcome! Select your language.",
-    "theme": "auto",
-    "logoPath": null
-  },
-  "advanced": {
-    "mediasoupWorkers": 1,
-    "rtcMinPort": 40000,
-    "rtcMaxPort": 49999,
-    "jitterBuffer": 5,
-    "autoStart": false
-  }
+### Current Design Tokens
+```css
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #0f3460;
+  --bg-input: #1e2a4a;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0b0;
+  --text-muted: #6b6b80;
+  --accent: #5a9cf5;
+  --success: #4caf50;
+  --warning: #ff9800;
+  --error: #f44336;
+  --border: #2a3a5e;
+  --radius: 6px;
 }
 ```
 
-## Scaling Considerations
+---
 
-| Concern | Small Church (50 listeners) | Medium Church (200 listeners) | Large Church (500+ listeners) |
-|---------|----------------------------|------------------------------|-------------------------------|
-| **mediasoup Workers** | 1 worker (single core) | 1-2 workers | 2-4 workers (one per core) |
-| **UDP Port Range** | 100 ports sufficient | 500 ports | 2000+ ports |
-| **Memory** | ~300MB total | ~500MB total | ~800MB-1GB total |
-| **CPU** | Any modern dual-core | Quad-core recommended | Quad-core minimum, 8-core for headroom |
-| **Network** | 100Mbps sufficient | Gigabit recommended | Gigabit required |
-| **Bandwidth per listener** | ~130kbps (Opus 128k + overhead) | Same per listener | Same per listener |
-| **Total bandwidth (3 ch, 200 listeners)** | N/A | ~78 Mbps outbound | ~195 Mbps for 500 |
+## Recommended Architecture
 
-**Key insight:** mediasoup is an SFU, not an MCU. It forwards packets without transcoding. CPU scales with number of listeners, not with audio complexity. The bottleneck for large churches is network bandwidth, not CPU.
+### Strategy: Incremental Migration (NOT big-bang)
 
-## Anti-Patterns
+**Rationale:**
+- App is live, used in production
+- Dark-only theme = simpler (no light mode to worry about)
+- Small team = cannot afford weeks of broken UI
+- Incremental = ship one component per PR, old CSS coexists with Tailwind
 
-### Anti-Pattern 1: Running mediasoup as a Separate Microservice
+### Migration Phases
 
-**What:** Splitting mediasoup into its own process/container, communicating with the main app over HTTP/gRPC.
+```
+Phase 1: Foundation (Tailwind + shadcn init, zero visual change)
+Phase 2: Primitives (add shadcn components to src/components/ui/)
+Phase 3: Leaf components (Badge, Button — no dependents)
+Phase 4: Cards and panels (ServerStatus, QrCode, LogViewer)
+Phase 5: Forms (Settings, ChannelConfig, ProcessingControls)
+Phase 6: Complex compositions (ChannelList, Dialog, SourceSelector)
+Phase 7: Layout (Sidebar, DashboardShell)
+Phase 8: Cleanup (delete App.css, enable preflight)
+```
 
-**Why bad:** Adds latency, complexity, and a failure mode. mediasoup is designed to be an in-process library. Its C++ workers are already separate processes. Adding another layer of IPC on top creates unnecessary overhead for a single-machine deployment.
+---
 
-**Instead:** Run mediasoup as a library in the Electron main process. It manages its own worker processes internally.
+## File Structure After Migration
 
-### Anti-Pattern 2: Using GStreamer Node.js Bindings
+```
+src/
+  components/
+    ui/                          <-- shadcn primitives (CLI-generated)
+      badge.tsx
+      button.tsx
+      card.tsx
+      checkbox.tsx
+      dialog.tsx
+      input.tsx
+      label.tsx
+      select.tsx
+      slider.tsx
+      toggle-group.tsx
+      toaster.tsx
+    layout/
+      DashboardShell.tsx         <-- Tailwind grid
+      Sidebar.tsx                <-- Tailwind nav buttons
+    channels/
+      ChannelList.tsx            <-- Card + Button + Badge
+      ChannelConfigPanel.tsx     <-- Input + Select + Checkbox
+      ChannelCreateDialog.tsx    <-- Dialog + Input
+      ProcessingControls.tsx     <-- Slider + ToggleGroup
+      SourceSelector.tsx         <-- Select + Badge + Button
+    monitoring/
+      VuMeter.tsx                <-- UNCHANGED (Canvas, no Tailwind)
+      VuMeterBank.tsx            <-- Tailwind flex wrapper only
+      ServerStatus.tsx           <-- Card grid
+      ListenerCountBadge.tsx     <-- Badge
+    settings/
+      QrCodeDisplay.tsx          <-- Card
+      SettingsPanel.tsx          <-- Input + Select + Checkbox + Button
+    ConnectionStatus.tsx         <-- Badge variant
+    LogViewer.tsx                <-- Card shell, monospace internals
+  lib/
+    utils.ts                     <-- cn() utility (clsx + tailwind-merge)
+  styles/
+    index.css                    <-- Tailwind imports + theme tokens
+  App.css                        <-- DELETED in Phase 8
+```
 
-**What:** Using `gstreamer-superficial` or similar bindings to run GStreamer in-process with Node.js.
-
-**Why bad:** These bindings are unofficial, poorly maintained, and tie GStreamer's lifecycle to Node.js. A GStreamer crash would take down the entire app. The bindings also lag behind GStreamer releases.
-
-**Instead:** Spawn GStreamer as child processes via `gst-launch-1.0`. Parse stdout/stderr for level data. Communicate audio via localhost UDP (which you need anyway for mediasoup PlainTransport).
-
-### Anti-Pattern 3: WebRTC Peer-to-Peer (No SFU)
-
-**What:** Having each listener connect directly to the audio source via peer-to-peer WebRTC.
-
-**Why bad:** Each peer connection requires encoding and sending a separate stream. With 100 listeners, you need 100 outbound streams from the source. CPU and bandwidth explode linearly.
-
-**Instead:** mediasoup SFU encodes once, forwards to all listeners. One inbound stream, N outbound forwards.
-
-### Anti-Pattern 4: Polling for Audio Levels / Stats
-
-**What:** Having the renderer poll the main process every 100ms for VU meter data.
-
-**Why bad:** Polling introduces jitter, wastes IPC bandwidth, and couples the update rate to the poll interval.
-
-**Instead:** Push audio levels from main process to renderer via Electron IPC events. GStreamer's `level` element emits messages on stderr at configurable intervals. Parse these, push to renderer.
-
-### Anti-Pattern 5: Single GStreamer Pipeline for All Channels
-
-**What:** Running all channels through one GStreamer pipeline with tee/deinterleave.
-
-**Why bad:** One channel's issue (bad multicast, format mismatch) crashes the entire pipeline. Cannot restart individual channels. Cannot add/remove channels without restarting everything.
-
-**Instead:** One GStreamer child process per channel. Independent lifecycle, independent failure domain.
-
-### Anti-Pattern 6: Using Tauri with Node.js Sidecar
-
-**What:** Choosing Tauri for smaller bundle size but then needing a Node.js sidecar for mediasoup.
-
-**Why bad:** You end up with: Tauri (Rust) + Node.js sidecar (compiled binary) + IPC between them + mediasoup (needs Node.js) + GStreamer (child processes). The Tauri bundle size advantage disappears when you bundle a Node.js binary. The IPC between Tauri's Rust core and the Node.js sidecar adds latency and complexity. You are fighting the framework instead of using it.
-
-**Instead:** Use Electron. mediasoup runs natively in Node.js. Web server runs natively in Node.js. GStreamer child processes spawn from Node.js. Everything is in its natural home.
+---
 
 ## Integration Points
 
-### Critical Integration: GStreamer to mediasoup (PlainTransport)
+### 1. Vite Config Update
 
-This is the most important integration point in the system. GStreamer outputs Opus-encoded RTP to a localhost UDP port. mediasoup's PlainTransport listens on that port.
+```typescript
+// vite.config.ts
+import path from "path";
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
-**Must match exactly:**
-- Opus codec parameters (48kHz, 2 channels)
-- RTP payload type (must match what mediasoup Router's codec config expects)
-- SSRC (must match what the Producer is configured with)
-- Port numbers (GStreamer udpsink port = PlainTransport listen port)
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  clearScreen: false,
+  server: { port: 1420, strictPort: true },
+  envPrefix: ["VITE_", "TAURI_"],
+  resolve: {
+    alias: { "@": path.resolve(__dirname, "./src") },
+  },
+  build: {
+    target: "es2022",
+    minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
+    sourcemap: !!process.env.TAURI_DEBUG,
+  },
+});
+```
 
-**Verified approach** (from mediasoup demo's GStreamer broadcaster script):
+### 2. TypeScript Path Alias
+
+```json
+// tsconfig.app.json — add to compilerOptions
+{
+  "baseUrl": ".",
+  "paths": { "@/*": ["./src/*"] }
+}
+```
+
+### 3. Tailwind CSS Entry (No Preflight)
+
+```css
+/* src/styles/index.css */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Custom theme: dark-only, matching existing design tokens */
+@theme inline {
+  --color-background: oklch(0.15 0.02 260);
+  --color-foreground: oklch(0.9 0.01 260);
+  --color-card: oklch(0.17 0.025 260);
+  --color-card-foreground: oklch(0.9 0.01 260);
+  --color-primary: oklch(0.65 0.14 250);
+  --color-primary-foreground: oklch(1 0 0);
+  --color-secondary: oklch(0.2 0.03 260);
+  --color-secondary-foreground: oklch(0.7 0.01 260);
+  --color-muted: oklch(0.2 0.025 260);
+  --color-muted-foreground: oklch(0.5 0.01 270);
+  --color-accent: oklch(0.65 0.14 250);
+  --color-accent-foreground: oklch(1 0 0);
+  --color-destructive: oklch(0.55 0.2 25);
+  --color-border: oklch(0.28 0.035 250);
+  --color-input: oklch(0.22 0.025 250);
+  --color-ring: oklch(0.65 0.14 250);
+  --radius: 0.375rem;
+}
+```
+
+### 4. Import Order in main.tsx
+
+```typescript
+// During migration (Phases 1-7):
+import "./App.css";           // legacy styles — keeps working
+import "./styles/index.css";  // Tailwind — utilities layer, lower specificity
+
+// After Phase 8 cleanup:
+import "./styles/index.css";  // Tailwind only
+```
+
+### 5. cn() Utility
+
+```typescript
+// src/lib/utils.ts
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+```
+
+---
+
+## Canvas VuMeter Coexistence Strategy
+
+**Problem:** VuMeter uses raw Canvas 2D at 60fps via requestAnimationFrame. Tailwind utilities have no effect inside Canvas drawing calls.
+
+**Solution:**
+
+1. **VuMeter internals unchanged.** All `ctx.fillStyle`, gradient creation, `ctx.fillRect` calls stay exactly as-is. Canvas rendering is pixel-based, not CSS-based.
+
+2. **Wrapper div migrates to Tailwind:**
+```typescript
+// Before (App.css class):
+<div className="vu-meter">
+
+// After (Tailwind utilities):
+<div className="flex flex-col items-center gap-1">
+```
+
+3. **Canvas element keeps inline style** — `style={{ width, height }}` is immune to Tailwind reset.
+
+4. **VuMeterBank wrapper migrates:**
+```typescript
+// Before:
+<div className="vu-meter-bank">
+
+// After:
+<div className="flex flex-wrap gap-4 p-4 bg-card border border-border rounded-md">
+```
+
+5. **Colors hardcoded in Canvas** — `COLOR_GREEN`, `COLOR_RED`, etc. are constants in VuMeter.tsx. NOT affected by CSS variables or Tailwind theme.
+
+**Key insight:** Tailwind's preflight (even if enabled later) cannot interfere with `ctx.fillStyle` calls. Only element-level CSS dimensions matter, and those use inline styles already.
+
+---
+
+## Theme Mapping
+
+| Current CSS Variable | shadcn Token | Tailwind Class |
+|---------------------|-------------|---------------|
+| `--bg-primary` | `background` | `bg-background` |
+| `--bg-secondary` | `card` | `bg-card` |
+| `--bg-tertiary` | `muted` | `bg-muted` |
+| `--bg-input` | `input` | `bg-input` |
+| `--text-primary` | `foreground` | `text-foreground` |
+| `--text-secondary` | `card-foreground` | `text-card-foreground` |
+| `--text-muted` | `muted-foreground` | `text-muted-foreground` |
+| `--accent` | `primary` | `bg-primary text-primary` |
+| `--success` | (custom) | `text-green-400` |
+| `--warning` | (custom) | `text-amber-400` |
+| `--error` | `destructive` | `text-destructive` |
+| `--border` | `border` | `border-border` |
+| `--radius` | `radius` | `rounded-md` |
+
+**Dark-only:** Set `<html class="dark">` in `index.html`. Define all tokens in `:root` directly. No `.dark` selector needed.
+
+---
+
+## Component Boundaries
+
+| Layer | Responsibility | Communicates With |
+|-------|---------------|-------------------|
+| `ui/*` | Pure presentation primitives (shadcn-generated) | Props only, no hooks |
+| `layout/*` | Page structure, navigation state | App.tsx via props |
+| `channels/*` | Channel CRUD + config UI | WebSocket hooks |
+| `monitoring/*` | Real-time display | Audio levels hook, resource stats hook |
+| `settings/*` | Server config forms | WebSocket hooks |
+| `lib/utils.ts` | cn() merge utility | All components import |
+
+---
+
+## Build Order (Detailed Migration Sequence)
+
+### Phase 1: Foundation (zero visual change)
 
 ```bash
-# GStreamer side
-opusenc bitrate=128000 ! rtpopuspay pt=101 ssrc=11111 ! udpsink host=127.0.0.1 port=20001
+npm install tailwindcss @tailwindcss/vite tailwind-merge clsx
+npx shadcn@latest init
 ```
 
-```typescript
-// mediasoup side
-const producer = await plainTransport.produce({
-  kind: 'audio',
-  rtpParameters: {
-    codecs: [{
-      mimeType: 'audio/opus',
-      clockRate: 48000,
-      channels: 2,
-      payloadType: 101,
-      parameters: { 'sprop-stereo': 1, useinbandfec: 1 }
-    }],
-    encodings: [{ ssrc: 11111 }]
-  }
-});
-```
+- Add `@tailwindcss/vite` plugin to `vite.config.ts`
+- Add `@/` path alias to `tsconfig.app.json` + `vite.config.ts`
+- Create `src/styles/index.css` (no preflight, theme tokens)
+- Create `src/lib/utils.ts` (cn utility)
+- Import `styles/index.css` in `main.tsx` AFTER `App.css`
+- **Verify:** App looks identical, no regressions
 
-**Confidence:** HIGH -- this integration pattern is documented in the official mediasoup demo repository.
-
-### Critical Integration: AES67 Multicast Reception
-
-The machine must join the correct multicast groups to receive Dante/AES67 audio.
-
-**Requirements:**
-- Machine must be on the same VLAN as Dante devices (or have multicast routing)
-- IGMP snooping must be configured on network switches
-- PTP clock sync is handled by Dante Controller / network -- GStreamer uses `rtpjitterbuffer` to smooth timing
-- SDP files or manual multicast address configuration needed per channel
-
-**GStreamer receive pipeline:**
+### Phase 2: Add shadcn Primitives
 
 ```bash
-udpsrc address=239.69.1.1 port=5004 \
-  caps="application/x-rtp,media=audio,clock-rate=48000,encoding-name=L24,channels=2" \
-! rtpjitterbuffer latency=5 \
-! rtpL24depay
+npx shadcn@latest add button badge card input label select checkbox slider dialog toggle-group
 ```
 
-**Confidence:** HIGH -- standard AES67 reception, documented by Collabora and multiple community implementations.
+- Components generated in `src/components/ui/`
+- NOT used anywhere yet — just available in codebase
+- **Verify:** Build passes, no runtime errors
 
-### Integration: Electron IPC (Main to Renderer)
+### Phase 3: Migrate Leaf Components (no downstream deps)
 
-**For real-time data (VU meters, listener counts):**
-Use `ipcMain`/`ipcRenderer` with event push from main to renderer. Do not poll.
+| Order | Component | Change |
+|-------|-----------|--------|
+| 3.1 | ListenerCountBadge | Replace HTML + class → shadcn Badge |
+| 3.2 | ConnectionStatus | Replace HTML + class → Badge variant |
+| 3.3 | CheckForUpdatesButton | Replace HTML + CSS Module → shadcn Button |
+| 3.4 | UpdateToast | Replace HTML + CSS Module → shadcn Toaster |
+
+**After 3.4:** Delete `CheckForUpdatesButton.module.css` and `UpdateToast.module.css`
+
+### Phase 4: Migrate Cards/Panels
+
+| Order | Component | Change |
+|-------|-----------|--------|
+| 4.1 | ServerStatus | stat-card → shadcn Card |
+| 4.2 | QrCodeDisplay | custom card → shadcn Card |
+| 4.3 | LogViewer | outer shell → Card, keep monospace internals |
+| 4.4 | VuMeterBank | wrapper div → Tailwind flex classes |
+
+### Phase 5: Migrate Forms
+
+| Order | Component | Change |
+|-------|-----------|--------|
+| 5.1 | SettingsPanel | form-field → Input + Select + Checkbox + Label + Button |
+| 5.2 | ProcessingControls | slider + toggle → Slider + ToggleGroup |
+| 5.3 | SourceSelector | custom UI → Select + Badge + Button |
+| 5.4 | ChannelConfigPanel | composition of 5.1-5.3 patterns |
+| 5.5 | ChannelCreateDialog | custom → Dialog + Input + Button |
+
+### Phase 6: Migrate Channel List
+
+| Order | Component | Change |
+|-------|-----------|--------|
+| 6.1 | ChannelList | channel-card → Card + StatusBadge + Button |
+
+This is the most complex single component. Create a `StatusBadge` wrapper:
+```typescript
+const statusVariants = {
+  streaming: "bg-green-500/15 text-green-400 border-green-500/30",
+  starting: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  error: "bg-red-500/15 text-red-400 border-red-500/30",
+  stopped: "bg-muted text-muted-foreground border-border",
+} as const;
+```
+
+### Phase 7: Migrate Layout
+
+| Order | Component | Change |
+|-------|-----------|--------|
+| 7.1 | Sidebar | BEM nav → Tailwind nav buttons (or shadcn Sidebar) |
+| 7.2 | DashboardShell | CSS grid → Tailwind grid classes |
+
+**Note:** Sidebar could use shadcn's full Sidebar component OR just Tailwind utilities. Recommend Tailwind utilities — the current sidebar is simple (4 buttons), shadcn Sidebar is heavy (collapsible, mobile drawer, etc.).
+
+### Phase 8: Cleanup
+
+- Delete `src/App.css` entirely
+- Remove `import "./App.css"` from `main.tsx`
+- Enable Tailwind preflight (switch to full `@import "tailwindcss"`)
+- Remove any remaining BEM class references
+- Full visual regression check
+
+---
+
+## Patterns to Follow
+
+### Pattern 1: One Component Per PR
+Migrate one component, remove its CSS from App.css comment block (or leave it — dead CSS until Phase 8). Each PR is reviewable and revertible.
+
+### Pattern 2: Semantic Wrapper Components
+Wrap shadcn primitives for domain-specific variants:
+```typescript
+// src/components/ui/status-badge.tsx
+import { Badge } from "./badge";
+import { cn } from "@/lib/utils";
+
+const variants = { streaming: "...", starting: "...", error: "...", stopped: "..." };
+
+export function StatusBadge({ status }: { status: string }) {
+  return <Badge className={cn(variants[status as keyof typeof variants])}>{status}</Badge>;
+}
+```
+
+### Pattern 3: Canvas Components Stay Pure
+VuMeter uses no Tailwind internally. Only wrapper elements get Tailwind classes.
+
+### Pattern 4: Form Pattern
+```typescript
+<div className="space-y-4">
+  <div className="space-y-2">
+    <Label htmlFor="port">Port</Label>
+    <Input id="port" type="number" value={port} onChange={...} />
+    {error && <p className="text-sm text-destructive">{error}</p>}
+  </div>
+</div>
+```
+
+---
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Mixed Old + New in Same Element
+**Bad:** `className="channel-card bg-card"` — half old, half new
+**Why:** Specificity conflicts, impossible to predict winner
+**Fix:** Migrate entire component at once
+
+### Anti-Pattern 2: @apply Rebuilding Old Classes
+**Bad:** `@apply flex items-center gap-2` to recreate `.channel-card-info`
+**Why:** Defeats utility-first purpose, harder to maintain than inline
+**Fix:** Inline utilities directly in JSX
+
+### Anti-Pattern 3: Tailwind Inside Canvas
+**Bad:** Reading Tailwind theme values for Canvas fillStyle
+**Why:** Runtime overhead, Canvas doesn't use CSS
+**Fix:** Keep Canvas colors as hardcoded constants
+
+### Anti-Pattern 4: Importing Full Tailwind During Transition
+**Bad:** `@import "tailwindcss"` (includes preflight)
+**Why:** Preflight resets headings, margins, buttons — breaks ALL existing CSS instantly
+**Fix:** Import only `tailwindcss/theme.css` + `tailwindcss/utilities.css` until Phase 8
+
+### Anti-Pattern 5: Over-Engineering Sidebar
+**Bad:** Using shadcn's full Sidebar (collapsible, mobile sheet, keyboard nav)
+**Why:** Current sidebar is 4 static buttons in a desktop-only Tauri app
+**Fix:** Simple Tailwind nav with `aria-current` for active state
+
+---
+
+## Coexistence Mechanics (How Both Systems Work Simultaneously)
+
+### CSS Specificity During Transition
+
+```
+App.css classes:       specificity = 0-1-0 (single class)
+Tailwind utilities:    specificity = 0-1-0 (single class) BUT in @layer utilities
+```
+
+CSS `@layer` has LOWER priority than unlayered styles. So existing App.css always wins over Tailwind utilities if both target the same element. This means:
+- Migrated components (using ONLY Tailwind) work correctly
+- Unmigrated components (using ONLY App.css) work correctly
+- No conflicts during transition period
+
+### Import Order Matters
 
 ```typescript
-// Main process: push audio levels
-ipcMain.on('subscribe:audio-levels', (event) => {
-  audioLevelEmitter.on('level', (data) => {
-    event.sender.send('audio:level', data);
-  });
-});
+import "./App.css";           // unlayered = higher priority
+import "./styles/index.css";  // @layer utilities = lower priority
 ```
 
-**For config/commands (settings changes, start/stop):**
-Use invoke/handle pattern for request-response.
+This is intentional. Unmigrated components keep working. Migrated components only use Tailwind (no old classes on the element), so they also work.
 
-```typescript
-// Main process
-ipcMain.handle('config:get', () => configStore.getAll());
-ipcMain.handle('config:set', (_, key, value) => configStore.set(key, value));
+---
+
+## Data Flow (Unchanged by Migration)
+
+```
+WebSocket hooks (useChannels, useAudioLevels, useServerStatus)
+      |
+      v
+App.tsx (state orchestrator, section navigation)
+      |
+      v
+DashboardShell (layout grid) --> Sidebar (nav)
+      |
+      v
+Section content (ChannelList | Monitoring | Settings | Overview)
+      |
+      v
+Leaf components (VuMeter, Badge, Card, etc.)
 ```
 
-### Integration: Web Server to mediasoup (Signaling)
+Migration is purely presentational. No hook changes, no state changes, no prop interface changes.
 
-The Express web server handles WebSocket connections from listener browsers. It translates signaling messages into mediasoup API calls.
+---
 
-**Pattern:** Thin signaling layer. The WebSocket handler is a bridge, not business logic.
+## New vs Modified Components
 
-```typescript
-// WebSocket message -> mediasoup API call -> response back to client
-ws.on('message', async (msg) => {
-  const { action, data } = JSON.parse(msg);
-  switch (action) {
-    case 'createTransport':
-      const transport = await router.createWebRtcTransport(transportOptions);
-      ws.send(JSON.stringify({ action: 'transportCreated', data: transport.params }));
-      break;
-    case 'consume':
-      const consumer = await transport.consume({ producerId, rtpCapabilities });
-      ws.send(JSON.stringify({ action: 'newConsumer', data: consumer.params }));
-      break;
-  }
-});
-```
+### New Files (created by migration)
+- `src/components/ui/*.tsx` — shadcn primitives (~12 files)
+- `src/lib/utils.ts` — cn() utility
+- `src/styles/index.css` — Tailwind entry + theme
 
-### Integration: GStreamer Audio Level to VU Meters
+### Modified Files (className changes only)
+- All 18 existing `.tsx` components get className updates
+- `vite.config.ts` — add tailwindcss plugin + path alias
+- `tsconfig.app.json` — add baseUrl + paths
+- `main.tsx` — add styles/index.css import
 
-GStreamer's `level` element outputs peak and RMS levels on stderr/bus messages. The pipeline manager parses these and emits them as events.
+### Deleted Files
+- `src/App.css` (Phase 8)
+- `src/components/UpdateToast/UpdateToast.module.css` (Phase 3)
+- `src/components/CheckForUpdatesButton/CheckForUpdatesButton.module.css` (Phase 3)
+
+---
+
+## Package Dependencies
 
 ```bash
-# In pipeline: ... ! level interval=100000000 ! ...
-# Outputs to stderr every 100ms:
-# "level, peak=(double){ -12.5, -13.1 }, rms=(double){ -18.2, -19.0 }"
+# Production
+npm install tailwind-merge clsx
+
+# Development
+npm install -D tailwindcss @tailwindcss/vite
 ```
 
-```typescript
-// Pipeline manager parses stderr
-gstreamerProcess.stderr.on('data', (data) => {
-  const levelMatch = data.toString().match(/peak=\(double\)\{([^}]+)\}/);
-  if (levelMatch) {
-    const peaks = levelMatch[1].split(',').map(Number);
-    emitter.emit('audio:level', { channel: channelId, peakL: peaks[0], peakR: peaks[1] });
-  }
-});
-```
+shadcn components add their own deps when generated (e.g., `@radix-ui/react-dialog`, `@radix-ui/react-select`, etc.). Each `npx shadcn add` command installs required packages automatically.
 
-## Build Order (Dependencies)
-
-The following order respects component dependencies:
-
-```
-Phase 1: Foundation
-  - Config store (everything needs config)
-  - Electron shell (app lifecycle, window management)
-  - Basic IPC bridge
-
-Phase 2: Audio Capture
-  - GStreamer pipeline builder (construct CLI args from config)
-  - Pipeline manager (spawn, monitor, restart child processes)
-  - AES67 multicast reception (verify on real Dante network)
-  - Audio level parsing (for VU meters later)
-
-Phase 3: SFU + Streaming
-  - mediasoup worker/router setup
-  - PlainTransport (receive from GStreamer)
-  - WebRtcTransport (serve to listeners)
-  - Producer/Consumer management
-
-Phase 4: Web Server + Signaling
-  - Express server (serve static PWA files)
-  - WebSocket signaling (transport negotiation)
-  - REST API (admin endpoints for stats, config)
-
-Phase 5: Listener Web UI (PWA)
-  - mediasoup-client integration
-  - Channel selection
-  - Audio playback (Web Audio API)
-  - Volume / mix controls
-  - PWA manifest + service worker
-
-Phase 6: Admin Dashboard
-  - VU meters (real-time level display)
-  - Channel management UI
-  - Listener stats display
-  - Settings panels
-
-Phase 7: Audio Processing
-  - RNNoise noise cancellation
-  - Loudness normalization
-  - EQ presets
-  - Per-channel processing config
-
-Phase 8: Polish + Robustness
-  - Auto-reconnect (listeners)
-  - Pipeline self-healing (auto-restart crashed GStreamer)
-  - Config import/export
-  - Auto-start on boot
-  - Update notifications
-  - Accessibility
-  - Theming (light/dark/auto)
-```
-
-**Rationale for this order:**
-- Config and Electron shell are prerequisites for everything.
-- Audio capture must work before you can stream anything.
-- SFU must work before listeners can connect.
-- Web server must exist before the PWA can be served.
-- PWA is needed to validate the end-to-end flow.
-- Admin dashboard is quality-of-life, not blocking.
-- Audio processing is additive (system works without it; it improves quality).
-- Polish comes last because it depends on everything else being stable.
-
-## Process Architecture Summary
-
-```
-[Electron Main Process]  (Node.js)
-  |
-  |-- mediasoup library (manages its own C++ worker processes)
-  |     |-- mediasoup-worker (C++ child process, one per CPU core used)
-  |
-  |-- Express web server (in-process)
-  |-- WebSocket server (in-process)
-  |-- Config manager (in-process)
-  |-- Pipeline manager (spawns/monitors):
-  |     |-- gst-launch-1.0 (child process, Channel 1)
-  |     |-- gst-launch-1.0 (child process, Channel 2)
-  |     |-- gst-launch-1.0 (child process, Channel N)
-  |
-  |-- Electron Renderer Process (Chromium, Admin Dashboard)
-
-Total processes for 3-channel setup:
-  1 Electron main
-  1 Electron renderer
-  1-4 mediasoup workers
-  3 GStreamer pipelines
-  = 6-9 OS processes
-```
-
-This is a manageable process count. Each GStreamer pipeline uses one core efficiently. mediasoup workers are lightweight forwarding engines. The Electron processes are standard overhead.
+---
 
 ## Sources
 
-- [Collabora: Receiving an AES67 stream with GStreamer](https://www.collabora.com/news-and-blog/blog/2017/04/25/receiving-an-aes67-stream-with-gstreamer/)
-- [AES67 Audio using GStreamer (StrongRandom)](https://strongrandom.com/post/aes67-gstreamer/)
-- [mediasoup Official Documentation](https://mediasoup.org/documentation/overview/)
-- [mediasoup Demo - GStreamer Broadcaster Script](https://github.com/versatica/mediasoup-demo/blob/v3/broadcasters/gstreamer.sh)
-- [mediasoup Discourse: GStreamer PlainTransport](https://mediasoup.discourse.group/t/gstreamer-send-rtp-plaintransport/2338)
-- [mediasoup Discourse: PlainTransport + GStreamer Opus](https://mediasoup.discourse.group/t/gstreamer-plaintransport-send-opus/2394)
-- [GStreamer audiornnoise Element](https://gstreamer.freedesktop.org/documentation/rsaudiofx/audiornnoise.html)
-- [GStreamer rtpopuspay Element](https://gstreamer.freedesktop.org/documentation/rtp/rtpopuspay.html)
-- [GStreamer Latency Design](https://gstreamer.freedesktop.org/documentation/additional/design/latency.html)
-- [Tauri v2: Node.js as a Sidecar](https://v2.tauri.app/learn/sidecar-nodejs/)
-- [Tauri v2: Embedding External Binaries](https://v2.tauri.app/develop/sidecar/)
-- [voc/aes67-recorder (GitHub)](https://github.com/voc/aes67-recorder)
-- [AES67 GStreamer Simple Implementation (Phil Hartung)](https://gist.github.com/philhartung/6f2905ea566bf5dbf5b0b3298008d1d3)
-- [Injecting audio/video into mediasoup using GStreamer (GitHub Gist)](https://gist.github.com/mkhahani/59b9eca043569a9ec3cbec67e4d05811)
-- [Electron vs. Tauri (DoltHub, 2025)](https://www.dolthub.com/blog/2025-11-13-electron-vs-tauri/)
-- [GstWebRTC H264-Opus Examples (RidgeRun)](https://developer.ridgerun.com/wiki/index.php?title=GstWebRTC_-_H264-Opus_Examples)
-- [Shure: Dante and AES67 Clocking In Depth](https://service.shure.com/Service/s/article/dante-and-aes-clocking-in-depth?language=en_US)
-
----
-*Architecture research for: Church Audio Streaming*
-*Researched: 2026-02-05*
+- [shadcn/ui Vite Installation](https://ui.shadcn.com/docs/installation/vite) — Official setup (HIGH confidence)
+- [shadcn/ui Theming](https://ui.shadcn.com/docs/theming) — CSS variable system, oklch tokens (HIGH confidence)
+- [Tailwind v4 Preflight Disable](https://github.com/tailwindlabs/tailwindcss/issues/15723) — Import splitting method (HIGH confidence)
+- [Tailwind CSS v4 Adding Custom Styles](https://tailwindcss.com/docs/adding-custom-styles) — @theme inline syntax (HIGH confidence)
+- [coder/coder MUI-to-shadcn Migration](https://github.com/coder/coder/issues/18993) — Real-world incremental strategy (MEDIUM confidence)
+- [shadcn/ui Handbook 2026](https://shadcnspace.com/blog/shadcn-ui-handbook) — Component organization best practices (MEDIUM confidence)

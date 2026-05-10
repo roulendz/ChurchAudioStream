@@ -52,6 +52,8 @@ export interface ConnectionStatsSnapshot {
   readonly rawJbEmittedCumulative: number;
   /** Raw cumulative jitterBufferTargetDelay (seconds) — used for delta computation. */
   readonly rawJbTargetCumulative: number;
+  /** Estimated one-way end-to-end delay: JB delay + RTT/2 + pipeline overhead. */
+  readonly estimatedE2eDelayMs: number;
 }
 
 const EMPTY_SNAPSHOT: ConnectionStatsSnapshot = {
@@ -75,6 +77,7 @@ const EMPTY_SNAPSHOT: ConnectionStatsSnapshot = {
   rawJbDelayCumulative: 0,
   rawJbEmittedCumulative: 0,
   rawJbTargetCumulative: 0,
+  estimatedE2eDelayMs: 0,
 };
 
 export async function captureConnectionStats(
@@ -213,6 +216,11 @@ export async function captureConnectionStats(
     const packetLossPercent =
       totalPackets > 0 ? (packetsLost / totalPackets) * 100 : 0;
 
+    // GStreamer pipeline overhead: capture(20) + mixer(10) + AGC(10) + encode(20) = ~60ms
+    const PIPELINE_OVERHEAD_MS = 60;
+    const oneWayNetworkMs = rttMs / 2;
+    const estimatedE2eDelayMs = jitterBufferDelayMs + oneWayNetworkMs + PIPELINE_OVERHEAD_MS;
+
     return {
       roundTripTimeMs: rttMs,
       packetLossPercent,
@@ -234,6 +242,7 @@ export async function captureConnectionStats(
       rawJbDelayCumulative,
       rawJbEmittedCumulative,
       rawJbTargetCumulative,
+      estimatedE2eDelayMs,
     };
   } catch {
     return EMPTY_SNAPSHOT;

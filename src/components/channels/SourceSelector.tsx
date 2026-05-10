@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import type { DiscoveredSource } from "../../hooks/useSources";
 import type { SourceAssignment } from "../../hooks/useChannels";
 
@@ -166,28 +167,31 @@ export function SourceSelector({
   }
 
   return (
-    <div className="source-selector">
-      <h4 className="source-selector-title">Input Sources</h4>
+    <div className="flex flex-col gap-3">
+      <h4 className="text-sm font-semibold text-foreground">Input Sources</h4>
 
       {/* Assigned sources list */}
       {assignedSources.length > 0 && (
-        <ul className="assigned-sources-list">
+        <ul className="list-none flex flex-col gap-1.5">
           {assignedSources.map((assignment, index) => {
             const source = findSourceById(sources, assignment.sourceId);
             return (
-              <li key={index} className="assigned-source-item">
-                <div className="assigned-source-info">
-                  <span className="assigned-source-name">
+              <li
+                key={index}
+                className="flex items-center justify-between px-2.5 py-1.5 bg-secondary/50 rounded-md"
+              >
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm text-foreground font-medium">
                     {source?.name ?? assignment.sourceId}
                     {source ? ` ${formatSourceSpecLabel(source)}` : ""}
                   </span>
-                  <span className="assigned-source-channels">
+                  <span className="text-xs text-muted-foreground">
                     Ch: {assignment.selectedChannels.map((c) => c + 1).join(", ")} → 48kHz
                   </span>
                 </div>
                 <button
                   type="button"
-                  className="btn-icon btn-remove-source"
+                  className="bg-transparent border border-transparent rounded-md text-destructive size-6 text-[0.65rem] inline-flex items-center justify-center cursor-pointer transition-all hover:border-destructive/50 hover:bg-destructive/10 disabled:opacity-30 disabled:cursor-not-allowed"
                   onClick={() => onRemoveSource(index)}
                   title="Remove source"
                 >
@@ -200,28 +204,30 @@ export function SourceSelector({
       )}
 
       {assignedSources.length === 0 && (
-        <p className="source-selector-empty">No sources assigned</p>
+        <p className="text-sm text-muted-foreground italic">No sources assigned</p>
       )}
 
       {/* Add source controls */}
-      <div className="source-add-controls">
-        <div className="form-field form-field--checkbox">
-          <label>
-            <input
-              type="checkbox"
-              checked={hideUnavailable}
-              onChange={(e) => handleToggleHideUnavailable(e.target.checked)}
-            />
-            Hide unavailable sources
-          </label>
-        </div>
+      <div className="flex flex-col gap-2 pt-2 border-t border-border">
+        <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={hideUnavailable}
+            onChange={(e) => handleToggleHideUnavailable(e.target.checked)}
+            className="accent-primary"
+          />
+          Hide unavailable sources
+        </label>
 
-        <div className="form-field">
-          <label htmlFor="source-select">Add Source</label>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="source-select" className="text-sm font-medium text-muted-foreground">
+            Add Source
+          </label>
           <select
             id="source-select"
             value={selectedSourceId}
             onChange={(e) => handleSourceChange(e.target.value)}
+            className="px-3 py-2 bg-input border border-border rounded-md text-foreground text-sm outline-none transition-colors focus:border-ring"
           >
             <option value="">-- Select source --</option>
             {Array.from(grouped.entries()).map(([groupName, groupSources]) => (
@@ -238,14 +244,19 @@ export function SourceSelector({
         </div>
 
         {selectedSource && channelOptions.length > 0 && (
-          <div className="channel-picker">
-            <span className="channel-picker-label">Channels:</span>
-            <div className="channel-picker-buttons">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted-foreground">Channels:</span>
+            <div className="flex gap-1 flex-wrap">
               {channelOptions.map((ch) => (
                 <button
                   key={ch}
                   type="button"
-                  className={`channel-pick-btn ${selectedChannels.includes(ch) ? "channel-pick-btn--active" : ""}`}
+                  className={cn(
+                    "size-7 border rounded-md text-xs inline-flex items-center justify-center cursor-pointer transition-all",
+                    selectedChannels.includes(ch)
+                      ? "bg-primary border-primary text-primary-foreground hover:bg-accent-hover"
+                      : "bg-transparent border-border text-muted-foreground hover:border-primary hover:text-primary",
+                  )}
                   onClick={() => handleChannelToggle(ch)}
                 >
                   {ch}
@@ -257,7 +268,7 @@ export function SourceSelector({
 
         <button
           type="button"
-          className="btn-primary btn-add-source"
+          className="self-start px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium cursor-pointer transition-colors hover:bg-accent-hover disabled:bg-accent-disabled disabled:text-muted-foreground disabled:cursor-not-allowed"
           disabled={!selectedSourceId || selectedChannels.length === 0}
           onClick={handleAddSource}
         >

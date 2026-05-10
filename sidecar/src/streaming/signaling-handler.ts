@@ -8,9 +8,11 @@
  * SRP note: SignalingHandler focuses on protoo request dispatch and consumer
  * lifecycle. Heartbeat/zombie detection is delegated to PeerHeartbeatTracker.
  *
- * Events emitted:
- * - "listener-connected"    { peerId, sessionId }
- * - "listener-disconnected" { peerId, sessionId, channelId }
+ * Events:
+ * - "listener-connected"      — WS open (browsing, not yet counted)
+ * - "listener-channel-joined" — user pressed Start Listening (now counted)
+ * - "listener-channel-left"   — user stopped listening (back button)
+ * - "listener-disconnected"   — WS closed
  */
 
 import { EventEmitter } from "node:events";
@@ -212,6 +214,7 @@ export class SignalingHandler extends EventEmitter {
       webRtcTransport: null,
       currentConsumer: null,
       currentChannelId: null,
+      isListening: false,
       isAdmin: false,
     };
     Object.assign(peer.data, peerData);
@@ -291,8 +294,8 @@ export class SignalingHandler extends EventEmitter {
   // -----------------------------------------------------------------------
 
   /**
-   * Count connected listeners, optionally filtered by channel.
-   * Admin preview connections are excluded.
+   * Count listeners actively consuming audio, optionally filtered by channel.
+   * Only peers that explicitly started playback (isListening === true) are counted.
    */
   getListenerCount(channelId?: string): number {
     let count = 0;
@@ -300,8 +303,20 @@ export class SignalingHandler extends EventEmitter {
       if (peer.closed) continue;
       const data = peer.data as unknown as ListenerPeerData;
       if (data.isAdmin) continue;
+      if (!data.isListening) continue;
       if (channelId !== undefined && data.currentChannelId !== channelId)
         continue;
+      count++;
+    }
+    return count;
+  }
+
+  getVisitorCount(): number {
+    let count = 0;
+    for (const peer of this.peers.values()) {
+      if (peer.closed) continue;
+      const data = peer.data as unknown as ListenerPeerData;
+      if (data.isAdmin) continue;
       count++;
     }
     return count;
@@ -461,6 +476,14 @@ export class SignalingHandler extends EventEmitter {
 
       case "switchChannel":
         await this.handleSwitchChannel(peer, request, accept, reject);
+        break;
+
+      case "startListening":
+        this.handleStartListening(peer, accept);
+        break;
+
+      case "leaveChannel":
+        this.handleLeaveChannel(peer, accept);
         break;
 
       default:
@@ -949,6 +972,71 @@ export class SignalingHandler extends EventEmitter {
     });
   }
 
+
+  // -----------------------------------------------------------------------
+  // Start listening (user pressed play — now counted)
+  // -----------------------------------------------------------------------
+
+  private handleStartListening(
+    peer: ProtooPeer,
+    accept: ProtooAcceptFn,
+  ): void {
+    const peerData = peer.data as unknown as ListenerPeerData;
+
+    if (peerData.isListening || peerData.currentChannelId === null) {
+      accept({});
+      return;
+    }
+
+    peerData.isListening = true;
+
+    this.emit("listener-channel-joined", {
+      peerId: peer.id,
+      channelId: peerData.currentChannelId,
+    });
+
+    logger.info("Listener started listening", {
+      peerId: peer.id,
+      channelId: peerData.currentChannelId,
+    });
+
+    accept({});
+  }
+
+  // -----------------------------------------------------------------------
+  // Leave channel (user stopped listening but WS stays open)
+  // -----------------------------------------------------------------------
+
+  private handleLeaveChannel(
+    peer: ProtooPeer,
+    accept: ProtooAcceptFn,
+  ): void {
+    const peerData = peer.data as unknown as ListenerPeerData;
+    const channelId = peerData.currentChannelId;
+
+    if (channelId === null) {
+      accept({});
+      return;
+    }
+
+    this.transportManager.closeTransport(peer.id);
+    peerData.webRtcTransport = null;
+    peerData.currentConsumer = null;
+    peerData.currentChannelId = null;
+    peerData.isListening = false;
+
+    this.emit("listener-channel-left", {
+      peerId: peer.id,
+      channelId,
+    });
+
+    logger.info("Listener left channel", {
+      peerId: peer.id,
+      channelId,
+    });
+
+    accept({});
+  }
 
   // -----------------------------------------------------------------------
   // Internal: peer close cleanup

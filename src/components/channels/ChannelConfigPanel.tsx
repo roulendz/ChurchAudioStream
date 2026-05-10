@@ -73,70 +73,78 @@ export function ChannelConfigPanel({
   }
 
   return (
-    <div className="channel-config-panel">
-      <div className="channel-config-header">
-        <button type="button" className="btn-back" onClick={onBack}>
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          className="bg-transparent border border-border rounded-md text-muted-foreground px-3 py-1.5 text-sm cursor-pointer transition-all hover:border-muted-foreground hover:text-foreground"
+          onClick={onBack}
+        >
           &larr; Back
         </button>
-        <h3 className="channel-config-title">Configure: {channel.name}</h3>
+        <h3 className="text-base font-semibold text-foreground">Configure: {channel.name}</h3>
       </div>
 
-      <div className="channel-config-body">
+      <div className="flex flex-col gap-6">
         {/* Basic properties */}
-        <div className="channel-config-section">
-          <h4 className="config-section-title">Properties</h4>
+        <section className="bg-card border border-border rounded-md p-5 flex flex-col gap-3">
+          <h4 className="text-sm font-semibold text-foreground mb-1">Properties</h4>
 
-          <div className="form-field">
-            <label htmlFor="cfg-name">Channel Name</label>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cfg-name" className="text-sm font-medium text-muted-foreground">
+              Channel Name
+            </label>
             <input
               id="cfg-name"
               type="text"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
+              className="px-3 py-2 bg-input border border-border rounded-md text-foreground text-sm outline-none transition-colors focus:border-ring"
             />
           </div>
 
-          <div className="form-field">
-            <label htmlFor="cfg-format">Output Format</label>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cfg-format" className="text-sm font-medium text-muted-foreground">
+              Output Format
+            </label>
             <select
               id="cfg-format"
               value={editFormat}
               onChange={(e) =>
                 setEditFormat(e.target.value as ChannelOutputFormat)
               }
+              className="px-3 py-2 bg-input border border-border rounded-md text-foreground text-sm outline-none transition-colors focus:border-ring"
             >
               <option value="mono">Mono</option>
               <option value="stereo">Stereo</option>
             </select>
           </div>
 
-          <div className="form-field--checkbox">
-            <label>
-              <input
-                type="checkbox"
-                checked={editAutoStart}
-                onChange={(e) => setEditAutoStart(e.target.checked)}
-              />
-              Auto-start on server boot
-            </label>
-          </div>
+          <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={editAutoStart}
+              onChange={(e) => setEditAutoStart(e.target.checked)}
+              className="accent-primary"
+            />
+            Auto-start on server boot
+          </label>
 
-          <div className="form-field--checkbox">
-            <label>
-              <input
-                type="checkbox"
-                checked={editVisible}
-                onChange={(e) => setEditVisible(e.target.checked)}
-              />
-              Visible to listeners
-            </label>
-          </div>
+          <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={editVisible}
+              onChange={(e) => setEditVisible(e.target.checked)}
+              className="accent-primary"
+            />
+            Visible to listeners
+          </label>
 
           {hasChanges && (
-            <div className="channel-config-save">
+            <div className="flex justify-end pt-2">
               <button
                 type="button"
-                className="btn-primary"
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium cursor-pointer transition-colors hover:bg-accent-hover disabled:bg-accent-disabled disabled:text-muted-foreground disabled:cursor-not-allowed"
                 onClick={handleSave}
                 disabled={!editName.trim()}
               >
@@ -144,10 +152,10 @@ export function ChannelConfigPanel({
               </button>
             </div>
           )}
-        </div>
+        </section>
 
         {/* Source assignment */}
-        <div className="channel-config-section">
+        <section className="bg-card border border-border rounded-md p-5 flex flex-col gap-3">
           <SourceSelector
             sources={sources}
             assignedSources={channel.sources}
@@ -158,11 +166,11 @@ export function ChannelConfigPanel({
               onRemoveSource(channel.id, sourceIndex)
             }
           />
-        </div>
+        </section>
 
         {/* Audio processing controls */}
         {sendMessage && (
-          <div className="channel-config-section">
+          <section className="bg-card border border-border rounded-md p-5 flex flex-col gap-3">
             <ProcessingControls
               channelId={channel.id}
               processing={{
@@ -171,10 +179,14 @@ export function ChannelConfigPanel({
                   enabled: ((channel.processing as Record<string, unknown>).agc as Record<string, unknown>)?.enabled as boolean ?? true,
                   targetLufs: ((channel.processing as Record<string, unknown>).agc as Record<string, unknown>)?.targetLufs as number ?? -16,
                 },
+                opus: {
+                  fec: ((channel.processing as Record<string, unknown>).opus as Record<string, unknown>)?.fec as boolean ?? false,
+                  frameSizeMs: Number(((channel.processing as Record<string, unknown>).opus as Record<string, unknown>)?.frameSize ?? "20"),
+                },
               }}
               sendMessage={sendMessage}
             />
-          </div>
+          </section>
         )}
       </div>
     </div>

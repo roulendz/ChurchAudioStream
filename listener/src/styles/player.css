@@ -108,7 +108,7 @@
   align-items: center;
   gap: 12px;
   padding: max(12px, env(safe-area-inset-top, 0px)) 18px 8px;
-  background: linear-gradient(180deg, rgba(11, 11, 24, 0.55) 0%, rgba(11, 11, 24, 0) 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-0) 55%, transparent) 0%, transparent 100%);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
@@ -116,30 +116,21 @@
 .player-view__header-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
   justify-content: center;
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--text-muted);
+  min-width: 0;
 }
 
-.player-view__eyebrow {
-  font-weight: 600;
+.player-view__header-name {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.player-view__live-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  transition: background 160ms ease, box-shadow 160ms ease;
-}
-
-.player-view__live-dot[data-live="true"] {
-  background: var(--success);
-  box-shadow: 0 0 14px var(--success-glow);
-}
 
 .player-view__header-tools {
   display: flex;
@@ -250,68 +241,144 @@
   overflow: hidden;
 }
 
-/* Visualizer scales with the SHORTER of viewport width/height so it
-   never pushes the play/pause button or footer off-screen on shallow
-   viewports (landscape phones, short browser windows). */
-.player-view__viz-wrap {
-  position: relative;
-  width: min(56vw, 36vh, 280px);
-  height: min(56vw, 36vh, 280px);
+/* ========================================================================
+ * Orb — the visualizer IS the play/pause button
+ *
+ * A single tappable circle. The canvas ring animates behind; the
+ * center holds a state-dependent icon. Tap feedback via scale +
+ * glow. On phones the whole thumb-target is the circle — no tiny
+ * separate button to hunt for.
+ * ======================================================================== */
+
+.player-view__orb {
+  position: relative; /* containing block for absolute children */
+  width: min(62vw, 42vh, 300px);
+  height: min(62vw, 42vh, 300px);
+  border-radius: 50%;
+  border: none;
+  background: radial-gradient(circle at 40% 35%,
+    var(--accent-soft) 0%,
+    transparent 70%);
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  padding: 0;
+  color: var(--text-primary);
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 300ms ease;
+  box-shadow:
+    0 0 0 1px var(--accent-soft),
+    0 8px 40px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
 }
 
-.audio-visualizer {
+.player-view__orb:active {
+  transform: scale(0.95);
+}
+
+.player-view__orb:disabled {
+  cursor: default;
+}
+
+.player-view__orb--ready {
+  box-shadow:
+    0 0 0 1px var(--accent-soft),
+    0 0 60px var(--accent-glow),
+    0 12px 48px rgba(0, 0, 0, 0.08);
+  animation: orb-breathe 3s ease-in-out infinite;
+}
+
+.player-view__orb--active {
+  box-shadow:
+    0 0 0 1px var(--accent-soft),
+    0 0 50px var(--accent-glow),
+    0 12px 48px rgba(0, 0, 0, 0.06);
+}
+
+.player-view__orb--paused {
+  box-shadow:
+    0 0 0 1px var(--accent-soft),
+    0 8px 32px rgba(0, 0, 0, 0.06);
+}
+
+@keyframes orb-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px var(--accent-soft), 0 0 50px var(--accent-glow), 0 12px 48px rgba(0, 0, 0, 0.08); }
+  50% { box-shadow: 0 0 0 1px var(--accent-soft), 0 0 70px var(--accent-glow), 0 16px 56px rgba(0, 0, 0, 0.1); }
+}
+
+.player-view__orb .audio-visualizer {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
 }
 
-.audio-visualizer__canvas {
+.player-view__orb .audio-visualizer__canvas {
   display: block;
   width: 100%;
   height: 100%;
 }
 
-.player-view__viz-caption {
+.player-view__orb-icon {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 8px;
+  z-index: 2;
   pointer-events: none;
-  text-align: center;
-  padding: 0 12%;
-}
-
-.player-view__flag {
-  font-size: 1.875rem;
-  line-height: 1;
-  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.5));
-  margin-bottom: 4px;
-}
-
-.player-view__channel-name {
-  font-size: 1.375rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.15;
   color: var(--text-primary);
-  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
-  word-break: break-word;
+  transition: opacity 200ms ease;
 }
 
-.player-view__language {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--text-secondary);
+.player-view__orb--active .player-view__orb-icon {
+  opacity: 0.35;
+  transition: opacity 200ms ease;
+}
+
+.player-view__orb--active:hover .player-view__orb-icon,
+.player-view__orb--active:active .player-view__orb-icon {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .player-view__orb--active .player-view__orb-icon {
+    opacity: 0.2;
+  }
+  .player-view__orb--active:active .player-view__orb-icon {
+    opacity: 1;
+  }
+}
+
+.player-view__orb-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: center;
+  max-width: 70%;
+  line-height: 1.3;
+}
+
+.player-view__orb-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--hairline);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ========================================================================
@@ -553,42 +620,6 @@
   background: rgba(255, 255, 255, 0.14);
 }
 
-/* Big circular play/pause button — primary in-app control for users on
-   browsers without lock-screen integration. */
-.player-view__playpause {
-  width: clamp(56px, 9vh, 72px);
-  height: clamp(56px, 9vh, 72px);
-  border-radius: 50%;
-  border: none;
-  background: var(--gradient-cta);
-  color: var(--surface-0);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    transform 100ms ease,
-    box-shadow 200ms ease,
-    background 200ms ease;
-  box-shadow:
-    0 14px 36px var(--accent-glow),
-    0 1px 0 rgba(255, 255, 255, 0.4) inset;
-}
-
-.player-view__playpause:hover {
-  box-shadow:
-    0 18px 44px rgba(124, 92, 255, 0.55),
-    0 1px 0 rgba(255, 255, 255, 0.5) inset;
-}
-
-.player-view__playpause:active {
-  transform: scale(0.94);
-}
-
-.player-view__playpause--paused {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(220, 220, 240, 0.85) 100%);
-  color: var(--surface-1);
-}
 
 .player-view__error {
   display: flex;
@@ -649,7 +680,7 @@
 .player-view__footer-meter {
   flex-shrink: 0;
   border-radius: 5px;
-  background: rgba(11, 11, 24, 0.55);
+  background: var(--surface-glass);
   padding: 0;
 }
 
@@ -1011,7 +1042,7 @@
   }
 
   .player-view__header {
-    background: linear-gradient(180deg, rgba(11, 11, 24, 0.85) 0%, rgba(11, 11, 24, 0.4) 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-0) 85%, transparent) 0%, color-mix(in srgb, var(--surface-0) 40%, transparent) 100%);
     padding-top: max(8px, env(safe-area-inset-top, 0px));
     padding-bottom: 4px;
   }
@@ -1027,7 +1058,7 @@
     padding: 6px 12px 0;
   }
 
-  .player-view__viz-wrap {
+  .player-view__orb {
     width: min(38vw, 60vh, 240px);
     height: min(38vw, 60vh, 240px);
     flex-shrink: 0;
@@ -1041,11 +1072,6 @@
     gap: 14px;
   }
 
-  /* Big play/pause stays prominent but fits the column. */
-  .player-view__playpause {
-    width: clamp(52px, 13vh, 64px);
-    height: clamp(52px, 13vh, 64px);
-  }
 
   .player-view__footer {
     padding: 4px 16px calc(8px + env(safe-area-inset-bottom, 0px));
@@ -1077,10 +1103,10 @@
   }
 
   .player-view__header {
-    background: linear-gradient(180deg, rgba(11, 11, 24, 0.85) 0%, rgba(11, 11, 24, 0.4) 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-0) 85%, transparent) 0%, color-mix(in srgb, var(--surface-0) 40%, transparent) 100%);
   }
 
-  .player-view__viz-wrap {
+  .player-view__orb {
     width: min(60vw, 38vh, 280px);
     height: min(60vw, 38vh, 280px);
   }

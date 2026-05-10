@@ -11,6 +11,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { ConnectionState } from "../hooks/useSignaling";
+import { forceVersionReload } from "../lib/sw-lifecycle";
 
 interface OfflineScreenProps {
   connectionState?: ConnectionState;
@@ -49,7 +50,14 @@ export function OfflineScreen({ connectionState }: OfflineScreenProps) {
       if (!navigator.onLine) return;
       try {
         const res = await fetch("/api/status", { cache: "no-store" });
-        if (res.ok) window.location.reload();
+        if (!res.ok) return;
+        const data = await res.json() as { instanceId?: string };
+        const storedInstanceId = sessionStorage.getItem("cas_instance_id");
+        if (typeof data.instanceId === "string" && storedInstanceId && data.instanceId !== storedInstanceId) {
+          forceVersionReload();
+          return;
+        }
+        window.location.reload();
       } catch {
         // Server still down, keep retrying
       }

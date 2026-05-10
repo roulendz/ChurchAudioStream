@@ -266,9 +266,14 @@ export class StreamingSubsystem extends EventEmitter {
   // Delegated accessors for admin dashboard
   // -------------------------------------------------------------------------
 
-  /** Count connected listeners, optionally filtered by channel. */
+  /** Count active listeners (pressed Start Listening), optionally filtered by channel. */
   getListenerCount(channelId?: string): number {
     return this.signalingHandler?.getListenerCount(channelId) ?? 0;
+  }
+
+  /** Count all connected visitors (including those browsing without listening). */
+  getVisitorCount(): number {
+    return this.signalingHandler?.getVisitorCount() ?? 0;
   }
 
   /** Get session info for all connected listeners. */
@@ -908,11 +913,37 @@ export class StreamingSubsystem extends EventEmitter {
     this.signalingHandler.on(
       "listener-connected",
       (info: { peerId: string; sessionId: string }) => {
-        // Emit listener count changed for admin dashboard (no specific channel yet)
         this.emit("listener-count-changed", null, this.getListenerCount());
-        logger.debug("Listener count changed (connected)", {
+        logger.debug("Listener peer connected", { peerId: info.peerId });
+      },
+    );
+
+    this.signalingHandler.on(
+      "listener-channel-joined",
+      (info: { peerId: string; channelId: string }) => {
+        this.emit(
+          "listener-count-changed",
+          info.channelId,
+          this.getListenerCount(info.channelId),
+        );
+        logger.debug("Listener started listening", {
           peerId: info.peerId,
-          totalListeners: this.getListenerCount(),
+          channelId: info.channelId,
+        });
+      },
+    );
+
+    this.signalingHandler.on(
+      "listener-channel-left",
+      (info: { peerId: string; channelId: string }) => {
+        this.emit(
+          "listener-count-changed",
+          info.channelId,
+          this.getListenerCount(info.channelId),
+        );
+        logger.debug("Listener stopped listening", {
+          peerId: info.peerId,
+          channelId: info.channelId,
         });
       },
     );

@@ -1,5 +1,6 @@
 {
-  "player.startListening": "Sakt klausities",
+  "player.nowListening": "Klausās",
+  "player.startListening": "Sākt klausīties",
   "player.mix": "Maisit",
   "player.keepAwake": "Turet aktivu",
   "player.volume": "Skalums",
@@ -14,7 +15,7 @@
   "channel.live": "Tiesraide",
   "channel.offline": "Nav pieejams",
   "channel.listeningCount": "{{count}} klausas",
-  "status.reconnecting": "Atjauno savienojumu...",
+  "status.reconnecting": "Atjauno savienojumu",
   "status.connecting": "Savieno...",
   "status.disconnected": "Nevar sasniegt audio serveri. Parliecinies, ka esi piesledzies baznicas WiFi.",
   "offline.title": "Savienojums zaudets",

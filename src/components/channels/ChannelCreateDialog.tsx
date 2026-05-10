@@ -21,10 +21,16 @@ export function ChannelCreateDialog({
   }
 
   return (
-    <form className="channel-create-dialog" onSubmit={handleSubmit}>
-      <h3 className="channel-create-title">New Channel</h3>
-      <div className="form-field">
-        <label htmlFor="channel-name">Name</label>
+    <form
+      className="bg-card border border-border rounded-md p-5 max-w-md flex flex-col gap-4"
+      onSubmit={handleSubmit}
+    >
+      <h3 className="text-base font-semibold text-foreground">New Channel</h3>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="channel-name" className="text-sm font-medium text-muted-foreground">
+          Name
+        </label>
         <input
           id="channel-name"
           type="text"
@@ -32,28 +38,38 @@ export function ChannelCreateDialog({
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. English, Spanish"
           autoFocus
+          className="px-3 py-2 bg-input border border-border rounded-md text-foreground text-sm outline-none transition-colors focus:border-ring"
         />
       </div>
-      <div className="form-field">
-        <label htmlFor="channel-format">Output Format</label>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="channel-format" className="text-sm font-medium text-muted-foreground">
+          Output Format
+        </label>
         <select
           id="channel-format"
           value={outputFormat}
           onChange={(e) =>
             setOutputFormat(e.target.value as ChannelOutputFormat)
           }
+          className="px-3 py-2 bg-input border border-border rounded-md text-foreground text-sm outline-none transition-colors focus:border-ring"
         >
           <option value="mono">Mono</option>
           <option value="stereo">Stereo</option>
         </select>
       </div>
-      <div className="channel-create-actions">
-        <button type="button" className="btn-secondary" onClick={onCancel}>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          className="px-3 py-1.5 bg-transparent border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-all hover:border-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+          onClick={onCancel}
+        >
           Cancel
         </button>
         <button
           type="submit"
-          className="btn-primary"
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium cursor-pointer transition-colors hover:bg-accent-hover disabled:bg-accent-disabled disabled:text-muted-foreground disabled:cursor-not-allowed"
           disabled={!name.trim()}
         >
           Create

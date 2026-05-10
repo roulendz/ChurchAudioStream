@@ -36,6 +36,17 @@ export interface UseSignalingResult {
   clearReconnect: () => void;
 }
 
+function storeServerInstanceId(): void {
+  fetch("/api/status", { cache: "no-store" })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data: { instanceId?: string } | null) => {
+      if (typeof data?.instanceId === "string") {
+        sessionStorage.setItem("cas_instance_id", data.instanceId);
+      }
+    })
+    .catch(() => {});
+}
+
 export function useSignaling(): UseSignalingResult {
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("connecting");
@@ -88,12 +99,12 @@ export function useSignaling(): UseSignalingResult {
       clearReconnectTimeout();
 
       if (hasConnectedOnce.current) {
-        // Reconnected after a disconnection
         setIsReconnect(true);
         setConnectionState("connected");
       } else {
         hasConnectedOnce.current = true;
         setConnectionState("connected");
+        storeServerInstanceId();
       }
     });
 

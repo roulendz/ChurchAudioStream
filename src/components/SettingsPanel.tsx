@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
+import { cn } from "@/lib/utils";
 import type {
   AppConfig,
   NetworkInterface,
   ConfigUpdateResult,
 } from "../hooks/useServerStatus";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface SettingsPanelProps {
   config: AppConfig | null;
@@ -20,6 +25,10 @@ interface FormState {
   mdnsEnabled: boolean;
   hostsFileEnabled: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function buildFormStateFromConfig(config: AppConfig): FormState {
   return {
@@ -86,6 +95,124 @@ function validatePort(value: string): string | null {
   if (num > 65535) return "Port must be 65535 or lower";
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Save button label
+// ---------------------------------------------------------------------------
+
+function saveButtonLabel(status: SaveStatus): string {
+  switch (status) {
+    case "saving": return "Saving...";
+    case "restarting": return "Server Restarting...";
+    case "saved": return "Saved";
+    default: return "Save";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Input class builder
+// ---------------------------------------------------------------------------
+
+const inputBaseClasses =
+  "px-3 py-2 bg-input border border-border rounded-md text-foreground text-sm outline-none transition-colors focus:border-ring disabled:opacity-50 disabled:cursor-not-allowed";
+
+// ---------------------------------------------------------------------------
+// DesignTokensSection
+// ---------------------------------------------------------------------------
+
+interface TokenSwatch {
+  name: string;
+  className: string;
+}
+
+interface TokenGroup {
+  label: string;
+  tokens: TokenSwatch[];
+}
+
+const TOKEN_GROUPS: TokenGroup[] = [
+  {
+    label: "Backgrounds",
+    tokens: [
+      { name: "background", className: "bg-background" },
+      { name: "card", className: "bg-card" },
+      { name: "secondary", className: "bg-secondary" },
+      { name: "muted", className: "bg-muted" },
+      { name: "input", className: "bg-input" },
+    ],
+  },
+  {
+    label: "Semantic",
+    tokens: [
+      { name: "primary", className: "bg-primary" },
+      { name: "destructive", className: "bg-destructive" },
+      { name: "success", className: "bg-success" },
+      { name: "warning", className: "bg-warning" },
+    ],
+  },
+  {
+    label: "Text",
+    tokens: [
+      { name: "foreground", className: "bg-card text-foreground" },
+      { name: "muted-foreground", className: "bg-card text-muted-foreground" },
+    ],
+  },
+  {
+    label: "Borders",
+    tokens: [
+      { name: "border", className: "border-2 border-border bg-transparent" },
+    ],
+  },
+];
+
+function DesignTokensSection() {
+  return (
+    <section className="bg-card border border-border rounded-md p-5">
+      <h2 className="text-lg font-semibold mb-4 text-foreground">Design Tokens</h2>
+      {TOKEN_GROUPS.map(({ label, tokens }) => (
+        <div key={label} className="mb-4">
+          <h3 className="text-sm font-semibold text-foreground mb-2">{label}</h3>
+          <div className="flex flex-wrap gap-3">
+            {tokens.map(({ name, className }) => (
+              <div key={name} className="flex flex-col items-center gap-1">
+                {label === "Text" ? (
+                  <div
+                    className={cn(
+                      "size-10 rounded-md border border-border flex items-center justify-center text-xs font-bold",
+                      className
+                    )}
+                  >
+                    Aa
+                  </div>
+                ) : (
+                  <div className={cn("size-10 rounded-md border border-border", className)} />
+                )}
+                <span className="text-xs text-muted-foreground">{name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="mb-0">
+        <h3 className="text-sm font-semibold text-foreground mb-2">Typography</h3>
+        <div className="flex flex-col gap-2 text-sm text-foreground">
+          <div>
+            <span className="text-muted-foreground">Sans: </span>
+            <span className="font-sans">system-ui, sans-serif</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Mono: </span>
+            <span className="font-[family-name:var(--font-mono)]">var(--font-mono)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SettingsPanel
+// ---------------------------------------------------------------------------
 
 export function SettingsPanel({
   config,
@@ -185,20 +312,23 @@ export function SettingsPanel({
 
   if (!config) {
     return (
-      <section className="settings-panel">
-        <h2>Server Settings</h2>
-        <p className="settings-loading">Loading configuration...</p>
+      <section className="space-y-6">
+        <h2 className="text-lg font-semibold text-foreground mb-5">Server Settings</h2>
+        <p className="text-muted-foreground italic">Loading configuration...</p>
       </section>
     );
   }
 
   return (
-    <section className="settings-panel">
-      <h2>Server Settings</h2>
+    <section className="space-y-6">
+      <h2 className="text-lg font-semibold text-foreground mb-5">Server Settings</h2>
 
-      <div className="settings-form">
-        <div className="form-field">
-          <label htmlFor="settings-port">Port</label>
+      <div className="bg-card border border-border rounded-md p-5 flex flex-col gap-4">
+        {/* Port */}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="settings-port" className="text-sm font-medium text-muted-foreground">
+            Port
+          </label>
           <input
             id="settings-port"
             type="number"
@@ -206,19 +336,23 @@ export function SettingsPanel({
             max={65535}
             value={formState.port}
             onChange={handlePortChange}
-            className={portError ? "input-error" : ""}
+            className={cn(inputBaseClasses, portError && "border-destructive")}
           />
           {portError && (
-            <span className="field-error">{portError}</span>
+            <span className="text-xs text-destructive">{portError}</span>
           )}
         </div>
 
-        <div className="form-field">
-          <label htmlFor="settings-interface">Network Interface</label>
+        {/* Network Interface */}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="settings-interface" className="text-sm font-medium text-muted-foreground">
+            Network Interface
+          </label>
           <select
             id="settings-interface"
             value={formState.selectedInterface}
             onChange={handleInterfaceChange}
+            className={inputBaseClasses}
           >
             <option value="">Auto (first available)</option>
             {interfaces.map((iface) => (
@@ -229,76 +363,88 @@ export function SettingsPanel({
           </select>
         </div>
 
-        <div className="form-field">
-          <label htmlFor="settings-domain">Domain</label>
+        {/* Domain */}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="settings-domain" className="text-sm font-medium text-muted-foreground">
+            Domain
+          </label>
           <input
             id="settings-domain"
             type="text"
             value={formState.domain}
             onChange={handleDomainChange}
             placeholder="church.audio"
+            className={inputBaseClasses}
           />
-          <span className="field-hint">
+          <span className="text-xs text-muted-foreground">
             Used for mDNS discovery, hosts file, and TLS certificate
           </span>
         </div>
 
-        <div className="form-field form-field--checkbox">
-          <label htmlFor="settings-mdns">
+        {/* mDNS checkbox */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="settings-mdns" className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
             <input
               id="settings-mdns"
               type="checkbox"
               checked={formState.mdnsEnabled}
               onChange={handleMdnsEnabledChange}
+              className="size-4 accent-primary cursor-pointer"
             />
             Enable mDNS Discovery
           </label>
         </div>
 
-        <div className="form-field form-field--checkbox">
-          <label htmlFor="settings-hosts-file">
-            <input
-              id="settings-hosts-file"
-              type="checkbox"
-              checked={formState.hostsFileEnabled}
-              onChange={handleHostsFileEnabledChange}
-            />
-            Update Hosts File
-          </label>
-          <span className="field-hint">
+        {/* Hosts file checkbox */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <label htmlFor="settings-hosts-file" className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input
+                id="settings-hosts-file"
+                type="checkbox"
+                checked={formState.hostsFileEnabled}
+                onChange={handleHostsFileEnabledChange}
+                className="size-4 accent-primary cursor-pointer"
+              />
+              Update Hosts File
+            </label>
+          </div>
+          <span className="text-xs text-muted-foreground">
             Maps domain to server IP in system hosts file (requires admin)
           </span>
         </div>
 
+        {/* Errors */}
         {errorMessages.length > 0 && (
-          <div className="settings-errors" role="alert">
+          <div className="bg-destructive/10 border border-destructive rounded-md p-3" role="alert">
             {errorMessages.map((err, idx) => (
-              <p key={idx} className="settings-error-message">
+              <p key={idx} className="text-sm text-destructive">
                 {err}
               </p>
             ))}
           </div>
         )}
 
-        <div className="form-actions">
+        {/* Save button */}
+        <div className="flex justify-end pt-2">
           <button
             type="button"
-            className="btn-save"
+            className={cn(
+              "px-6 py-2 rounded-md text-sm font-medium min-w-[140px] cursor-pointer transition-colors",
+              "bg-primary text-primary-foreground hover:bg-primary/90",
+              "disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+            )}
             onClick={handleSave}
             disabled={
               !isDirty || portError !== null || saveStatus === "saving"
             }
           >
-            {saveStatus === "saving"
-              ? "Saving..."
-              : saveStatus === "restarting"
-                ? "Server Restarting..."
-                : saveStatus === "saved"
-                  ? "Saved"
-                  : "Save"}
+            {saveButtonLabel(saveStatus)}
           </button>
         </div>
       </div>
+
+      <DesignTokensSection />
     </section>
   );
 }

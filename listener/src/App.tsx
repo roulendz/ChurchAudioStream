@@ -29,6 +29,7 @@ import { ChannelListView } from "./views/ChannelListView";
 import { PlayerView } from "./views/PlayerView";
 import { OfflineScreen } from "./components/OfflineScreen";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { VersionFooter } from "./components/VersionFooter";
 import type { ListenerChannelInfo } from "./lib/types";
 import "./App.css";
 
@@ -124,6 +125,7 @@ function App() {
         <OfflineScreen connectionState={connectionState} />
         <div className="app-spinner" />
         <p className="app-status">{t("status.connecting")}</p>
+        <VersionFooter />
       </div>
     );
   }
@@ -133,6 +135,7 @@ function App() {
       <div className="app-container app-container--centered">
         <OfflineScreen connectionState={connectionState} />
         <p className="app-status">{t("status.disconnected")}</p>
+        <VersionFooter />
       </div>
     );
   }
@@ -143,7 +146,14 @@ function App() {
 
       {connectionState === "reconnecting" && (
         <div className="app-reconnecting-banner" role="alert">
-          {t("status.reconnecting")}
+          <span className="app-reconnecting-banner__text">
+            {t("status.reconnecting")}
+          </span>
+          <span className="app-reconnecting-banner__dots" aria-hidden="true">
+            <span className="app-reconnecting-banner__dot" />
+            <span className="app-reconnecting-banner__dot" />
+            <span className="app-reconnecting-banner__dot" />
+          </span>
         </div>
       )}
 
@@ -199,6 +209,8 @@ function App() {
         themeMode={themeMode}
         onThemeModeChange={setThemeMode}
       />
+
+      <VersionFooter />
     </div>
   );
 }
