@@ -296,7 +296,7 @@ export function buildOpusRtpParameters(
         clockRate: 48000,
         payloadType: OPUS_PAYLOAD_TYPE,
         channels: 2,
-        parameters: { "sprop-stereo": 1 },
+        parameters: { "sprop-stereo": 1, useinbandfec: 1 },
       },
     ],
     encodings: [{ ssrc }],
